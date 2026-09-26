@@ -32,7 +32,8 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 function initPaths() {
-  if (process.env.RPOS_USER_DATA) app.setPath('userData', process.env.RPOS_USER_DATA);
+  // Test hook only; packaged builds always use the standard %APPDATA% location.
+  if (!app.isPackaged && process.env.RPOS_USER_DATA) app.setPath('userData', process.env.RPOS_USER_DATA);
   const userData = app.getPath('userData');
   ctx.paths.userData = userData;
   ctx.paths.dbFile = path.join(userData, 'data', 'retailpos.db');

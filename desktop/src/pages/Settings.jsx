@@ -536,7 +536,7 @@ function LicenseTab() {
 // ------------------------------------------------------------------ General
 function GeneralTab() {
   const s = useSection('general');
-  const { info, toast, toastError, confirm, reloadSettings } = useApp();
+  const { info, setInfo, toast, toastError, confirm, reloadSettings } = useApp();
   const [pw, setPw] = useState({ currentPassword: '', newPassword: '' });
   const act = async (title, message, method, done) => {
     if (!(await confirm({ title, message, danger: method !== 'data.loadDemo', confirmText: 'Continue' }))) return;
@@ -553,6 +553,7 @@ function GeneralTab() {
       await api('auth.changePassword', pw);
       setPw({ currentPassword: '', newPassword: '' });
       toast('Password changed');
+      api('app.info').then(setInfo).catch(() => {});
     } catch (e) {
       toastError(e);
     }

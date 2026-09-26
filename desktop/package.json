@@ -19,9 +19,9 @@
     "dist:portable": "vite build && electron-builder --win portable --x64",
     "dist:dir": "vite build && electron-builder --win dir --x64",
     "dist:zip": "vite build && electron-builder --win zip --x64",
-    "make-icon": "electron scripts/make-icon.js"
+    "make-icon": "electron scripts/make-icon.js",
+    "test:e2e": "node tests/e2e.js"
   },
-  "dependencies": {},
   "devDependencies": {
     "@fontsource/inter": "^5.3.0",
     "@fontsource/noto-naskh-arabic": "^5.3.0",
@@ -29,6 +29,7 @@
     "electron": "^44.4.5",
     "electron-builder": "^26.15.3",
     "lucide-react": "^1.48.0",
+    "playwright-core": "^1.63.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-router-dom": "^7.18.4",

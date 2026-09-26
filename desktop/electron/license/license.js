@@ -3,6 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { execFileSync } = require('child_process');
 const ctx = require('../core/context');
 const logger = require('../core/logger');
 const { AppError } = require('../core/errors');
@@ -26,6 +27,30 @@ function file() {
   return path.join(ctx.paths.userData, 'license.json');
 }
 
+// Second copy of the trial start date in the Windows registry, so deleting
+// license.json does not restart the trial.
+const REG_KEY = 'HKCU\\Software\\RetailPOS';
+
+function registryTrialStart() {
+  if (process.platform !== 'win32') return null;
+  try {
+    const out = execFileSync('reg', ['query', REG_KEY, '/v', 'ts'], { encoding: 'utf8', windowsHide: true, timeout: 5000 });
+    const m = /ts\s+REG_SZ\s+(\S+)/.exec(out);
+    return m && !Number.isNaN(Date.parse(m[1])) ? m[1] : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeRegistryTrialStart(iso) {
+  if (process.platform !== 'win32') return;
+  try {
+    execFileSync('reg', ['add', REG_KEY, '/v', 'ts', '/t', 'REG_SZ', '/d', iso, '/f'], { windowsHide: true, timeout: 5000 });
+  } catch {
+    /* best effort */
+  }
+}
+
 function load() {
   if (state) return state;
   try {
@@ -33,10 +58,13 @@ function load() {
   } catch {
     state = {};
   }
-  if (!state.trialStart) {
-    state.trialStart = new Date().toISOString();
+  const reg = registryTrialStart();
+  const earliest = [state.trialStart, reg, new Date().toISOString()].filter(Boolean).sort()[0];
+  if (state.trialStart !== earliest) {
+    state.trialStart = earliest;
     save();
   }
+  if (reg !== earliest) writeRegistryTrialStart(earliest);
   return state;
 }
 
