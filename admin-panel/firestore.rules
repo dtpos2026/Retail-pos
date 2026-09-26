@@ -1,0 +1,64 @@
+rules_version = '2';
+
+// Retail POS — Super Admin security rules.
+//  * Head admin: digitaltarget.digital@gmail.com (email must be verified)
+//  * Extra admins: documents in /admins/{email} with active == true (managed by head only)
+//  * /licenseStatus/{licenseId} is readable by anyone who knows the (random) id so the
+//    offline POS can pick up renewals / revocations when it happens to be online.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+    function verifiedEmail() {
+      return signedIn() && request.auth.token.email_verified == true;
+    }
+    function isHead() {
+      return verifiedEmail() && request.auth.token.email == 'digitaltarget.digital@gmail.com';
+    }
+    function isAdmin() {
+      return isHead() || (
+        verifiedEmail()
+        && exists(/databases/$(database)/documents/admins/$(request.auth.token.email))
+        && get(/databases/$(database)/documents/admins/$(request.auth.token.email)).data.active == true
+      );
+    }
+
+    match /clients/{clientId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /licenses/{licenseId} {
+      allow read, create, update: if isAdmin();
+      allow delete: if isHead();
+    }
+
+    match /licenseStatus/{licenseId} {
+      allow get: if true;          // single-document read by id (POS online check)
+      allow list: if isAdmin();    // no public enumeration
+      allow write: if isAdmin();
+    }
+
+    // Signing key pair. Private key is readable by admins only.
+    match /config/{docId} {
+      allow read: if isAdmin();
+      allow write: if isHead();
+    }
+
+    match /admins/{email} {
+      allow read: if isAdmin();
+      allow write: if isHead();
+    }
+
+    match /activity/{id} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && request.resource.data.by == request.auth.token.email;
+      allow update, delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

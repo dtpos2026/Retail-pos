@@ -65,22 +65,4 @@ function renderCsv(report) {
   return '﻿' + lines.join('\r\n');
 }
 
-/** Excel 2003 XML spreadsheet — opens natively in Excel without extra libraries. */
-function renderExcelXml(report) {
-  const x = (s) => esc(s).replace(/'/g, '&apos;');
-  const cell = (c, v) => {
-    if (v === null || v === undefined || v === '') return '<Cell/>';
-    if ((c.type === 'money' || c.type === 'number') && Number.isFinite(Number(v))) return `<Cell ss:StyleID="${c.type === 'money' ? 'm' : 'n'}"><Data ss:Type="Number">${Number(v)}</Data></Cell>`;
-    return `<Cell><Data ss:Type="String">${x(v)}</Data></Cell>`;
-  };
-  const header = `<Row>${report.columns.map((c) => `<Cell ss:StyleID="h"><Data ss:Type="String">${x(c.label)}</Data></Cell>`).join('')}</Row>`;
-  const rows = report.rows.map((r) => `<Row>${report.columns.map((c) => cell(c, r[c.key])).join('')}</Row>`).join('');
-  const totals = report.totals ? `<Row ss:StyleID="h">${report.columns.map((c) => cell(c, report.totals[c.key])).join('')}</Row>` : '';
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<?mso-application progid="Excel.Sheet"?>
-<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
-<Styles><Style ss:ID="h"><Font ss:Bold="1"/></Style><Style ss:ID="m"><NumberFormat ss:Format="#,##0.00"/></Style><Style ss:ID="n"><NumberFormat ss:Format="#,##0.##"/></Style></Styles>
-<Worksheet ss:Name="${x(report.title.slice(0, 30))}"><Table>${header}${rows}${totals}</Table></Worksheet></Workbook>`;
-}
-
-module.exports = { renderReport, renderCsv, renderExcelXml };
+module.exports = { renderReport, renderCsv };

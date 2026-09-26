@@ -24,7 +24,8 @@ const backup = require('../services/backup');
 const seed = require('../db/seed');
 const license = require('../license/license');
 const printService = require('../printing/printService');
-const { renderReport, renderCsv, renderExcelXml } = require('../printing/reportHtml');
+const { renderReport, renderCsv } = require('../printing/reportHtml');
+const { reportToXlsx } = require('../printing/xlsx');
 
 const win = () => BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0];
 
@@ -148,7 +149,7 @@ const routes = {
     perm: 'reports',
     fn: async ({ format, ...a }) => {
       const report = reports.run(a);
-      const ext = { pdf: 'pdf', csv: 'csv', excel: 'xls' }[format];
+      const ext = { pdf: 'pdf', csv: 'csv', excel: 'xlsx' }[format];
       if (!ext) throw new AppError('Unknown export format.');
       const name = `${report.title.replace(/[^\w]+/g, '-')}_${report.from}${report.to !== report.from ? '_to_' + report.to : ''}.${ext}`;
       const r = await dialog.showSaveDialog(win(), {
@@ -160,7 +161,7 @@ const routes = {
       let data;
       if (ext === 'pdf') data = await require('../printing/printer').htmlToPdf(renderReport(report), { landscape: report.columns.length > 7 });
       else if (ext === 'csv') data = renderCsv(report);
-      else data = renderExcelXml(report);
+      else data = reportToXlsx(report);
       fs.writeFileSync(r.filePath, data);
       shell.showItemInFolder(r.filePath);
       return { file: r.filePath };

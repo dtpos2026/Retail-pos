@@ -203,6 +203,20 @@ test('Test 14: reports match actual sales', () => {
   assert.equal(pay.totals.amount, Math.round(paidSum * 100) / 100);
 });
 
+test('report exports: xlsx is a valid zip workbook, csv has BOM', () => {
+  const { reportToXlsx } = require('../electron/printing/xlsx');
+  const { renderCsv, renderReport } = require('../electron/printing/reportHtml');
+  const today = require('../electron/core/util').localDate();
+  const r = reports.run({ key: 'products', from: today, to: today });
+  const x = reportToXlsx(r);
+  assert.equal(x.readUInt32LE(0), 0x04034b50);
+  assert.equal(x.readUInt32LE(x.length - 22), 0x06054b50);
+  assert.ok(x.includes(Buffer.from('xl/worksheets/sheet1.xml')));
+  const csv = renderCsv(r);
+  assert.equal(csv.charCodeAt(0), 0xfeff);
+  assert.match(renderReport(r), /Product Sales/);
+});
+
 test('Test 13: backup -> reset -> restore', async () => {
   const before = ctx.db.get('SELECT COUNT(*) c FROM orders').c;
   const b = await backup.create({});
