@@ -260,7 +260,7 @@ function retail(d) {
   const items = d.items
     .map((i, idx) =>
       narrow
-        ? `<tr><td style="${cell}" colspan="2">${idx + 1}. ${t(i.name)}${itemNote(d, i)}<br>${formatQty(i.qty)} × ${n(i.price)}</td><td style="${cell}" class="r">${n(i.total)}</td></tr>`
+        ? `<tr><td style="${cell}" colspan="2">${idx + 1}. ${t(i.name)}<br>${formatQty(i.qty)} × ${n(i.price)}${itemNote(d, i)}</td><td style="${cell}" class="r">${n(i.total)}</td></tr>`
         : `<tr><td style="${cell}" class="c">${idx + 1}</td><td style="${cell}">${t(i.name)}${itemNote(d, i)}</td><td style="${cell}" class="c">${formatQty(i.qty)}</td><td style="${cell}" class="r">${n(i.price)}</td><td style="${cell}" class="r">${n(i.total)}</td></tr>`
     )
     .join('');

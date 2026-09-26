@@ -17,7 +17,9 @@
     "test": "node --test --no-warnings tests/*.test.js",
     "dist": "vite build && electron-builder --win nsis --x64",
     "dist:portable": "vite build && electron-builder --win portable --x64",
-    "dist:dir": "vite build && electron-builder --win dir --x64"
+    "dist:dir": "vite build && electron-builder --win dir --x64",
+    "dist:zip": "vite build && electron-builder --win zip --x64",
+    "make-icon": "electron scripts/make-icon.js"
   },
   "dependencies": {},
   "devDependencies": {
@@ -59,7 +61,7 @@
         }
       ],
       "icon": "build/icon.ico",
-      "artifactName": "RetailPOS-Setup-${version}.${ext}"
+      "artifactName": "RetailPOS-${version}-win-${arch}.${ext}"
     },
     "nsis": {
       "oneClick": false,
@@ -70,7 +72,8 @@
       "shortcutName": "Retail POS",
       "deleteAppDataOnUninstall": false,
       "installerIcon": "build/icon.ico",
-      "uninstallerIcon": "build/icon.ico"
+      "uninstallerIcon": "build/icon.ico",
+      "artifactName": "RetailPOS-Setup-${version}.${ext}"
     },
     "portable": {
       "artifactName": "RetailPOS-Portable-${version}.${ext}"

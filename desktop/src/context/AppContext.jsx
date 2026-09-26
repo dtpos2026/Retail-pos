@@ -20,7 +20,7 @@ export function AppProvider({ children }) {
 
   const toast = useCallback((message, type = 'success', ms = 3200) => {
     const id = ++idRef.current;
-    setToasts((t) => [...t, { id, message, type }]);
+    setToasts((t) => [...t.slice(-2), { id, message, type }]);
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), ms);
   }, []);
 
