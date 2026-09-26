@@ -4,12 +4,35 @@
 It runs **100% offline** on the shop's computer. A separate **Super Admin web panel** (Firebase) is used by the vendor to manage clients and generate license keys.
 
 ```
-Retail-pos/
-├── desktop/        Windows POS application (Electron + React + SQLite)        ← installed at each shop, offline
-├── admin-panel/    Super Admin web panel (React + Firebase Auth/Firestore)   ← vendor only, online
-├── docs/           Setup guides (Super Admin, printers, database, licensing)
-└── .github/        GitHub Actions workflow that builds the Windows installer
+Retail-pos/                  ← POS software (Windows, offline). Run npm commands here.
+├── electron/                main process: database, services, printing, license
+├── src/                     React UI
+├── shared/  assets/  build/  scripts/  tests/
+├── package.json
+├── superadmin/              ← Super Admin web panel (Firebase). Its own npm commands.
+└── docs/                    setup guides
 ```
+
+## Quick commands (Windows CMD)
+
+**POS software** (in the main folder):
+```cmd
+cd C:\Retail-pos
+npm install
+npm run build
+npm run dist
+```
+→ Installer: `release\RetailPOS-Setup-1.0.0.exe`
+
+**Super Admin panel**:
+```cmd
+cd C:\Retail-pos\superadmin
+npm install
+npm run build
+npx firebase-tools login
+npx firebase-tools deploy
+```
+→ Panel: https://retail-pos-db7c6.web.app
 
 ---
 
@@ -65,7 +88,6 @@ A red banner reminds the admin to change the default password (**Users → Edit*
 Requirements: **Node.js 22+** (Windows 10/11 for building the installer).
 
 ```bash
-cd desktop
 npm install
 npm run dev          # development: Vite + Electron with hot reload
 npm test             # 17 service tests (sales, tables, tokens, inventory, reports, backup/restore, permissions, templates…)
@@ -74,7 +96,6 @@ npm start            # build the UI and run the production app
 
 ### Windows installer
 ```bash
-cd desktop
 npm run dist         # → release/RetailPOS-Setup-1.0.0.exe   (NSIS installer)
 npm run dist:portable  # → release/RetailPOS-Portable-1.0.0.exe (no install needed)
 ```
@@ -84,7 +105,7 @@ npm run dist:portable  # → release/RetailPOS-Portable-1.0.0.exe (no install ne
 
 Data location on the shop PC: `%APPDATA%\Retail POS\` (`data\retailpos.db`, `backups\`, `logs\`, `license.json`).
 
-> **Before giving the installer to customers:** paste your license public key into `desktop/electron/license/config.js` (see [docs/LICENSING.md](docs/LICENSING.md)). Without it the build runs as an unlicensed "developer build" and shows a banner.
+> **Before giving the installer to customers:** paste your license public key into `electron/license/config.js` (see [docs/LICENSING.md](docs/LICENSING.md)). Without it the build runs as an unlicensed "developer build" and shows a banner.
 
 ---
 
@@ -93,7 +114,7 @@ Data location on the shop PC: `%APPDATA%\Retail POS\` (`data\retailpos.db`, `bac
 Full step-by-step guide: **[docs/SUPER_ADMIN_SETUP.md](docs/SUPER_ADMIN_SETUP.md)**. In short:
 
 ```bash
-cd admin-panel
+cd superadmin
 npm install
 npm run dev                      # http://localhost:5174
 npm test                         # license signing ⇄ POS verification tests
@@ -133,7 +154,7 @@ Barcode scanners: scan into the search box and the product is added on **Enter**
 ## 7. Architecture
 
 ```
-desktop/
+Retail-pos/
 ├── electron/                 Main process (Node) — all business logic, no UI
 │   ├── main.js               window, single-instance lock, image protocol, background jobs
 │   ├── preload.js            exposes one safe `pos.invoke(method, args)` bridge

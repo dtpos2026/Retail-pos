@@ -19,7 +19,7 @@ The POS itself never needs this panel to run. It only needs the license key the 
 ## 2. Deploy the panel and security rules
 
 ```bash
-cd admin-panel
+cd superadmin
 npm install
 npm run build
 npx firebase-tools login          # sign in with the Google account that owns the Firebase project
@@ -35,7 +35,7 @@ The database structure is created automatically by the panel on first use. There
 2. Password accounts must verify the email once: click **Send verification email**, open the link, then **I have verified — continue**.
 3. **Settings → Create signing key**. Then:
    - **Download private backup** and keep the JSON file safe and offline (USB).
-   - **Copy config.js line** and paste it into `desktop/electron/license/config.js` (replace `const PUBLIC_KEY_PEM = ``;`).
+   - **Copy config.js line** and paste it into `electron/license/config.js` (replace `const PUBLIC_KEY_PEM = ``;`).
    - Build the POS installer. From now on every build accepts licenses from this panel.
 4. (Optional) **Admins → Add admin** to let staff generate licenses. They sign in with their own verified email.
 
@@ -50,12 +50,12 @@ The database structure is created automatically by the panel on first use. There
 | `admins/{email}` | email, name, active, addedAt/By | admins read; head writes |
 | `activity/{id}` | action, detail, by, at, clientId?, licenseId? | admins read and create; immutable |
 
-Rules are in `admin-panel/firestore.rules`. Everything requires a **verified** email that is the head admin or an active entry in `admins`.
+Rules are in `superadmin/firestore.rules`. Everything requires a **verified** email that is the head admin or an active entry in `admins`.
 
 ## 5. Local testing with emulators (optional)
 
 ```bash
-cd admin-panel
+cd superadmin
 npx firebase-tools emulators:start --only auth,firestore     # terminal 1
 VITE_USE_EMULATORS=1 npm run dev                             # terminal 2
 ```

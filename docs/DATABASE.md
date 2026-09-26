@@ -5,7 +5,7 @@ Retail POS uses **SQLite** (`node:sqlite`, built into Electron) at `%APPDATA%\Re
 - `journal_mode=WAL`, `synchronous=FULL`, `foreign_keys=ON`. A committed sale survives power loss.
 - Every checkout (order + items + payment + stock + token + table) is **one transaction**, so it is saved completely or not at all.
 - `PRAGMA integrity_check` runs at start-up.
-- Migrations are versioned in `desktop/electron/db/schema.js` (`schema_version` table).
+- Migrations are versioned in `electron/db/schema.js` (`schema_version` table).
 - Timestamps are local time `YYYY-MM-DD HH:MM:SS`; money is stored in rupees (REAL, rounded to 2 decimals).
 
 ## Tables

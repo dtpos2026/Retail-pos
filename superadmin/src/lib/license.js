@@ -1,5 +1,5 @@
 // License signing for Retail POS (runs in the browser, WebCrypto ECDSA P-256 / SHA-256).
-// Key format must match desktop/electron/license/license.js:
+// Key format must match electron/license/license.js:
 //   RPOS1.<base64url(JSON payload)>.<base64url(IEEE-P1363 signature)>
 
 const subtle = globalThis.crypto.subtle;

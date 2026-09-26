@@ -7,6 +7,5 @@ release/
 .env
 .env.local
 .firebase/
-admin-panel/dist/
-tests/.e2e-shots/
 *.zip
+tests/.e2e-shots/

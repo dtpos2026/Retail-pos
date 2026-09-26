@@ -112,7 +112,7 @@ export default function Settings() {
               <div className="card card-pad small" style={{ background: 'var(--info-50)', borderColor: 'transparent' }}>
                 <b>Put this key into the POS before building installers for customers:</b>
                 <ol style={{ margin: '8px 0 0', paddingLeft: 18, lineHeight: 1.7 }}>
-                  <li>Open <code>desktop/electron/license/config.js</code></li>
+                  <li>Open <code>electron/license/config.js</code></li>
                   <li>Replace the line <code>const PUBLIC_KEY_PEM = ``;</code> with the copied config.js line.</li>
                   <li>Build the installer (<code>npm run dist</code> or the GitHub Actions workflow).</li>
                 </ol>

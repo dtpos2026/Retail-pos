@@ -22,13 +22,13 @@ test('panel-signed key verifies with desktop algorithm', async () => {
 
 test('desktop license module accepts panel key', async () => {
   const { privateJwk, publicPem } = await generateKeyPair();
-  const cfgPath = require.resolve('../../desktop/electron/license/config.js');
+  const cfgPath = require.resolve('../../electron/license/config.js');
   require.cache[cfgPath] = { id: cfgPath, filename: cfgPath, loaded: true, exports: { PUBLIC_KEY_PEM: publicPem, TRIAL_DAYS: 7, FIREBASE: { projectId: 'x', apiKey: 'y' }, VENDOR: {} } };
-  const ctx = require('../../desktop/electron/core/context.js');
+  const ctx = require('../../electron/core/context.js');
   const fs = require('node:fs');
   const os = require('node:os');
   ctx.paths.userData = fs.mkdtempSync(os.tmpdir() + '/rpos-lic-');
-  const lic = require('../../desktop/electron/license/license.js');
+  const lic = require('../../electron/license/license.js');
   assert.equal(lic.status().state, 'trial');
   const mid = lic.machineId();
   const key = await signLicense(privateJwk, { lid: 'L9', cid: 'C9', bn: 'Test Shop', mid, plan: 'yearly', iat: '2026-01-01', exp: '2099-12-31', mu: 2 });

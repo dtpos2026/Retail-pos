@@ -1,7 +1,7 @@
 # Licensing
 
 ## How it works
-- The Super Admin panel owns an **ECDSA P-256 key pair**. The private key signs licenses. The POS contains only the **public key** (`desktop/electron/license/config.js`), so it can verify licenses but never create them.
+- The Super Admin panel owns an **ECDSA P-256 key pair**. The private key signs licenses. The POS contains only the **public key** (`electron/license/config.js`), so it can verify licenses but never create them.
 - A license key looks like `RPOS1.<payload>.<signature>` (base64url). Payload:
 
 | Field | Meaning |

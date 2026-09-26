@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "deploy": "vite build && firebase deploy",
+    "deploy": "npm run build && npx firebase-tools deploy",
     "test": "node --test --no-warnings tests/*.test.js"
   },
   "dependencies": {
