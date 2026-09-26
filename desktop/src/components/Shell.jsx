@@ -1,0 +1,129 @@
+import { useEffect, useState } from 'react';
+import { NavLink, useLocation } from 'react-router-dom';
+import {
+  LayoutDashboard, ShoppingCart, ReceiptText, Armchair, Package, Tags, Users2, Ticket, Boxes, BarChart3, UserCog, Settings as SettingsIcon,
+  LogOut, PanelLeftClose, PanelLeftOpen, ShieldAlert, KeyRound,
+} from 'lucide-react';
+import { useApp } from '../context/AppContext';
+import { api } from '../lib/api';
+import { initials } from '../lib/format';
+import { Button } from './ui';
+
+export const NAV = [
+  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, perm: 'dashboard' },
+  { to: '/pos', label: 'POS / New Sale', icon: ShoppingCart, perm: 'pos' },
+  { to: '/orders', label: 'Orders', icon: ReceiptText, perm: 'orders', badge: 'pending' },
+  { to: '/tables', label: 'Tables', icon: Armchair, perm: 'tables', needs: 'dineIn' },
+  { to: '/products', label: 'Products', icon: Package, perm: 'products' },
+  { to: '/categories', label: 'Categories', icon: Tags, perm: 'categories' },
+  { to: '/customers', label: 'Customers', icon: Users2, perm: 'customers' },
+  { to: '/tokens', label: 'Tokens', icon: Ticket, perm: 'tokens' },
+  { to: '/inventory', label: 'Inventory', icon: Boxes, perm: 'inventory' },
+  { to: '/reports', label: 'Reports', icon: BarChart3, perm: 'reports' },
+  { to: '/users', label: 'Users', icon: UserCog, perm: 'users' },
+  { to: '/settings', label: 'Settings', icon: SettingsIcon, perm: 'settings' },
+];
+
+function Clock() {
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 15000);
+    return () => clearInterval(t);
+  }, []);
+  return (
+    <div className="clock">
+      <b>{now.toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' })}</b>
+      <div>{now.toLocaleDateString('en-PK', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}</div>
+    </div>
+  );
+}
+
+export default function Shell({ children }) {
+  const { user, settings, license, info, can, logout, confirm } = useApp();
+  const [collapsed, setCollapsed] = useState(false);
+  const [pending, setPending] = useState(0);
+  const loc = useLocation();
+  const biz = settings?.business || {};
+  const current = NAV.find((n) => loc.pathname.startsWith(n.to));
+
+  useEffect(() => {
+    if (!can('orders') && !can('pos')) return;
+    api('orders.pending').then((r) => setPending(r.length)).catch(() => {});
+  }, [loc.pathname, can]);
+
+  // Collapse the sidebar on the POS screen to give products more room.
+  useEffect(() => setCollapsed(loc.pathname === '/pos'), [loc.pathname]);
+
+  const doLogout = async () => {
+    if (await confirm({ title: 'Log out?', message: 'Any items in the current cart that are not saved will be lost.', confirmText: 'Log out' })) logout();
+  };
+
+  const nav = NAV.filter((n) => can(n.perm) && (n.needs !== 'dineIn' || settings?.sales?.enableDineIn));
+
+  return (
+    <div className="shell">
+      <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
+        <div className="brand">
+          <div className="brand-logo">{biz.logo ? <img src={biz.logo} alt="" /> : 'R'}</div>
+          <div className="brand-text">
+            <div className="brand-name">Retail POS</div>
+            <div className="brand-sub">
+              <bdi>{biz.name && biz.name !== 'My Business' ? biz.name : 'Simple Offline POS'}</bdi>
+            </div>
+          </div>
+        </div>
+        <nav className="nav">
+          {nav.map((n) => (
+            <NavLink key={n.to} to={n.to} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title={n.label}>
+              <n.icon size={19} />
+              <span className="nav-label">{n.label}</span>
+              {n.badge === 'pending' && pending > 0 && <span className="badge-dot">{pending}</span>}
+            </NavLink>
+          ))}
+        </nav>
+        <div className="sidebar-foot">
+          <button className="nav-item" style={{ background: 'none', border: 0, width: '100%', cursor: 'pointer' }} onClick={() => setCollapsed(!collapsed)} title="Toggle sidebar">
+            {collapsed ? <PanelLeftOpen size={19} /> : <PanelLeftClose size={19} />}
+            <span className="nav-label">Collapse</span>
+          </button>
+        </div>
+      </aside>
+      <div className="main">
+        <header className="topbar">
+          <h1>{current?.label || 'Retail POS'}</h1>
+          <div className="spacer" />
+          <Clock />
+          <div className="user-chip">
+            <div className="avatar">{initials(user.name)}</div>
+            <div className="who">
+              <div className="b">{user.name}</div>
+              <small>{user.role}</small>
+            </div>
+            <Button variant="ghost" size="sm" icon={LogOut} onClick={doLogout} title="Log out" />
+          </div>
+        </header>
+        {license?.state === 'trial' && (
+          <div className="banner warn">
+            <KeyRound size={16} /> {license.message} {can('settings') ? 'Activate from Settings → License.' : 'Ask your admin to activate the license.'}
+          </div>
+        )}
+        {license?.state === 'active' && license.message && (
+          <div className="banner warn">
+            <KeyRound size={16} /> {license.message} Contact {license.vendor?.name} to renew.
+          </div>
+        )}
+        {license?.state === 'unconfigured' && info?.packaged && (
+          <div className="banner info">
+            <ShieldAlert size={16} /> Developer build: licensing is not configured. Do not distribute this build to customers.
+          </div>
+        )}
+        {info?.defaultAdmin && user.role === 'admin' && (
+          <div className="banner danger">
+            <ShieldAlert size={16} /> You are using the default admin password. Change it in Users to protect your data.
+          </div>
+        )}
+        <main className={`content ${loc.pathname === '/pos' ? 'flush' : ''}`}>{children}</main>
+      </div>
+    </div>
+  );
+}
