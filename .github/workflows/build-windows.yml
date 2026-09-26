@@ -4,6 +4,10 @@ on:
   workflow_dispatch:
   push:
     tags: ['v*']
+    branches: ['**']
+    paths:
+      - 'desktop/**'
+      - '.github/workflows/build-windows.yml'
 
 jobs:
   build:
