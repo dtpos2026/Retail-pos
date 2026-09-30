@@ -354,10 +354,12 @@ export default function Pos() {
                       <div className="initials" style={{ background: `linear-gradient(135deg, ${p.category_color || '#6366f1'}, ${p.category_color || '#6366f1'}bb)` }}>{initials(p.name)}</div>
                     )}
                   </div>
+                  {p.is_deal && <span className="deal-badge">DEAL</span>}
                   {qtyInCart[p.id] > 0 && <span className="qty-badge">{formatQty(qtyInCart[p.id])}</span>}
                   {tracked && <span className={`stock ${out ? 'out' : low ? 'low' : ''}`}>{out ? 'Out' : formatQty(p.stock_qty)}</span>}
                   <div className="body">
                     <div className="name"><bdi>{p.name}</bdi></div>
+                    {p.is_deal && p.deal_text && <div className="small faint" style={{ fontSize: 11, lineHeight: 1.2 }}>{p.deal_text}</div>}
                     <div className="price">
                       {p.discount > 0 && <s className="faint small" style={{ fontWeight: 500, marginRight: 5 }}>{formatMoney(p.sale_price, '')}</s>}
                       {formatMoney(p.sale_price - (p.discount || 0), cur)}

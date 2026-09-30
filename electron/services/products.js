@@ -5,13 +5,15 @@ const { AppError, assert } = require('../core/errors');
 const { nowLocal, cleanStr, round2, toNumber } = require('../core/util');
 
 const COLUMNS = `p.id, p.name, p.sku, p.barcode, p.category_id, p.sale_price, p.cost_price, p.discount,
-  p.stock_qty, p.low_stock, p.unit, p.track_stock, p.active, p.sort_order, p.updated_at,
+  p.stock_qty, p.low_stock, p.unit, p.track_stock, p.active, p.sort_order, p.updated_at, p.is_deal,
+  (SELECT group_concat(CAST(di.qty AS INTEGER) || ' × ' || cp.name, ' + ') FROM deal_items di JOIN products cp ON cp.id = di.product_id WHERE di.deal_id = p.id) AS deal_text,
   (p.image IS NOT NULL) AS has_image, c.name AS category_name, c.color AS category_color`;
 
 function shape(p) {
   return {
     ...p,
     active: !!p.active,
+    is_deal: !!p.is_deal,
     track_stock: !!p.track_stock,
     has_image: !!p.has_image,
     image_url: p.has_image ? `posimg://product/${p.id}?v=${encodeURIComponent(p.updated_at)}` : null,
@@ -40,7 +42,14 @@ function list({ search, categoryId, activeOnly, lowStockOnly } = {}) {
 function get({ id }) {
   const p = ctx.db.get(`SELECT ${COLUMNS} FROM products p LEFT JOIN categories c ON c.id = p.category_id WHERE p.id = ?`, [Number(id)]);
   assert(p, 'Product not found.');
-  return shape(p);
+  const out = shape(p);
+  if (out.is_deal) {
+    out.deal_items = ctx.db.all(
+      'SELECT di.product_id AS productId, di.qty, cp.name, cp.sale_price, cp.cost_price FROM deal_items di JOIN products cp ON cp.id = di.product_id WHERE di.deal_id = ? ORDER BY di.id',
+      [p.id]
+    );
+  }
+  return out;
 }
 
 /** Exact barcode / SKU match used by barcode scanners on the POS screen. */
@@ -85,17 +94,39 @@ function save(input) {
     const dupe = ctx.db.get('SELECT name FROM products WHERE barcode = ? AND id <> ?', [barcode, id || 0]);
     if (dupe) throw new AppError(`Barcode already used by "${dupe.name}".`);
   }
+  // ---- deals (combo: several menu items sold together at one price) ----------------------------
+  let isDeal = input.isDeal === undefined ? (id ? !!ctx.db.get('SELECT is_deal FROM products WHERE id = ?', [id])?.is_deal : false) : !!input.isDeal;
+  let dealItems = null;
+  let dealCost = 0;
+  if (isDeal) {
+    assert(Array.isArray(input.dealItems) && input.dealItems.length > 0, 'Add at least one item to the deal.');
+    const seen = new Set();
+    dealItems = input.dealItems.map((d) => {
+      const pid = Number(d.productId);
+      const qty = round2(toNumber(d.qty));
+      assert(qty > 0, 'Deal item quantity must be greater than zero.');
+      assert(!seen.has(pid), 'An item is listed twice in the deal. Increase its quantity instead.');
+      seen.add(pid);
+      assert(pid !== id, 'A deal cannot contain itself.');
+      const comp = ctx.db.get('SELECT id, name, cost_price, is_deal FROM products WHERE id = ?', [pid]);
+      assert(comp, 'A deal item no longer exists.');
+      assert(!comp.is_deal, `"${comp.name}" is itself a deal. Deals cannot contain other deals.`);
+      dealCost += comp.cost_price * qty;
+      return { pid, qty };
+    });
+  }
   const fields = {
     name,
     sku,
     barcode,
     category_id: categoryId,
     sale_price: salePrice,
-    cost_price: costPrice,
+    cost_price: isDeal ? round2(dealCost) : costPrice,
     discount,
     low_stock: round2(toNumber(input.low_stock)),
     unit: cleanStr(input.unit || 'pcs', 20) || 'pcs',
-    track_stock: input.track_stock !== false,
+    track_stock: isDeal ? false : input.track_stock !== false,
+    is_deal: isDeal,
     active: input.active !== false,
     updated_at: nowLocal(),
   };
@@ -119,6 +150,10 @@ function save(input) {
         );
       }
     }
+    if (isDeal) {
+      ctx.db.run('DELETE FROM deal_items WHERE deal_id = ?', [productId]);
+      for (const d of dealItems) ctx.db.run('INSERT INTO deal_items (deal_id, product_id, qty) VALUES (?, ?, ?)', [productId, d.pid, d.qty]);
+    }
     if (input.image === null) {
       ctx.db.run('UPDATE products SET image = NULL, image_mime = NULL WHERE id = ?', [productId]);
     } else if (typeof input.image === 'string' && input.image.startsWith('data:')) {
@@ -131,7 +166,7 @@ function save(input) {
 
 function remove({ id }) {
   id = Number(id);
-  const used = ctx.db.get('SELECT COUNT(*) c FROM order_items WHERE product_id = ?', [id]).c;
+  const used = ctx.db.get('SELECT COUNT(*) c FROM order_items WHERE product_id = ?', [id]).c + ctx.db.get('SELECT COUNT(*) c FROM deal_items WHERE product_id = ?', [id]).c;
   if (used > 0) {
     ctx.db.run('UPDATE products SET active = 0, updated_at = ? WHERE id = ?', [nowLocal(), id]);
     return { deactivated: true };
@@ -144,4 +179,10 @@ function image(id) {
   return ctx.db.get('SELECT image, image_mime FROM products WHERE id = ?', [Number(id)]);
 }
 
-module.exports = { list, get, findByCode, save, remove, image };
+/** Set or clear a product's picture from a data URL (used by bulk picture import). */
+function setImage(id, dataUrl) {
+  const { buf, mime } = decodeImage(dataUrl);
+  ctx.db.run('UPDATE products SET image = ?, image_mime = ?, updated_at = ? WHERE id = ?', [buf, mime, nowLocal(), Number(id)]);
+}
+
+module.exports = { list, get, findByCode, save, remove, image, setImage };

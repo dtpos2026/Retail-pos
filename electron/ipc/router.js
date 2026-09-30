@@ -16,6 +16,7 @@ const products = require('../services/products');
 const customers = require('../services/customers');
 const tables = require('../services/tables');
 const tableOps = require('../services/tableOps');
+const bulk = require('../services/bulk');
 const orders = require('../services/orders');
 const tokens = require('../services/tokens');
 const inventory = require('../services/inventory');
@@ -119,6 +120,10 @@ const routes = {
   'products.findByCode': { fn: (a) => products.findByCode(a) },
   'products.save': { perm: 'products', fn: (a) => products.save(a) },
   'products.remove': { perm: 'products', fn: (a) => products.remove(a) },
+  'products.importParse': { perm: 'products', fn: (a) => bulk.parseMenu(a) },
+  'products.importApply': { perm: 'products', fn: (a) => bulk.importMenu(a) },
+  'products.setImages': { perm: 'products', fn: (a) => bulk.setImages(a) },
+  'products.template': { perm: 'products', fn: (a) => saveXlsx(a && a.kind === 'menu' ? bulk.menuXlsx() : bulk.templateXlsx(), a && a.kind === 'menu' ? 'Menu-export.xlsx' : 'Menu-import-template.xlsx') },
 
   // ---- customers / tables --------------------------------------------------
   'customers.list': { any: ['customers', 'pos'], fn: (a) => customers.list(a) },
@@ -268,6 +273,18 @@ async function savePng(defaultName, html, widthMm) {
   });
   if (r.canceled || !r.filePath) return { canceled: true };
   fs.writeFileSync(r.filePath, await printService.renderPng(html, widthMm));
+  shell.showItemInFolder(r.filePath);
+  return { file: r.filePath };
+}
+
+async function saveXlsx(buffer, defaultName) {
+  const r = await dialog.showSaveDialog(win(), {
+    title: 'Save Excel file',
+    defaultPath: require('path').join(app.getPath('documents'), defaultName),
+    filters: [{ name: 'Excel workbook', extensions: ['xlsx'] }],
+  });
+  if (r.canceled || !r.filePath) return { canceled: true };
+  fs.writeFileSync(r.filePath, buffer);
   shell.showItemInFolder(r.filePath);
   return { file: r.filePath };
 }

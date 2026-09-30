@@ -70,6 +70,7 @@ npx firebase-tools deploy
 | **Printers** | Any Windows printer (USB, Bluetooth, network) for receipts and a separate token/kitchen printer. Direct thermal ESC/POS printing (no blank paper, exact cut) or Windows driver mode; silent printing; clear error when printing fails. |
 | **Backup & Restore** | Backup now, backup to USB / folder, automatic daily backup (keeps the last N), restore with a safety copy, last-backup indicator. |
 | **Data safety** | SQLite WAL + `synchronous=FULL`, every sale in one transaction, integrity check at start-up, crash handlers, friendly error messages (technical details only in logs). |
+| **Bulk menu & deals** | Import the whole menu from Excel/CSV (template included, categories created automatically), attach pictures in bulk by file name (`Zinger Burger.jpg` → Zinger Burger), and create deals/combos whose component stock is deducted automatically. |
 | **License** | A license key is required from the first launch (no trial by default). The public key is downloaded automatically from your Super Admin, nothing to paste. The computer registers once (online) and is remembered; the Super Admin can block / suspend / remove devices live and set the device limit. Renewals and revocations are picked up automatically when online. |
 
 ### Super Admin panel (web, Firebase)

@@ -158,6 +158,54 @@ let failed = false;
     if (firstInk > 24) throw new Error(`blank space at top: ${firstInk} rows`);
     await page.keyboard.press('Escape');
   });
+  await step('bulk menu import (xlsx), bulk pictures by file name, deal creation', async () => {
+    const { reportToXlsx } = require('../electron/printing/xlsx');
+    const xlsx = reportToXlsx({
+      title: 'Menu',
+      columns: [{ key: 'name', label: 'Name' }, { key: 'category', label: 'Category' }, { key: 'sale_price', label: 'Price', type: 'number' }],
+      rows: [{ name: 'Zinger Burger', category: 'Burgers', sale_price: 470 }, { name: 'Paneer Tikka Roll', category: 'Rolls', sale_price: 320 }, { name: 'Mango Shake', category: 'Drinks', sale_price: 250 }],
+    });
+    const xfile = path.join(ud, 'menu.xlsx');
+    fs.writeFileSync(xfile, xlsx);
+    await page.click('a[href="#/products"]');
+    await page.waitForSelector('table.table');
+    await page.click('button:has-text("Import Excel")');
+    await page.setInputFiles('.modal input[type=file]', xfile);
+    await page.waitForSelector('.modal .badge:has-text("2 new")');
+    await shot('50-import-preview');
+    await page.click('.modal button:has-text("Import 3 items")');
+    await page.waitForSelector('.modal:has-text("2 added · 1 updated")');
+    await page.click('.modal button:has-text("Done")');
+    // pictures: names match items (one with different case / separators, one unknown)
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
+    const pics = ['zinger-burger.png', 'PANEER TIKKA ROLL.png', 'mango_shake.png', 'mystery dish.png'].map((n) => { const f = path.join(ud, n); fs.writeFileSync(f, png); return f; });
+    await page.click('button:has-text("Bulk pictures")');
+    await page.setInputFiles('.modal input[type=file][multiple]:not([webkitdirectory])', pics);
+    await page.waitForSelector('.modal .badge:has-text("3 matched")');
+    await shot('51-bulk-pictures');
+    await page.click('.modal button:has-text("Add 3 pictures")');
+    await page.waitForSelector('text=3 pictures added');
+    const list = await page.evaluate(() => window.pos.invoke('products.list', {}));
+    const withImg = list.data.filter((p) => p.has_image).map((p) => p.name).sort();
+    if (!['Mango Shake', 'Paneer Tikka Roll', 'Zinger Burger'].every((n) => withImg.includes(n))) throw new Error('pictures not attached: ' + withImg);
+    // deal
+    await page.click('button:has-text("Create Deal")');
+    await page.fill('.modal input[placeholder^="e.g. Family Deal"]', 'Burger Combo');
+    await page.fill('.modal input[placeholder="0"]', '600');
+    for (const n of ['Zinger Burger', 'Mango Shake']) {
+      await page.fill('.modal input[placeholder^="Search menu items"]', n);
+      await page.click(`.modal button:has-text("${n}")`);
+    }
+    await shot('52-deal-form');
+    await page.click('.modal button:has-text("Save Deal")');
+    await page.waitForSelector('text=Deal created');
+    await page.click('a[href="#/pos"]');
+    await page.waitForSelector('.pcard .deal-badge');
+    await shot('53-pos-deal');
+    await page.click('.pcard:has(.deal-badge)');
+    await page.waitForSelector('.citem:has-text("Burger Combo")');
+    await page.click('button:has-text("Clear")').catch(() => {});
+  });
   await step('table management: floors, transfer, merge, split, free, history', async () => {
     const inv = async (m, a) => { const r = await page.evaluate(([mm, aa]) => window.pos.invoke(mm, aa), [m, a]); if (!r.ok) throw new Error(`${m}: ${r.error && r.error.message}`); return r.data; };
     const f = await inv('tables.floorSave', { name: 'Ground Floor' });

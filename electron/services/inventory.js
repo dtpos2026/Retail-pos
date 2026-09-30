@@ -5,6 +5,18 @@ const settings = require('./settings');
 const { AppError, assert } = require('../core/errors');
 const { nowLocal, round2, toNumber, cleanStr } = require('../core/util');
 
+/** Stock lines of an order: normal items as sold, deals expanded into their components. */
+function stockLines(orderId) {
+  return ctx.db.all(
+    `SELECT t.product_id, SUM(t.qty) qty, p.name, p.stock_qty, p.track_stock FROM (
+       SELECT i.product_id AS product_id, i.qty AS qty FROM order_items i JOIN products d ON d.id = i.product_id WHERE i.order_id = ? AND d.is_deal = 0
+       UNION ALL
+       SELECT di.product_id, i.qty * di.qty FROM order_items i JOIN deal_items di ON di.deal_id = i.product_id WHERE i.order_id = ?
+     ) t JOIN products p ON p.id = t.product_id GROUP BY t.product_id`,
+    [orderId, orderId]
+  );
+}
+
 function isEnabled() {
   return settings.get('inventory').enabled;
 }
@@ -28,12 +40,7 @@ function applySale(orderId) {
   const order = ctx.db.get('SELECT id, order_no, stock_applied FROM orders WHERE id = ?', [orderId]);
   if (!order || order.stock_applied) return false;
   const { allowNegative } = settings.get('inventory');
-  const items = ctx.db.all(
-    `SELECT i.product_id, SUM(i.qty) qty, p.name, p.stock_qty, p.track_stock
-     FROM order_items i JOIN products p ON p.id = i.product_id
-     WHERE i.order_id = ? GROUP BY i.product_id`,
-    [orderId]
-  );
+  const items = stockLines(orderId);
   for (const it of items) {
     if (!it.track_stock) continue;
     if (!allowNegative && it.stock_qty < it.qty) {
@@ -49,11 +56,7 @@ function applySale(orderId) {
 function reverseSale(orderId) {
   const order = ctx.db.get('SELECT id, order_no, stock_applied FROM orders WHERE id = ?', [orderId]);
   if (!order || !order.stock_applied) return false;
-  const items = ctx.db.all(
-    `SELECT i.product_id, SUM(i.qty) qty, p.track_stock FROM order_items i JOIN products p ON p.id = i.product_id
-     WHERE i.order_id = ? GROUP BY i.product_id`,
-    [orderId]
-  );
+  const items = stockLines(orderId);
   for (const it of items) {
     if (it.track_stock) move(it.product_id, 'return', it.qty, { orderId, note: `Refund ${order.order_no}` });
   }

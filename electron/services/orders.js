@@ -115,6 +115,11 @@ function save(input) {
         );
         assert(product, `Product "${it.name || ''}" no longer exists. Remove it from the cart.`);
       }
+      let dealNote = null;
+      if (product && product.is_deal) {
+        const parts = ctx.db.all('SELECT di.qty, cp.name FROM deal_items di JOIN products cp ON cp.id = di.product_id WHERE di.deal_id = ? ORDER BY di.id', [product.id]);
+        dealNote = parts.map((d) => `${Math.round(d.qty * 100) / 100} × ${d.name}`).join(' + ');
+      }
       const unitPrice = round2(toNumber(it.unitPrice, product ? product.sale_price : 0));
       const unitDiscount = round2(Math.min(unitPrice, Math.max(0, toNumber(it.unitDiscount))));
       if (unitDiscount > (product ? product.discount : 0) + 0.001) manualDiscount = true;
@@ -128,7 +133,7 @@ function save(input) {
         unitPrice,
         unitDiscount,
         costPrice: product ? product.cost_price : 0,
-        notes: cleanStr(it.notes, 200) || null,
+        notes: cleanStr(it.notes, 200) || dealNote,
       };
     });
     if (manualDiscount && !can(user, 'discount')) throw new AppError('You do not have permission to give discounts.');

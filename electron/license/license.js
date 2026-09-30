@@ -128,6 +128,8 @@ const packaged = () => {
 /** Download the provider's public key (internet needed once). Resolves true when licensing is configured. */
 async function ensureKey() {
   if (configured()) return true;
+  // Unpackaged development runs stay license-free (set RPOS_FORCE_LICENSE=1 to test the real flow).
+  if (!packaged() && !process.env.RPOS_FORCE_LICENSE) return false;
   const before = status();
   try {
     const doc = await cloud.getPublicKey();

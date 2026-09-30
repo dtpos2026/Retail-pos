@@ -215,7 +215,7 @@ function ReceiptTab() {
     api('print.templates').then(setTemplates).catch(toastError);
   }, [toastError]);
   const v = s.v;
-  const setWidth = (w) => s.setV({ ...v, paperWidth: w, marginLeft: 1, marginRight: 1, fontSize: w === 58 ? 11 : 12 });
+  const setWidth = (w) => s.setV({ ...v, paperWidth: w, marginSide: 1, marginLeft: 1, marginRight: 1, fontSize: w === 58 ? 11 : 12 });
   const test = async () => {
     if (s.dirty && !(await s.save())) return;
     api('print.test', { kind: 'receipt' }).then((r) => toast(`Test receipt sent to ${r.printer}`)).catch(toastError);
@@ -239,8 +239,8 @@ function ReceiptTab() {
           <div className="form-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
             <Field label="Top margin (mm)"><NumberInput value={v.marginTop} onChange={(x) => s.set('marginTop')(Number(x))} /></Field>
             <Field label="Bottom margin"><NumberInput value={v.marginBottom} onChange={(x) => s.set('marginBottom')(Number(x))} /></Field>
-            <Field label="Left margin"><NumberInput value={v.marginLeft} onChange={(x) => s.set('marginLeft')(Number(x))} /></Field>
-            <Field label="Right margin"><NumberInput value={v.marginRight} onChange={(x) => s.set('marginRight')(Number(x))} /></Field>
+            <Field label="Side margin (mm)" hint="Left = Right, always equal"><NumberInput value={v.marginSide} onChange={(x) => { const n = Number(x); s.setV({ ...v, marginSide: n, marginLeft: n, marginRight: n }); }} /></Field>
+            <div className="small faint" style={{ alignSelf: 'end', paddingBottom: 8 }}>Printer not centred? Use <b>Settings → Printers → Side balance</b>.</div>
             <Field label="Font size (px)"><NumberInput value={v.fontSize} onChange={(x) => s.set('fontSize')(Number(x))} /></Field>
             <Field label="Font">
               <Select value={v.fontFamily} onChange={(e) => s.set('fontFamily')(e.target.value)} options={[{ value: 'sans', label: 'Arial (clear)' }, { value: 'mono', label: 'Monospace' }, { value: 'condensed', label: 'Condensed' }, { value: 'serif', label: 'Serif' }]} />

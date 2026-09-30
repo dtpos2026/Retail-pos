@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Package, Plus, Pencil, Trash2, ImagePlus, X, Barcode } from 'lucide-react';
+import { Package, Plus, Pencil, Trash2, ImagePlus, X, Barcode, Gift, FileSpreadsheet, Images } from 'lucide-react';
 import { api } from '../lib/api';
 import { useApp } from '../context/AppContext';
 import { readImage } from '../lib/image';
 import { initials, formatQty } from '../lib/format';
+import { ImportMenuModal, BulkPicturesModal, DealForm } from '../components/BulkModals';
 import { PageHead, Button, SearchBox, Select, Loading, Empty, Money, Modal, Field, Input, NumberInput, Switch, Badge } from '../components/ui';
 
 const UNITS = ['pcs', 'plate', 'kg', 'g', 'litre', 'ml', 'dozen', 'pack', 'bottle', 'box', 'cup', 'glass', 'serving'];
@@ -142,6 +143,17 @@ export default function Products() {
   const [cat, setCat] = useState('');
   const [status, setStatus] = useState('');
   const [edit, setEdit] = useState(null);
+  const [tool, setTool] = useState(null); // 'import' | 'pictures' | 'deal'
+  const [deal, setDeal] = useState(null);
+
+  const openRow = async (p) => {
+    if (!p.is_deal) return setEdit(p);
+    try {
+      setDeal(await api('products.get', { id: p.id }));
+    } catch (e) {
+      toastError(e);
+    }
+  };
 
   const load = () => api('products.list', {}).then(setRows).catch(toastError);
   useEffect(() => {
@@ -163,6 +175,9 @@ export default function Products() {
   return (
     <div className="col" style={{ gap: 16 }}>
       <PageHead title="Products" sub={rows ? `${rows.length} products` : ''}>
+        <Button icon={FileSpreadsheet} onClick={() => setTool('import')}>Import Excel</Button>
+        <Button icon={Images} onClick={() => setTool('pictures')} disabled={!rows?.length}>Bulk pictures</Button>
+        <Button icon={Gift} onClick={() => setDeal({})}>Create Deal</Button>
         <Button variant="primary" icon={Plus} onClick={() => setEdit({})}>Add Product</Button>
       </PageHead>
       <div className="card card-pad row wrap">
@@ -183,11 +198,11 @@ export default function Products() {
               </thead>
               <tbody>
                 {filtered.map((p) => (
-                  <tr key={p.id} className="clickable" onClick={() => setEdit(p)}>
+                  <tr key={p.id} className="clickable" onClick={() => openRow(p)}>
                     <td>
                       <div className="row">
                         {p.image_url ? <img className="thumb" src={p.image_url} alt="" /> : <div className="thumb" style={{ background: p.category_color || '#6366f1' }}>{initials(p.name)}</div>}
-                        <div><div className="b"><bdi>{p.name}</bdi></div><div className="small faint">{p.unit}</div></div>
+                        <div><div className="b"><bdi>{p.name}</bdi> {p.is_deal && <span className="badge amber" style={{ marginLeft: 4 }}>DEAL</span>}</div><div className="small faint">{p.is_deal ? p.deal_text : p.unit}</div></div>
                       </div>
                     </td>
                     <td>{p.category_name ? <span className="row" style={{ gap: 6 }}><span style={{ width: 9, height: 9, borderRadius: 5, background: p.category_color }} /><bdi>{p.category_name}</bdi></span> : <span className="faint">—</span>}</td>
@@ -206,6 +221,9 @@ export default function Products() {
           </div>
         )}
       </div>
+      {tool === 'import' && <ImportMenuModal onClose={() => setTool(null)} onDone={() => { load(); api('categories.list').then(setCats).catch(() => {}); }} />}
+      {tool === 'pictures' && rows && <BulkPicturesModal products={rows} onClose={() => setTool(null)} onDone={load} />}
+      {deal && rows && <DealForm deal={deal.id ? deal : null} categories={cats} products={rows} onClose={() => setDeal(null)} onSaved={load} />}
       {edit && <ProductForm product={edit.id ? edit : null} categories={cats} onClose={() => setEdit(null)} onSaved={load} />}
     </div>
   );

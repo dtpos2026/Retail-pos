@@ -56,14 +56,22 @@ function bodyWidthMm(paperMm) {
   return escpos.mmForDots(escpos.effectiveDots(paperMm, pr).content);
 }
 
-function baseCss({ paperWidth, bodyWidth, marginTop, marginRight, marginBottom, marginLeft, fontSize, fontFamily, compact }) {
+/** Left and right margins are always equal; `marginSide` is the single setting (older data: the smaller of left/right). */
+function sideMargin({ marginSide, marginLeft, marginRight }) {
+  const s = Number(marginSide);
+  if (Number.isFinite(s) && marginSide !== null && marginSide !== '') return Math.max(0, s);
+  return Math.max(0, Math.min(Number(marginLeft) || 0, Number(marginRight) || 0));
+}
+
+function baseCss({ paperWidth, bodyWidth, marginTop, marginSide, marginRight, marginBottom, marginLeft, fontSize, fontFamily, compact }) {
+  const side = sideMargin({ marginSide, marginLeft, marginRight });
   const fam = FONT_FAMILIES[fontFamily] || FONT_FAMILIES.sans;
   const bw = bodyWidth || paperWidth;
   const lh = compact ? 1.2 : 1.35;
   return `${urduFontCss()}
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{background:#fff;color:#000}
-body{width:${bw}mm;padding:${marginTop}mm ${marginRight}mm ${marginBottom}mm ${marginLeft}mm;
+body{width:${bw}mm;padding:${marginTop}mm ${side}mm ${marginBottom}mm ${side}mm;
   font-family:${fam},'RPOS Urdu',sans-serif;font-size:${fontSize}px;line-height:${lh};
   -webkit-print-color-adjust:exact;print-color-adjust:exact;overflow:hidden}
 bdi{unicode-bidi:isolate}
@@ -89,4 +97,4 @@ function wrap(css, body, title = 'Receipt') {
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title><style>${css}</style></head><body>${body}</body></html>`;
 }
 
-module.exports = { FONT_FAMILIES, urduFontCss, esc, t, baseCss, logoHtml, wrap, bodyWidthMm };
+module.exports = { sideMargin, FONT_FAMILIES, urduFontCss, esc, t, baseCss, logoHtml, wrap, bodyWidthMm };

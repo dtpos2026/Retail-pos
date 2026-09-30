@@ -21,7 +21,8 @@ const DEFAULTS = {
     template: 'classic',
     marginTop: 1,
     marginBottom: 3,
-    marginLeft: 1,
+    marginSide: 1, // equal left and right margin (mm)
+    marginLeft: 1, // kept equal to marginSide (older versions stored them separately)
     marginRight: 1,
     showLogo: true,
     logoWidth: 45, // percentage of printable width
@@ -163,9 +164,39 @@ function get(section) {
       stored = null;
     }
   }
+  if (section === 'receipt' && stored) migrateMargins(stored);
   const value = merge(DEFAULTS[section], stored);
+  if (section === 'receipt') value.marginLeft = value.marginRight = value.marginSide;
   cache.set(section, value);
   return value;
+}
+
+/**
+ * Older versions had separate left / right margins, which people used to compensate for a printer that is not
+ * centred. Convert once: equal side margin = the smaller one, and the difference moves to the printer's
+ * "Side balance" so the printed result stays exactly the same.
+ */
+function migrateMargins(stored) {
+  if (stored.marginSide !== undefined) return;
+  const l = Number(stored.marginLeft);
+  const r = Number(stored.marginRight);
+  if (!Number.isFinite(l) || !Number.isFinite(r)) return;
+  stored.marginSide = Math.min(l, r);
+  if (Math.abs(l - r) > 0.01) {
+    const row = ctx.db.get("SELECT value FROM settings WHERE key = 'printer'");
+    let pr = {};
+    try {
+      pr = row ? JSON.parse(row.value) : {};
+    } catch {
+      pr = {};
+    }
+    if (!Number(pr.shift)) {
+      pr.shift = Math.max(-96, Math.min(96, Math.round((l - r) * 8)));
+      ctx.db.run("INSERT INTO settings (key, value) VALUES ('printer', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", [JSON.stringify(pr)]);
+      cache.delete('printer');
+    }
+  }
+  ctx.db.run("INSERT INTO settings (key, value) VALUES ('receipt', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", [JSON.stringify({ ...stored, marginLeft: stored.marginSide, marginRight: stored.marginSide })]);
 }
 
 function getAll() {
@@ -178,6 +209,7 @@ function set(section, patch) {
   if (!DEFAULTS[section]) throw new AppError('Unknown settings section.');
   const current = get(section);
   const value = merge(DEFAULTS[section], { ...current, ...(patch || {}) });
+  if (section === 'receipt') value.marginLeft = value.marginRight = value.marginSide;
   validate(section, value);
   ctx.db.run(
     'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
@@ -190,7 +222,7 @@ function set(section, patch) {
 function validate(section, v) {
   if (section === 'receipt') {
     if (![58, 80].includes(Number(v.paperWidth))) throw new AppError('Paper width must be 58mm or 80mm.');
-    for (const k of ['marginTop', 'marginBottom', 'marginLeft', 'marginRight']) {
+    for (const k of ['marginTop', 'marginBottom', 'marginSide']) {
       if (v[k] < 0 || v[k] > 20) throw new AppError('Margins must be between 0 and 20 mm.');
     }
     if (v.fontSize < 8 || v.fontSize > 20) throw new AppError('Font size must be between 8 and 20.');

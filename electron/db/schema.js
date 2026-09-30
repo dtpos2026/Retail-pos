@@ -200,6 +200,20 @@ ALTER TABLE orders ADD COLUMN merged_note TEXT;
 ALTER TABLE payments ADD COLUMN bank_account TEXT;
 `,
   },
+  {
+    version: 3,
+    sql: `
+ALTER TABLE products ADD COLUMN is_deal INTEGER NOT NULL DEFAULT 0;
+CREATE TABLE deal_items (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  deal_id    INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  product_id INTEGER NOT NULL REFERENCES products(id),
+  qty        REAL NOT NULL DEFAULT 1
+);
+CREATE INDEX ix_deal_items_deal ON deal_items(deal_id);
+CREATE INDEX ix_deal_items_product ON deal_items(product_id);
+`,
+  },
 ];
 
 module.exports = { migrations };
