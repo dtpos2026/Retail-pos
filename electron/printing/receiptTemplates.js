@@ -112,7 +112,7 @@ function footer(d, extra = '') {
   if (d.footer) parts.push(`<div>${t(d.footer).replace(/\n/g, '<br>')}</div>`);
   if (d.order.reprint) parts.push('<div class="b" style="margin-top:1mm">** DUPLICATE COPY **</div>');
   parts.push(qrBlock(d));
-  if (d.cfg.showPoweredBy) parts.push('<div style="font-size:.72em;margin-top:1.5mm">Powered by Digital Target · Retail POS</div>');
+  if (d.cfg.showPoweredBy) parts.push('<div style="font-size:.72em;margin-top:1.5mm">Powered by Digital Target · DT Retail POS</div>');
   return `<div class="c" style="${extra}">${parts.join('')}</div>`;
 }
 
