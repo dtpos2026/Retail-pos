@@ -34,10 +34,47 @@ service cloud.firestore {
       allow delete: if isHead();
     }
 
+    // Public status page of a license, read by the offline POS when it happens to be online.
+    // A POS may only bump `deviceCount` by 1 (while below `maxDevices`) in the same batch that creates
+    // its own device document — that is how "one license = N devices" is enforced without a server.
     match /licenseStatus/{licenseId} {
       allow get: if true;          // single-document read by id (POS online check)
       allow list: if isAdmin();    // no public enumeration
-      allow write: if isAdmin();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (
+        resource.data.status == 'active'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deviceCount', 'lastDevice'])
+        && request.resource.data.deviceCount == resource.data.deviceCount + 1
+        && request.resource.data.deviceCount <= resource.data.maxDevices
+        && request.resource.data.lastDevice is string
+        && !exists(/databases/$(database)/documents/devices/$(licenseId + '_' + request.resource.data.lastDevice))
+        && existsAfter(/databases/$(database)/documents/devices/$(licenseId + '_' + request.resource.data.lastDevice))
+      );
+    }
+
+    // One document per registered computer: id = {licenseId}_{machineId}.
+    match /devices/{deviceId} {
+      allow get: if true;
+      allow list: if isAdmin();
+      allow create: if isAdmin() || (
+        request.resource.data.keys().hasOnly(['licenseId', 'machineId', 'name', 'os', 'appVersion', 'status', 'businessName', 'firstSeen', 'lastSeen'])
+        && deviceId == request.resource.data.licenseId + '_' + request.resource.data.machineId
+        && request.resource.data.status == 'active'
+        && request.resource.data.firstSeen is timestamp
+        && request.resource.data.lastSeen is timestamp
+        && get(/databases/$(database)/documents/licenseStatus/$(request.resource.data.licenseId)).data.status == 'active'
+        && getAfter(/databases/$(database)/documents/licenseStatus/$(request.resource.data.licenseId)).data.deviceCount
+             == get(/databases/$(database)/documents/licenseStatus/$(request.resource.data.licenseId)).data.deviceCount + 1
+        && getAfter(/databases/$(database)/documents/licenseStatus/$(request.resource.data.licenseId)).data.deviceCount
+             <= get(/databases/$(database)/documents/licenseStatus/$(request.resource.data.licenseId)).data.maxDevices
+        && getAfter(/databases/$(database)/documents/licenseStatus/$(request.resource.data.licenseId)).data.lastDevice == request.resource.data.machineId
+      );
+      // Heartbeat from the POS: only descriptive fields + lastSeen; it can never change its own status.
+      allow update: if isAdmin() || (
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'os', 'appVersion', 'lastSeen'])
+        && request.resource.data.lastSeen is timestamp
+      );
+      allow delete: if isAdmin();
     }
 
     // Signing key pair. Private key is readable by admins only.

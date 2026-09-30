@@ -19,10 +19,10 @@ const DEFAULTS = {
   receipt: {
     paperWidth: 80,
     template: 'classic',
-    marginTop: 2,
-    marginBottom: 4,
-    marginLeft: 3,
-    marginRight: 3,
+    marginTop: 1,
+    marginBottom: 3,
+    marginLeft: 1,
+    marginRight: 1,
     showLogo: true,
     logoWidth: 45, // percentage of printable width
     logoAlign: 'center',
@@ -40,12 +40,23 @@ const DEFAULTS = {
     showItemNotes: true,
     compact: false,
     copies: 1,
+    showPoweredBy: true,
+    amountInWords: false,
+    qrMode: 'off', // off | order | custom
+    qrText: '',
+    qrLabel: 'Scan to pay / follow us',
   },
   printer: {
     receiptPrinter: '',
     tokenPrinter: '',
     autoPrintReceipt: true,
     autoPrintToken: true,
+    method: 'thermal', // thermal = direct ESC/POS (fast, exact length, exact cut) | driver = Windows driver
+    cut: 'partial', // partial | full | none
+    feedMm: 3, // extra blank feed after the receipt before the cut
+    darkness: 'normal', // light | normal | dark
+    dots: 0, // 0 = auto (384 for 58mm, 576 for 80mm)
+    compatCut: false, // older printers without "feed and cut"
   },
   token: {
     enabled: true,
@@ -61,6 +72,7 @@ const DEFAULTS = {
     showBusinessName: true,
     showLogo: false,
     numberSize: 56,
+    design: 'classic', // classic | boxed | bold | minimal | ticket
     footer: 'Please wait for your number to be called.',
     orderTypes: ['takeaway', 'delivery'],
   },
@@ -100,10 +112,19 @@ const DEFAULTS = {
   },
   general: {
     currency: 'Rs.',
-    theme: 'light',
     showImagesOnPos: true,
     posGridSize: 'medium',
     onboarded: false,
+  },
+  appearance: {
+    theme: 'royal', // royal | crimson | gold | emerald | sunset | ocean | night
+    animations: true,
+    bannerEnabled: false,
+    bannerTitle: '',
+    bannerSubtitle: '',
+    bannerImage: null,
+    bannerOnPos: true,
+    bannerOnDashboard: true,
   },
 };
 
@@ -171,6 +192,15 @@ function validate(section, v) {
     if (v.fontSize < 8 || v.fontSize > 20) throw new AppError('Font size must be between 8 and 20.');
     if (v.logoWidth < 10 || v.logoWidth > 100) throw new AppError('Logo size must be between 10% and 100%.');
     if (v.copies < 1 || v.copies > 5) throw new AppError('Copies must be between 1 and 5.');
+  }
+  if (section === 'printer') {
+    if (!['thermal', 'driver'].includes(v.method)) throw new AppError('Unknown print method.');
+    if (!['partial', 'full', 'none'].includes(v.cut)) throw new AppError('Unknown cut mode.');
+    if (v.feedMm < 0 || v.feedMm > 30) throw new AppError('Feed must be between 0 and 30 mm.');
+    if (v.dots && (v.dots < 192 || v.dots > 832 || v.dots % 8)) throw new AppError('Print width (dots) must be a multiple of 8 between 192 and 832, or 0 for automatic.');
+  }
+  if (section === 'appearance') {
+    if (!['royal', 'crimson', 'gold', 'emerald', 'sunset', 'ocean', 'night'].includes(v.theme)) throw new AppError('Unknown theme.');
   }
   if (section === 'token') {
     if (![58, 80].includes(Number(v.paperWidth))) throw new AppError('Token paper width must be 58mm or 80mm.');

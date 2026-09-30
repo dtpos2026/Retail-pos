@@ -8,7 +8,16 @@ const ctx = require('../core/context');
 const logger = require('../core/logger');
 const { AppError } = require('../core/errors');
 const { machineId } = require('./machine');
-const { PUBLIC_KEY_PEM, TRIAL_DAYS, FIREBASE, VENDOR } = require('./config');
+const cloud = require('./cloud');
+const { PUBLIC_KEY_PEM, TRIAL_DAYS, VENDOR } = require('./config');
+
+const VERSION = (() => {
+  try {
+    return require('../../package.json').version;
+  } catch {
+    return '0.0.0';
+  }
+})();
 
 /*
  * License key format:  RPOS1.<base64url(JSON payload)>.<base64url(ECDSA P-256 / SHA-256 signature, IEEE-P1363)>
@@ -129,10 +138,17 @@ function clockTampered(s) {
   return false;
 }
 
+
+const DEVICE_MSG = {
+  blocked: 'This device has been blocked by your provider. Please contact support.',
+  suspended: 'This device has been suspended by your provider. It will work again when it is re-activated.',
+  removed: 'This device was removed from the license by your provider. Register it again to continue (internet needed once).',
+};
+
 function status() {
   const s = load();
   const mid = machineId();
-  const base = { machineId: mid, configured: configured(), vendor: VENDOR, lastOnlineCheck: s.lastOnlineCheck || null };
+  const base = { machineId: mid, configured: configured(), vendor: VENDOR, version: VERSION, lastOnlineCheck: s.lastOnlineCheck || null };
 
   if (!configured()) {
     return { ...base, state: 'unconfigured', usable: true, message: 'Developer build — licensing not configured.' };
@@ -144,6 +160,7 @@ function status() {
   if (s.key) {
     try {
       const { payload } = decode(s.key);
+      const dev = s.device && s.device.regMid === mid ? s.device : null;
       const info = {
         ...base,
         licenseId: payload.lid,
@@ -153,6 +170,8 @@ function status() {
         issuedAt: payload.iat,
         expiresAt: payload.exp || null,
         maxUsers: payload.mu || 0,
+        maxDevices: s.maxDevices || payload.md || 1,
+        device: dev ? { registered: true, status: dev.status || 'active', name: dev.name, registeredAt: dev.registeredAt } : { registered: false },
       };
       if (payload.mid !== '*' && payload.mid !== mid) {
         return { ...info, state: 'invalid', usable: false, message: 'This license belongs to a different computer.' };
@@ -160,6 +179,13 @@ function status() {
       if (s.revoked === payload.lid) {
         return { ...info, state: 'revoked', usable: false, message: 'This license has been deactivated by your provider.' };
       }
+      // Device registration: license keys that are not locked to this computer need an online registration once.
+      if (!dev && payload.mid === '*') {
+        return { ...info, state: 'unregistered', usable: false, message: s.deviceError || 'This device is not registered yet. Register it to continue (internet needed once).' };
+      }
+      if (dev && dev.status === 'removed') return { ...info, state: 'unregistered', usable: false, message: DEVICE_MSG.removed };
+      if (dev && dev.status === 'blocked') return { ...info, state: 'blocked', usable: false, message: DEVICE_MSG.blocked };
+      if (dev && dev.status === 'suspended') return { ...info, state: 'suspended', usable: false, message: DEVICE_MSG.suspended };
       if (payload.exp) {
         const left = daysUntil(payload.exp);
         if (left <= 0) return { ...info, state: 'expired', usable: false, daysLeft: 0, message: `License expired on ${payload.exp}.` };
@@ -177,7 +203,73 @@ function status() {
   return { ...base, state: 'trial_expired', usable: false, trialDaysLeft: 0, message: 'Your trial has ended. Please activate a license to continue.' };
 }
 
-function activate({ key }) {
+/** Listeners are told whenever a background check changes what the user is allowed to do. */
+const listeners = new Set();
+function onChange(fn) {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
+function notify(before) {
+  const now = status();
+  if (before && before.state === now.state && before.usable === now.usable && before.message === now.message && before.expiresAt === now.expiresAt) return now;
+  listeners.forEach((fn) => {
+    try {
+      fn(now);
+    } catch {
+      /* ignore */
+    }
+  });
+  return now;
+}
+
+function keyPayload() {
+  const s = load();
+  if (!s.key) return null;
+  try {
+    return decode(s.key).payload;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Register this computer for the stored license (needs internet once).
+ * Throws AppError with a clear message when the limit is reached or there is no connection.
+ */
+async function registerDevice() {
+  const s = load();
+  const payload = keyPayload();
+  if (!payload) throw new AppError('Enter a license key first.');
+  const mid = machineId();
+  const before = status();
+  try {
+    const r = await cloud.registerDevice({ lid: payload.lid, machineId: mid, businessName: payload.bn, version: VERSION });
+    s.device = { regMid: mid, status: r.status, name: require('os').hostname(), registeredAt: new Date().toISOString() };
+    s.maxDevices = Number(r.license?.maxDevices) || s.maxDevices;
+    delete s.deviceError;
+    delete s.revoked;
+    s.lastOnlineCheck = new Date().toISOString();
+    save();
+    logger.info('Device registered', payload.lid, r.created ? '(new)' : '(existing)');
+  } catch (err) {
+    if (err instanceof cloud.CloudError) {
+      if (err.offline) {
+        s.deviceError = 'Internet is needed once to register this device. Please connect to the internet and try again.';
+        save();
+        notify(before);
+        throw new AppError(s.deviceError, 'OFFLINE');
+      }
+      s.deviceError = err.message;
+      save();
+      notify(before);
+      throw new AppError(err.message, err.code || 'DEVICE');
+    }
+    throw err;
+  }
+  return notify(before);
+}
+
+async function activate({ key }) {
   if (!configured()) throw new AppError('Licensing is not configured in this build.');
   const { payload, key: clean } = decode(key);
   const mid = machineId();
@@ -186,17 +278,37 @@ function activate({ key }) {
   }
   if (payload.exp && daysUntil(payload.exp) <= 0) throw new AppError(`This license expired on ${payload.exp}.`);
   const s = load();
+  const before = status();
+  const prev = keyPayload();
+  if (!prev || prev.lid !== payload.lid) delete s.device; // a different license: register again
   s.key = clean;
+  delete s.deviceError;
   if (s.revoked === payload.lid) delete s.revoked;
   save();
-  logger.info('License activated', payload.lid);
-  onlineCheck().catch(() => {});
-  return status();
+  logger.info('License key stored', payload.lid);
+  try {
+    await registerDevice();
+  } catch (err) {
+    if (payload.mid === '*') {
+      // Limit reached: do not keep a key that cannot be used on this computer.
+      if (err.code === 'DEVICE_LIMIT' || err.code === 'INACTIVE' || err.code === 'NOT_FOUND') {
+        delete s.key;
+        delete s.device;
+        save();
+      }
+      throw err;
+    }
+    // Machine-locked key: works offline, registration completes on the next online check.
+    logger.info('Machine-locked key activated offline; device registration pending', err.message);
+  }
+  return notify(before);
 }
 
 function removeLicense() {
   const s = load();
   delete s.key;
+  delete s.device;
+  delete s.deviceError;
   save();
   return status();
 }
@@ -211,54 +323,62 @@ function maxUsers() {
 }
 
 /**
- * Best-effort online check against Firestore (public read of licenseStatus/{lid}).
- * Picks up renewals (a newer signed key) and revocations. Silent when offline.
+ * Best-effort online check. Picks up: license revoked / suspended, renewals (newer signed key),
+ * device limit, and this device being blocked / suspended / removed. Also sends a heartbeat.
+ * Silent (returns null) when offline.
  */
 async function onlineCheck() {
   const s = load();
-  if (!configured() || !s.key) return null;
-  let payload;
+  const payload = keyPayload();
+  if (!configured() || !payload) return null;
+  const mid = machineId();
+  const before = status();
+  let state;
   try {
-    payload = decode(s.key).payload;
+    state = await cloud.fetchState(payload.lid, mid);
   } catch {
-    return null;
+    return null; // offline or server unreachable — ignore
   }
-  const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE.projectId}/databases/(default)/documents/licenseStatus/${encodeURIComponent(payload.lid)}?key=${FIREBASE.apiKey}`;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 8000);
-  try {
-    const res = await fetch(url, { signal: controller.signal });
-    if (res.status === 404) return null;
-    if (!res.ok) return null;
-    const doc = await res.json();
-    const f = doc.fields || {};
-    const remoteStatus = f.status?.stringValue;
-    const remoteKey = f.key?.stringValue;
-    s.lastOnlineCheck = new Date().toISOString();
-    if (remoteStatus === 'revoked' || remoteStatus === 'suspended') {
-      s.revoked = payload.lid;
-    } else if (s.revoked === payload.lid) {
-      delete s.revoked;
-    }
-    if (remoteStatus === 'active' && remoteKey && remoteKey !== s.key) {
+  const { license, device } = state;
+  s.lastOnlineCheck = new Date().toISOString();
+  if (license) {
+    if (license.status === 'revoked' || license.status === 'suspended') s.revoked = payload.lid;
+    else if (s.revoked === payload.lid) delete s.revoked;
+    if (license.maxDevices) s.maxDevices = Number(license.maxDevices);
+    if (license.status === 'active' && license.key && license.key !== s.key) {
       try {
-        const next = decode(remoteKey).payload;
-        const mid = machineId();
+        const next = decode(license.key).payload;
         if (next.lid === payload.lid && (next.mid === '*' || next.mid === mid)) {
-          s.key = remoteKey;
+          s.key = license.key;
           logger.info('License updated from server', next.lid, next.exp);
         }
       } catch (err) {
         logger.warn('Remote license key rejected', err.message);
       }
     }
-    save();
-    return status();
-  } catch {
-    return null; // offline — ignore
-  } finally {
-    clearTimeout(timer);
   }
+  if (s.device && s.device.regMid === mid) {
+    if (device) {
+      s.device.status = device.status || 'active';
+      cloud.heartbeat({ lid: payload.lid, machineId: mid, version: VERSION }).catch(() => {});
+    } else if (license) {
+      // Registered before, but the admin deleted the device (freeing the slot).
+      s.device.status = 'removed';
+    }
+  } else if (license && device && payload.mid !== '*') {
+    // Machine-locked key that had not finished registering: adopt the server record.
+    s.device = { regMid: mid, status: device.status || 'active', name: device.name, registeredAt: new Date().toISOString() };
+  } else if (license && !device && payload.mid !== '*' && license.status === 'active') {
+    // Machine-locked key, first time online: register quietly (ignore limit errors so an offline shop keeps working).
+    try {
+      const r = await cloud.registerDevice({ lid: payload.lid, machineId: mid, businessName: payload.bn, version: VERSION });
+      s.device = { regMid: mid, status: r.status, name: require('os').hostname(), registeredAt: new Date().toISOString() };
+    } catch (err) {
+      logger.info('Silent device registration skipped', err.message);
+    }
+  }
+  save();
+  return notify(before);
 }
 
-module.exports = { status, activate, removeLicense, isUsable, maxUsers, onlineCheck, machineId, decode };
+module.exports = { status, activate, registerDevice, removeLicense, isUsable, maxUsers, onlineCheck, onChange, machineId, decode, VERSION };

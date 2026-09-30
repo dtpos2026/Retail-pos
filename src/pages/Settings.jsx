@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Store, ReceiptText, Printer, Ticket, Percent, Wallet, Boxes, DatabaseBackup, KeyRound, SlidersHorizontal, Save, Upload, X, RefreshCw,
-  FolderOpen, HardDriveDownload, RotateCcw, CheckCircle2, AlertTriangle, Usb, Bluetooth, Database, Trash2, FlaskConical, FileText, Lock,
+  FolderOpen, HardDriveDownload, RotateCcw, CheckCircle2, AlertTriangle, Usb, Bluetooth, Database, Trash2, FlaskConical, FileText, Lock, Palette, ChefHat, Zap,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { useApp } from '../context/AppContext';
@@ -10,9 +10,13 @@ import { formatDateTime, fileSize, formatDate } from '../lib/format';
 import { Button, Field, Input, NumberInput, Select, ToggleRow, Seg, Tabs, Loading, Check, Badge, Empty, Switch } from '../components/ui';
 import ReceiptPreview from '../components/ReceiptPreview';
 import { LicenseActivateForm } from './Activation';
+import { applyAppearance } from '../context/AppContext';
+import { BRAND } from '@shared/brand.mjs';
+import { DT_LOCKUP_WHITE, ContactButtons } from '../components/Brand';
 
 const TABS = [
   { key: 'business', label: 'Business', icon: Store },
+  { key: 'appearance', label: 'Appearance', icon: Palette },
   { key: 'receipt', label: 'Receipt', icon: ReceiptText },
   { key: 'printer', label: 'Printers', icon: Printer },
   { key: 'token', label: 'Tokens', icon: Ticket },
@@ -111,6 +115,97 @@ function BusinessTab() {
   );
 }
 
+
+// ------------------------------------------------------------------ Appearance
+const THEMES = [
+  { key: 'royal', name: 'Royal Purple', desc: 'Digital Target signature — deep purple luxury', colors: ['#2a0a55', '#6d28d9', '#f4f2f9', '#f5b301'] },
+  { key: 'crimson', name: 'Crimson Red & White', desc: 'Bold red with clean white cards', colors: ['#2b0b0d', '#dc2626', '#faf6f5', '#ffffff'] },
+  { key: 'gold', name: 'Black & Gold', desc: 'Dark luxury with gold accents', colors: ['#050505', '#d4a017', '#17150f', '#f6efdc'] },
+  { key: 'emerald', name: 'Emerald', desc: 'Fresh green — food & grocery', colors: ['#063a2b', '#059669', '#f2f8f5', '#ffffff'] },
+  { key: 'sunset', name: 'Sunset Orange', desc: 'Warm, energetic and friendly', colors: ['#34160a', '#ea580c', '#faf6f2', '#facc15'] },
+  { key: 'ocean', name: 'Ocean Blue', desc: 'Calm, corporate and clear', colors: ['#07304a', '#0284c7', '#f1f6fa', '#ffffff'] },
+  { key: 'night', name: 'Night', desc: 'Dark mode for dim shops', colors: ['#070c17', '#8b5cf6', '#121a2b', '#e6ebf5'] },
+];
+
+function AppearanceTab() {
+  const s = useSection('appearance');
+  const { settings, toastError } = useApp();
+  const fileRef = useRef(null);
+  const v = s.v;
+  useEffect(() => () => applyAppearance(settings.appearance), []); // eslint-disable-line react-hooks/exhaustive-deps
+  const preview = (patch) => {
+    s.setV({ ...v, ...patch });
+    applyAppearance({ ...v, ...patch });
+  };
+  const pickBanner = async (e) => {
+    const f = e.target.files?.[0];
+    e.target.value = '';
+    if (!f) return;
+    try {
+      s.set('bannerImage')(await readImage(f, { maxSize: 700, type: f.type === 'image/png' ? 'image/png' : 'image/webp', quality: 0.9 }));
+    } catch (err) {
+      toastError(err);
+    }
+  };
+  return (
+    <div className="col" style={{ gap: 16 }}>
+      <div className="card card-pad col">
+        <div className="b" style={{ fontSize: 16 }}>Theme</div>
+        <div className="theme-grid">
+          {THEMES.map((t) => (
+            <button key={t.key} className={`theme-card ${v.theme === t.key ? 'on' : ''}`} onClick={() => preview({ theme: t.key })}>
+              <div className="sw">{t.colors.map((c, i) => <i key={i} style={{ background: c, flex: i === 0 ? 1.2 : 1 }} />)}</div>
+              <div className="nm">{t.name}{v.theme === t.key && <CheckCircle2 size={15} color="var(--primary)" />}</div>
+              <div className="ds">{t.desc}</div>
+            </button>
+          ))}
+        </div>
+        <ToggleRow title="Smooth animations" desc="Screen transitions and effects. Turn off on slow computers." checked={v.animations} onChange={(x) => preview({ animations: x })} />
+      </div>
+      <div className="card card-pad col">
+        <div className="row"><div className="b grow" style={{ fontSize: 16 }}>Banner</div><Switch checked={v.bannerEnabled} onChange={s.set('bannerEnabled')} /></div>
+        <div className="small muted">A promo strip on the POS screen and a hero on the dashboard — e.g. “Discount up to 20% on Zinger Burger”.</div>
+        {v.bannerEnabled && (
+          <>
+            <div className="form-grid">
+              <Field label="Banner title"><Input dir="auto" value={v.bannerTitle} onChange={(e) => s.set('bannerTitle')(e.target.value)} placeholder="e.g. Today's Special" /></Field>
+              <Field label="Banner text"><Input dir="auto" value={v.bannerSubtitle} onChange={(e) => s.set('bannerSubtitle')(e.target.value)} placeholder="e.g. Buy 2 burgers, get a free drink" /></Field>
+            </div>
+            <div className="dropzone">
+              {v.bannerImage ? <img src={v.bannerImage} alt="Banner" /> : <div className="small muted">Optional image (PNG with transparent background looks best)</div>}
+              <div className="col" style={{ gap: 8 }}>
+                <Button icon={Upload} onClick={() => fileRef.current?.click()}>{v.bannerImage ? 'Change image' : 'Upload image'}</Button>
+                {v.bannerImage && <Button variant="danger-ghost" size="sm" icon={X} onClick={() => s.set('bannerImage')(null)}>Remove</Button>}
+              </div>
+            </div>
+            <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={pickBanner} />
+            <div className="row wrap"><Check label="Show on POS screen" checked={v.bannerOnPos} onChange={s.set('bannerOnPos')} /><Check label="Show on dashboard" checked={v.bannerOnDashboard} onChange={s.set('bannerOnDashboard')} /></div>
+            <div className="promo" style={{ margin: 0 }}>
+              <div style={{ position: 'relative', zIndex: 1 }}><div className="pt"><bdi>{v.bannerTitle || 'Your banner title'}</bdi></div><div className="ps"><bdi>{v.bannerSubtitle || 'Your banner text'}</bdi></div></div>
+              {v.bannerImage && <img src={v.bannerImage} alt="" />}
+            </div>
+          </>
+        )}
+      </div>
+      <SaveBar s={s} />
+    </div>
+  );
+}
+
+function AboutCard({ info }) {
+  return (
+    <div className="about-card">
+      <img src={DT_LOCKUP_WHITE} alt={BRAND.developer} />
+      <div className="grow">
+        <div style={{ fontSize: 12, letterSpacing: '.14em', textTransform: 'uppercase', opacity: 0.75 }}>Developed by</div>
+        <div style={{ fontSize: 20, fontWeight: 800 }}>{BRAND.developer}</div>
+        <div style={{ opacity: 0.85, margin: '2px 0 10px' }}>{BRAND.product} v{info?.version} · {BRAND.tagline}</div>
+        <ContactButtons />
+      </div>
+    </div>
+  );
+}
+
 // ------------------------------------------------------------------ Receipt
 function ReceiptTab() {
   const s = useSection('receipt');
@@ -120,7 +215,7 @@ function ReceiptTab() {
     api('print.templates').then(setTemplates).catch(toastError);
   }, [toastError]);
   const v = s.v;
-  const setWidth = (w) => s.setV({ ...v, paperWidth: w, marginLeft: w === 58 ? 2 : 3, marginRight: w === 58 ? 2 : 3, fontSize: w === 58 ? 11 : 12 });
+  const setWidth = (w) => s.setV({ ...v, paperWidth: w, marginLeft: 1, marginRight: 1, fontSize: w === 58 ? 11 : 12 });
   const test = async () => {
     if (s.dirty && !(await s.save())) return;
     api('print.test', { kind: 'receipt' }).then((r) => toast(`Test receipt sent to ${r.printer}`)).catch(toastError);
@@ -174,6 +269,19 @@ function ReceiptTab() {
           <ToggleRow title="Show NTN" checked={v.showNtn} onChange={s.set('showNtn')} />
           <ToggleRow title="Show item notes" checked={v.showItemNotes} onChange={s.set('showItemNotes')} />
           <ToggleRow title="Compact mode" desc="Tighter lines, saves paper" checked={v.compact} onChange={s.set('compact')} />
+          <ToggleRow title="Amount in words" desc="Rupees One Thousand Fifty Only" checked={v.amountInWords} onChange={s.set('amountInWords')} />
+          <ToggleRow title="“Powered by Digital Target” line" checked={v.showPoweredBy} onChange={s.set('showPoweredBy')} />
+        </div>
+        <div className="card card-pad col">
+          <div className="row"><div className="b grow">QR code on receipt</div>
+            <Seg value={v.qrMode} onChange={s.set('qrMode')} options={[{ value: 'off', label: 'Off' }, { value: 'order', label: 'Order info' }, { value: 'custom', label: 'My link / number' }]} />
+          </div>
+          {v.qrMode === 'custom' && (
+            <div className="form-grid">
+              <Field label="QR content" hint="e.g. your website, Google review link, Instagram, JazzCash / EasyPaisa number"><Input value={v.qrText} onChange={(e) => s.set('qrText')(e.target.value)} placeholder="https://…" /></Field>
+              <Field label="Text next to the QR"><Input dir="auto" value={v.qrLabel} onChange={(e) => s.set('qrLabel')(e.target.value)} /></Field>
+            </div>
+          )}
         </div>
         <div className="row" style={{ justifyContent: 'flex-end' }}>
           <Button icon={Printer} onClick={test}>Save &amp; test print</Button>
@@ -225,6 +333,25 @@ function PrinterTab() {
         <Field label="Token / kitchen printer" hint="Leave on default to use the receipt printer.">
           <Select value={s.v.tokenPrinter} onChange={(e) => s.set('tokenPrinter')(e.target.value)} options={[{ value: '', label: '— Same as receipt printer —' }, ...opts.slice(1)]} />
         </Field>
+        <div className="card card-pad col" style={{ background: 'var(--primary-50)', borderColor: 'transparent', gap: 12 }}>
+          <div className="row"><Zap size={18} color="var(--primary)" /><div className="b grow">Print method</div>
+            <Seg value={s.v.method} onChange={s.set('method')} options={[{ value: 'thermal', label: 'Thermal — fast (recommended)' }, { value: 'driver', label: 'Windows driver' }]} />
+          </div>
+          <div className="small muted">
+            {s.v.method === 'thermal'
+              ? 'Sends the receipt straight to the thermal printer as an image: exact length (no blank paper at the top), instant printing and a precise cut. Works with any ESC/POS thermal printer (XPrinter, Rongta, POS-80, Epson TM…).'
+              : 'Prints through the Windows printer driver. Use this only for non-thermal or special printers. Thermal drivers often feed extra blank paper.'}
+          </div>
+          {s.v.method === 'thermal' && (
+            <div className="form-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+              <Field label="Paper cut"><Select value={s.v.cut} onChange={(e) => s.set('cut')(e.target.value)} options={[{ value: 'partial', label: 'Partial cut' }, { value: 'full', label: 'Full cut' }, { value: 'none', label: 'No cut (tear)' }]} /></Field>
+              <Field label="Extra feed (mm)" hint="Blank space after the receipt"><NumberInput value={s.v.feedMm} onChange={(x) => s.set('feedMm')(Number(x))} /></Field>
+              <Field label="Print darkness"><Select value={s.v.darkness} onChange={(e) => s.set('darkness')(e.target.value)} options={[{ value: 'light', label: 'Light' }, { value: 'normal', label: 'Normal' }, { value: 'dark', label: 'Dark / bold' }]} /></Field>
+              <Field label="Print width (dots)" hint="Auto: 384 (58mm) / 576 (80mm)"><Select value={String(s.v.dots)} onChange={(e) => s.set('dots')(Number(e.target.value))} options={[{ value: '0', label: 'Auto' }, { value: '384', label: '384 (48 mm)' }, { value: '448', label: '448 (56 mm)' }, { value: '512', label: '512 (64 mm)' }, { value: '576', label: '576 (72 mm)' }, { value: '640', label: '640 (80 mm)' }]} /></Field>
+              <div className="full" style={{ gridColumn: '1 / -1' }}><Check label="Compatibility cut for older printers (feed, then cut)" checked={s.v.compatCut} onChange={s.set('compatCut')} /></div>
+            </div>
+          )}
+        </div>
         <div>
           <ToggleRow title="Print receipt automatically after payment" checked={s.v.autoPrintReceipt} onChange={s.set('autoPrintReceipt')} />
           <ToggleRow title="Print tokens automatically after payment" checked={s.v.autoPrintToken} onChange={s.set('autoPrintToken')} />
@@ -232,6 +359,7 @@ function PrinterTab() {
         <div className="row">
           <Button icon={Printer} loading={testing === 'receipt'} onClick={() => test('receipt')}>Test receipt</Button>
           <Button icon={Ticket} loading={testing === 'token'} onClick={() => test('token')}>Test token</Button>
+          <Button icon={ChefHat} loading={testing === 'kot'} onClick={() => test('kot')}>Test kitchen slip</Button>
           <div className="grow" />
           <Button variant="primary" icon={Save} onClick={() => s.save()} loading={s.saving} disabled={!s.dirty}>Save</Button>
         </div>
@@ -240,8 +368,9 @@ function PrinterTab() {
         <div className="b" style={{ fontSize: 15 }}>Printer setup help</div>
         <div className="row" style={{ alignItems: 'flex-start' }}><Usb size={18} className="faint" /><div><b>USB thermal printer:</b> install the driver from the printer CD/website. It then appears in the list above (e.g. "POS-80", "XP-58", "BlackCopper").</div></div>
         <div className="row" style={{ alignItems: 'flex-start' }}><Bluetooth size={18} className="faint" /><div><b>Bluetooth printer:</b> pair it in Windows Settings → Bluetooth &amp; devices, then install its driver so Windows lists it as a printer. It will then appear above.</div></div>
-        <div className="row" style={{ alignItems: 'flex-start' }}><ReceiptText size={18} className="faint" /><div><b>Paper size:</b> choose 58mm or 80mm in the Receipt tab. In the Windows driver, set paper to the same width.</div></div>
-        <div className="row" style={{ alignItems: 'flex-start' }}><AlertTriangle size={18} className="faint" /><div><b>Auto-cut:</b> enable "Cut after document / page" in the printer driver's preferences. Retail POS sizes each page to the content so the cut happens right after the receipt.</div></div>
+        <div className="row" style={{ alignItems: 'flex-start' }}><ReceiptText size={18} className="faint" /><div><b>Paper size:</b> choose 58mm or 80mm in the Receipt tab (and Tokens tab). In thermal mode Retail POS controls the length itself, so the Windows paper setting does not matter.</div></div>
+        <div className="row" style={{ alignItems: 'flex-start' }}><Zap size={18} className="faint" /><div><b>Blank paper at the top?</b> Use the <b>Thermal — fast</b> method. If your printer prints strange characters, switch to <b>Windows driver</b>.</div></div>
+        <div className="row" style={{ alignItems: 'flex-start' }}><AlertTriangle size={18} className="faint" /><div><b>Cut position:</b> adjust <b>Extra feed</b> so the cut lands right after the last line. Choose <b>Compatibility cut</b> for older printers.</div></div>
       </div>
     </div>
   );
@@ -252,9 +381,11 @@ function TokenTab() {
   const s = useSection('token');
   const { toast, toastError, confirm } = useApp();
   const [info, setInfo] = useState(null);
+  const [designs, setDesigns] = useState([]);
   const v = s.v;
   useEffect(() => {
     api('tokens.info').then(setInfo).catch(() => {});
+    api('print.tokenDesigns').then(setDesigns).catch(() => {});
   }, []);
   const toggleType = (t, on) => s.set('orderTypes')(on ? [...new Set([...v.orderTypes, t])] : v.orderTypes.filter((x) => x !== t));
   const reset = async () => {
@@ -278,6 +409,17 @@ function TokenTab() {
           <div className="toggle-row">
             <div className="t"><div>Generate tokens for</div></div>
             {[['dine_in', 'Dine-In'], ['takeaway', 'Takeaway'], ['delivery', 'Delivery']].map(([k, l]) => <Check key={k} label={l} checked={v.orderTypes.includes(k)} onChange={(on) => toggleType(k, on)} />)}
+          </div>
+        </div>
+        <div className="card card-pad col">
+          <div className="b">Token design</div>
+          <div className="grid grid-3" style={{ gap: 10 }}>
+            {designs.map((d) => (
+              <button key={d.key} className={`method ${v.design === d.key ? 'on' : ''}`} style={{ alignItems: 'flex-start', textAlign: 'left', padding: 12 }} onClick={() => s.set('design')(d.key)}>
+                <span className="row" style={{ width: '100%' }}>{d.label}{v.design === d.key && <CheckCircle2 size={16} style={{ marginLeft: 'auto' }} />}</span>
+                <span className="small faint" style={{ fontWeight: 400 }}>{d.description}</span>
+              </button>
+            ))}
           </div>
         </div>
         <div className="card card-pad">
@@ -500,7 +642,7 @@ function BackupTab() {
 function LicenseTab() {
   const { license, setLicense, confirm, toastError } = useApp();
   if (!license) return <Loading />;
-  const STATE = { active: ['green', 'Active'], trial: ['amber', 'Trial'], unconfigured: ['blue', 'Developer build'], expired: ['red', 'Expired'], revoked: ['red', 'Deactivated'], invalid: ['red', 'Invalid'], trial_expired: ['red', 'Trial ended'] };
+  const STATE = { active: ['green', 'Active'], trial: ['amber', 'Trial'], unconfigured: ['blue', 'Developer build'], expired: ['red', 'Expired'], revoked: ['red', 'Deactivated'], invalid: ['red', 'Invalid'], trial_expired: ['red', 'Trial ended'], blocked: ['red', 'Device blocked'], suspended: ['amber', 'Device suspended'], unregistered: ['amber', 'Not registered'] };
   const [color, label] = STATE[license.state] || ['', license.state];
   const remove = async () => {
     if (await confirm({ title: 'Remove license from this computer?', danger: true, confirmText: 'Remove' })) api('license.remove').then(setLicense).catch(toastError);
@@ -514,6 +656,8 @@ function LicenseTab() {
           {license.plan && (<><div>Plan</div><div style={{ textTransform: 'capitalize' }}>{license.plan}</div></>)}
           {license.state === 'active' && (<><div>Expires</div><div>{license.expiresAt ? `${formatDate(license.expiresAt)} (${license.daysLeft} days left)` : 'Never (lifetime)'}</div></>)}
           {license.maxUsers > 0 && (<><div>Max users</div><div>{license.maxUsers}</div></>)}
+          {license.licenseId && (<><div>This device</div><div>{license.device?.registered ? <span><Badge color={license.device.status === 'active' ? 'green' : 'red'}>{license.device.status}</Badge> {license.device.name}</span> : <Badge color="amber">Not registered</Badge>}</div></>)}
+          {license.maxDevices > 0 && license.licenseId && (<><div>Devices allowed</div><div>{license.maxDevices}</div></>)}
           {license.state === 'trial' && (<><div>Trial</div><div>{license.trialDaysLeft} day(s) left</div></>)}
           <div>Computer ID</div><div className="mono b">{license.machineId}</div>
           {license.licenseId && (<><div>License ID</div><div className="mono small">{license.licenseId}</div></>)}
@@ -562,10 +706,6 @@ function GeneralTab() {
     <div className="grid grid-2" style={{ alignItems: 'start' }}>
       <div className="col" style={{ gap: 16 }}>
         <div className="card card-pad">
-          <div className="toggle-row">
-            <div className="t"><div>Theme</div></div>
-            <Seg value={s.v.theme} onChange={(t) => { s.setV({ ...s.v, theme: t }); s.save({ ...s.v, theme: t }); }} options={[{ value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }]} />
-          </div>
           <ToggleRow title="Show product images on POS" desc="Turn off on slow computers" checked={s.v.showImagesOnPos} onChange={s.set('showImagesOnPos')} />
           <div className="toggle-row">
             <div className="t"><div>POS product size</div></div>
@@ -587,6 +727,7 @@ function GeneralTab() {
         </div>
       </div>
       <div className="col" style={{ gap: 16 }}>
+        <AboutCard info={info} />
         <div className="card card-pad col">
           <div className="b">Data</div>
           <div className="row"><FlaskConical size={18} className="faint" /><div className="grow small">Load a sample restaurant menu, tables, customers and a cashier (PIN 1111) to try the software.</div>
@@ -616,7 +757,7 @@ export default function Settings() {
   const [tab, setTab] = useState('business');
   const { settings } = useApp();
   if (!settings) return <Loading />;
-  const C = { business: BusinessTab, receipt: ReceiptTab, printer: PrinterTab, token: TokenTab, sales: SalesTab, payment: PaymentTab, inventory: InventoryTab, backup: BackupTab, license: LicenseTab, general: GeneralTab }[tab];
+  const C = { business: BusinessTab, appearance: AppearanceTab, receipt: ReceiptTab, printer: PrinterTab, token: TokenTab, sales: SalesTab, payment: PaymentTab, inventory: InventoryTab, backup: BackupTab, license: LicenseTab, general: GeneralTab }[tab];
   return (
     <div>
       <Tabs tabs={TABS} value={tab} onChange={setTab} />

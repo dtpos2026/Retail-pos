@@ -1,33 +1,43 @@
 import { useState } from 'react';
 import { signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, sendPasswordResetEmail, sendEmailVerification } from 'firebase/auth';
-import { LogIn, Mail, KeyRound, ShieldAlert, RefreshCw, LogOut, Building2, BadgeCheck, CloudOff } from 'lucide-react';
+import { LogIn, Mail, KeyRound, ShieldAlert, RefreshCw, LogOut, Building2, BadgeCheck, CloudOff, Monitor, ShieldCheck } from 'lucide-react';
 import { auth } from '../firebase';
 import { resolveRole } from '../lib/data';
 import { useAdmin, friendly } from '../context';
 import { Button, Field, Input } from '../components/ui';
+import { DtMark, Floaters, DT_LOCKUP_WHITE, DT_LOCKUP_PURPLE, BRAND } from '../components/Brand';
 
 function Brand() {
   return (
     <div className="auth-brand">
+      <Floaters />
       <div className="row" style={{ gap: 14 }}>
-        <img src="/icon.png" alt="" style={{ width: 52, height: 52 }} />
+        <div className="auth-logo" style={{ width: 54, height: 54 }}><DtMark size={28} /></div>
         <div>
-          <div style={{ fontWeight: 700, fontSize: 18 }}>Retail POS</div>
-          <div style={{ opacity: 0.7, fontSize: 13 }}>Super Admin Panel</div>
+          <div style={{ fontWeight: 800, fontSize: 19 }}>{BRAND.product}</div>
+          <div style={{ opacity: 0.7, fontSize: 13 }}>{BRAND.panel} Panel</div>
         </div>
       </div>
       <div>
-        <h1>Manage clients
-          <br />&amp; licenses.</h1>
-        <div className="sub">Generate secure, offline-verifiable license keys for every Retail POS installation.</div>
+        <h1>Clients, licenses
+          <br />&amp; devices.</h1>
+        <div className="sub">Generate secure license keys and control every registered computer — live.</div>
         <div className="auth-feats" style={{ marginTop: 34 }}>
           <div className="auth-feat"><Building2 size={20} /> Client records</div>
           <div className="auth-feat"><KeyRound size={20} /> Signed license keys</div>
+          <div className="auth-feat"><Monitor size={20} /> Device limits</div>
+          <div className="auth-feat"><ShieldCheck size={20} /> Block &amp; suspend live</div>
           <div className="auth-feat"><BadgeCheck size={20} /> Renew &amp; revoke</div>
           <div className="auth-feat"><CloudOff size={20} /> POS stays offline</div>
         </div>
       </div>
-      <div style={{ opacity: 0.6, fontSize: 13 }}>Authorised administrators only.</div>
+      <div className="auth-footer-brand">
+        <img src={DT_LOCKUP_WHITE} alt="" />
+        <div style={{ lineHeight: 1.35 }}>
+          <div style={{ fontSize: 11, letterSpacing: '.14em', textTransform: 'uppercase', opacity: 0.7 }}>Developed by</div>
+          <div style={{ fontWeight: 700 }}>{BRAND.developer} · v{BRAND.version}</div>
+        </div>
+      </div>
     </div>
   );
 }

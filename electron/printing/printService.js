@@ -2,13 +2,15 @@
 
 const settings = require('../services/settings');
 const orders = require('../services/orders');
+const reports = require('../services/reports');
 const receiptData = require('./receiptData');
 const { renderReceipt, TEMPLATES } = require('./receiptTemplates');
-const { renderToken } = require('./tokenTemplate');
+const { renderToken, renderKot, TOKEN_DESIGNS } = require('./tokenTemplate');
+const { renderThermalReport } = require('./reportThermal');
 const { esc } = require('./common');
 const { AppError } = require('../core/errors');
 
-// printer.js needs Electron; load lazily so the HTML builders stay testable in Node.
+// printer.js needs Electron; load lazily so the HTML builders stay testable in plain Node.
 const printer = () => require('./printer');
 
 function receiptHtml({ orderId, sample, overrides, reprint } = {}) {
@@ -16,25 +18,35 @@ function receiptHtml({ orderId, sample, overrides, reprint } = {}) {
   return renderReceipt(receiptData.build(order, { ...(overrides || {}), reprint }));
 }
 
+function sampleTokenOrder() {
+  const order = receiptData.sampleOrder();
+  order.order_type = 'takeaway';
+  order.table_name = null;
+  order.tokens = [{ token_no: '027', created_at: order.created_at, items: order.items.map((i) => ({ name: i.name, qty: i.qty, total: i.total, notes: i.notes })) }];
+  return order;
+}
+
 function tokenHtmls({ orderId, sample, overrides } = {}) {
-  let order;
-  if (sample || !orderId) {
-    order = receiptData.sampleOrder();
-    order.order_type = 'takeaway';
-    order.table_name = null;
-    order.tokens = [{ token_no: '027', created_at: order.created_at, items: order.items.map((i) => ({ name: i.name, qty: i.qty, total: i.total, notes: i.notes })) }];
-  } else {
-    order = orders.get({ id: orderId });
-  }
+  const order = sample || !orderId ? sampleTokenOrder() : orders.get({ id: orderId });
   if (!order.tokens.length) throw new AppError('This order has no token.');
   return order.tokens.map((tk) => renderToken(order, tk, overrides));
 }
 
+function kotHtml({ orderId, sample } = {}) {
+  const order = sample || !orderId ? { ...receiptData.sampleOrder(), status: 'pending' } : orders.get({ id: orderId });
+  return renderKot(order);
+}
+
+const receiptPrinter = () => settings.get('printer').receiptPrinter;
+const tokenPrinter = () => {
+  const pr = settings.get('printer');
+  return pr.tokenPrinter || pr.receiptPrinter;
+};
+
 async function printReceipt({ orderId, reprint }) {
   const cfg = settings.get('receipt');
-  const html = receiptHtml({ orderId, reprint });
-  return printer().printHtml(html, {
-    printerName: settings.get('printer').receiptPrinter,
+  return printer().printHtml(receiptHtml({ orderId, reprint }), {
+    printerName: receiptPrinter(),
     widthMm: cfg.paperWidth,
     copies: cfg.copies,
     jobKey: `receipt:${orderId}`,
@@ -43,25 +55,24 @@ async function printReceipt({ orderId, reprint }) {
 
 async function printTokens({ orderId }) {
   const cfg = settings.get('token');
-  const pr = settings.get('printer');
   const htmls = tokenHtmls({ orderId });
   let result;
   for (let i = 0; i < htmls.length; i++) {
-    result = await printer().printHtml(htmls[i], {
-      printerName: pr.tokenPrinter || pr.receiptPrinter,
-      widthMm: cfg.paperWidth,
-      jobKey: `token:${orderId}:${i}`,
-    });
+    result = await printer().printHtml(htmls[i], { printerName: tokenPrinter(), widthMm: cfg.paperWidth, jobKey: `token:${orderId}:${i}` });
   }
   return { ...result, count: htmls.length };
+}
+
+/** Kitchen order ticket for a running / held order (goes to the token / kitchen printer). */
+async function printKot({ orderId }) {
+  return printer().printHtml(kotHtml({ orderId }), { printerName: tokenPrinter(), widthMm: settings.get('token').paperWidth, jobKey: `kot:${orderId}` });
 }
 
 /** Receipt + tokens after checkout, according to the auto-print settings. */
 async function printAfterSale({ orderId, receipt, token }) {
   const pr = settings.get('printer');
   const out = { receipt: null, token: null, errors: [] };
-  const wantReceipt = receipt ?? pr.autoPrintReceipt;
-  if (wantReceipt) {
+  if (receipt ?? pr.autoPrintReceipt) {
     try {
       out.receipt = await printReceipt({ orderId });
     } catch (e) {
@@ -69,8 +80,7 @@ async function printAfterSale({ orderId, receipt, token }) {
     }
   }
   const o = orders.get({ id: orderId });
-  const wantToken = (token ?? pr.autoPrintToken) && o.tokens.length > 0;
-  if (wantToken) {
+  if ((token ?? pr.autoPrintToken) && o.tokens.length > 0) {
     try {
       out.token = await printTokens({ orderId });
     } catch (e) {
@@ -80,8 +90,8 @@ async function printAfterSale({ orderId, receipt, token }) {
   return out;
 }
 
-function testPageHtml(kind) {
-  const w = kind === 'token' ? settings.get('token').paperWidth : settings.get('receipt').paperWidth;
+function testPageHtml() {
+  const w = settings.get('receipt').paperWidth;
   const r = settings.get('receipt');
   const ruler = '|'.padEnd(w === 58 ? 32 : 48, '-') + '|';
   const html = receiptHtml({ sample: true });
@@ -97,9 +107,36 @@ async function testPrint({ kind = 'receipt', printerName }) {
   const pr = settings.get('printer');
   if (kind === 'token') {
     const [html] = tokenHtmls({ sample: true });
-    return printer().printHtml(html, { printerName: printerName ?? (pr.tokenPrinter || pr.receiptPrinter), widthMm: settings.get('token').paperWidth, jobKey: 'test:token' });
+    return printer().printHtml(html, { printerName: printerName ?? tokenPrinter(), widthMm: settings.get('token').paperWidth, jobKey: 'test:token' });
   }
-  return printer().printHtml(testPageHtml('receipt'), { printerName: printerName ?? pr.receiptPrinter, widthMm: settings.get('receipt').paperWidth, jobKey: 'test:receipt' });
+  if (kind === 'kot') return printer().printHtml(kotHtml({ sample: true }), { printerName: printerName ?? tokenPrinter(), widthMm: settings.get('token').paperWidth, jobKey: 'test:kot' });
+  return printer().printHtml(testPageHtml(), { printerName: printerName ?? pr.receiptPrinter, widthMm: settings.get('receipt').paperWidth, jobKey: 'test:receipt' });
 }
 
-module.exports = { TEMPLATES, receiptHtml, tokenHtmls, printReceipt, printTokens, printAfterSale, testPrint, listPrinters: () => printer().listPrinters() };
+// ---- thermal reports ---------------------------------------------------------------------
+
+function reportHtml({ key, from, to, width }) {
+  return renderThermalReport({ ...reports.run({ key, from, to }), key }, { paperWidth: width });
+}
+
+async function printReportThermal({ key, from, to, width }) {
+  const w = Number(width) || settings.get('receipt').paperWidth;
+  return printer().printHtml(reportHtml({ key, from, to, width: w }), { printerName: receiptPrinter(), widthMm: w, jobKey: `report:${key}:${from}:${to}` });
+}
+
+module.exports = {
+  TEMPLATES,
+  TOKEN_DESIGNS,
+  receiptHtml,
+  tokenHtmls,
+  kotHtml,
+  reportHtml,
+  printReceipt,
+  printTokens,
+  printKot,
+  printAfterSale,
+  printReportThermal,
+  testPrint,
+  listPrinters: () => printer().listPrinters(),
+  renderPng: (html, widthMm) => printer().renderPng(html, { widthMm }),
+};

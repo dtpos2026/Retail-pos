@@ -2,7 +2,9 @@
 
 const settings = require('../services/settings');
 const { formatDate, formatTime, orderTypeLabel } = require('../../shared/format.mjs');
-const { round2 } = require('../core/util');
+const { round2, amountInWords } = require('../core/util');
+const { bodyWidthMm } = require('./common');
+const { qrSvg } = require('./qr');
 
 function methodLabel(key) {
   const m = settings.get('payment').methods.find((x) => x.key === key);
@@ -16,6 +18,7 @@ function build(order, overrides = {}) {
   const sales = settings.get('sales');
   const currency = settings.get('general').currency || 'Rs.';
 
+  cfg.bodyWidth = bodyWidthMm(cfg.paperWidth);
   const items = order.items.map((i) => ({
     name: i.name,
     qty: i.qty,
@@ -72,7 +75,20 @@ function build(order, overrides = {}) {
       payments: (order.payments || []).map((p) => ({ method: methodLabel(p.method), amount: p.amount })),
     },
     footer: cfg.footerText,
+    words: cfg.amountInWords ? amountInWords(order.total) : '',
+    qr: buildQr(cfg, order),
   };
+}
+
+function buildQr(cfg, order) {
+  if (cfg.qrMode === 'off') return null;
+  const text = cfg.qrMode === 'custom' ? String(cfg.qrText || '').trim() : `${order.order_no}|${order.total}|${order.created_at}`;
+  if (!text) return null;
+  try {
+    return { svg: qrSvg(text), label: cfg.qrMode === 'custom' ? cfg.qrLabel : 'Scan for order details' };
+  } catch {
+    return null;
+  }
 }
 
 /** Realistic sample order used for previews and test prints. */

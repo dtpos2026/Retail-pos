@@ -2,17 +2,19 @@ import { useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, ShoppingCart, ReceiptText, Armchair, Package, Tags, Users2, Ticket, Boxes, BarChart3, UserCog, Settings as SettingsIcon,
-  LogOut, PanelLeftClose, PanelLeftOpen, ShieldAlert, KeyRound,
+  LogOut, PanelLeftClose, PanelLeftOpen, ShieldAlert, KeyRound, PauseCircle,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { api } from '../lib/api';
 import { initials } from '../lib/format';
 import { Button } from './ui';
+import { DevFooter, DtMark } from './Brand';
 
 export const NAV = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, perm: 'dashboard' },
   { to: '/pos', label: 'POS / New Sale', icon: ShoppingCart, perm: 'pos' },
-  { to: '/orders', label: 'Orders', icon: ReceiptText, perm: 'orders', badge: 'pending' },
+  { to: '/held', label: 'Hold / Running', icon: PauseCircle, perm: 'pos', badge: 'pending' },
+  { to: '/orders', label: 'Orders', icon: ReceiptText, perm: 'orders' },
   { to: '/tables', label: 'Tables', icon: Armchair, perm: 'tables', needs: 'dineIn' },
   { to: '/products', label: 'Products', icon: Package, perm: 'products' },
   { to: '/categories', label: 'Categories', icon: Tags, perm: 'categories' },
@@ -47,8 +49,11 @@ export default function Shell({ children }) {
   const current = NAV.find((n) => loc.pathname.startsWith(n.to));
 
   useEffect(() => {
-    if (!can('orders') && !can('pos')) return;
-    api('orders.pending').then((r) => setPending(r.length)).catch(() => {});
+    if (!can('orders') && !can('pos')) return undefined;
+    const load = () => api('orders.pending').then((r) => setPending(r.length)).catch(() => {});
+    load();
+    const t = setInterval(load, 20000);
+    return () => clearInterval(t);
   }, [loc.pathname, can]);
 
   // Collapse the sidebar on the POS screen to give products more room.
@@ -64,7 +69,7 @@ export default function Shell({ children }) {
     <div className="shell">
       <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
         <div className="brand">
-          <div className="brand-logo">{biz.logo ? <img src={biz.logo} alt="" /> : 'R'}</div>
+          <div className="brand-logo">{biz.logo ? <img src={biz.logo} alt="" /> : <DtMark size={24} />}</div>
           <div className="brand-text">
             <div className="brand-name">Retail POS</div>
             <div className="brand-sub">
@@ -82,6 +87,7 @@ export default function Shell({ children }) {
           ))}
         </nav>
         <div className="sidebar-foot">
+          <DevFooter version={info?.version || license?.version || ''} />
           <button className="nav-item" style={{ background: 'none', border: 0, width: '100%', cursor: 'pointer' }} onClick={() => setCollapsed(!collapsed)} title="Toggle sidebar">
             {collapsed ? <PanelLeftOpen size={19} /> : <PanelLeftClose size={19} />}
             <span className="nav-label">Collapse</span>
@@ -122,7 +128,11 @@ export default function Shell({ children }) {
             <ShieldAlert size={16} /> You are using the default admin password. Change it in Users to protect your data.
           </div>
         )}
-        <main className={`content ${loc.pathname === '/pos' ? 'flush' : ''}`}>{children}</main>
+        <main className={`content ${loc.pathname === '/pos' ? 'flush' : ''}`}>
+          <div key={loc.pathname} className="page-in" style={loc.pathname === '/pos' ? { height: '100%' } : undefined}>
+            {children}
+          </div>
+        </main>
       </div>
     </div>
   );

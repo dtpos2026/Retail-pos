@@ -7,6 +7,8 @@ import '@fontsource/inter/800.css';
 import '@fontsource/noto-naskh-arabic/400.css';
 import '@fontsource/noto-naskh-arabic/700.css';
 import './styles/app.css';
+import './styles/themes.css';
+import './styles/extras.css';
 import App from './App';
 import { AppProvider } from './context/AppContext';
 

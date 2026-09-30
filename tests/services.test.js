@@ -168,14 +168,15 @@ test('credit sale records due; receive payment clears it', () => {
   assert.equal(o2.payment_status, 'paid');
 });
 
-test('all 6 receipt templates render at 58mm and 80mm with Urdu and logo', () => {
+test('all receipt templates render at 58mm and 80mm with Urdu and logo', () => {
   const logo = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
   settings.set('business', { name: 'بسم اللہ بریانی', logo });
   const seen = new Set();
   for (const t of printService.TEMPLATES) {
     for (const w of [58, 80]) {
       const html = printService.receiptHtml({ sample: true, overrides: { receipt: { template: t.key, paperWidth: w } } });
-      assert.match(html, new RegExp(`width:${w}mm`));
+      // Thermal mode prints the printable area: 72 mm on 80 mm paper, 48 mm on 58 mm paper.
+      assert.match(html, new RegExp(`width:${w === 80 ? 72 : 48}mm`));
       assert.match(html, /بسم اللہ بریانی/);
       assert.match(html, /چکن بریانی/);
       assert.match(html, /<img src="data:image\/png/);
@@ -183,7 +184,8 @@ test('all 6 receipt templates render at 58mm and 80mm with Urdu and logo', () =>
       if (w === 80) seen.add(html.replace(/\d+/g, ''));
     }
   }
-  assert.equal(seen.size, 6, 'every template produces a distinct layout');
+  assert.equal(seen.size, printService.TEMPLATES.length, 'every template produces a distinct layout');
+  assert.ok(printService.TEMPLATES.length >= 11);
 });
 
 test('Test 14: reports match actual sales', () => {

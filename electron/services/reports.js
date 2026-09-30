@@ -8,6 +8,7 @@ const { localDate, isDateStr, round2 } = require('../core/util');
 const TYPE_LABEL = { dine_in: 'Dine-In', takeaway: 'Takeaway', delivery: 'Delivery' };
 
 const REPORTS = [
+  { key: 'daily', label: 'Day Summary (Z Report)', group: 'Sales' },
   { key: 'sales', label: 'Sales Report', group: 'Sales' },
   { key: 'orders', label: 'Order Report', group: 'Sales' },
   { key: 'dine_in', label: 'Dine-In Sales', group: 'Sales' },
@@ -39,6 +40,86 @@ function sumCols(rows, keys) {
   const totals = {};
   for (const k of keys) totals[k] = round2(rows.reduce((s, r) => s + (Number(r[k]) || 0), 0));
   return totals;
+}
+
+
+const settingsSvc = require('./settings');
+const { formatMoney: fmtMoney } = require('../../shared/format.mjs');
+
+/** Day closing summary: one compact page for the owner (prints nicely on 80 mm paper). */
+function daily({ from, to }) {
+  const cur = settingsSvc.get('general').currency || 'Rs.';
+  const M = (v) => fmtMoney(v, cur);
+  const one = (sql, p) => ctx.db.get(sql, p);
+  const tot = one(
+    `SELECT COUNT(*) c, COALESCE(SUM(subtotal),0) gross, COALESCE(SUM(item_discount+order_discount),0) disc, COALESCE(SUM(tax_amount),0) tax,
+       COALESCE(SUM(delivery_charges),0) del, COALESCE(SUM(total),0) net, COALESCE(SUM(due),0) due, COALESCE(SUM(cost_total),0) cost,
+       COALESCE(SUM(subtotal-item_discount-order_discount),0) netgoods
+     FROM orders WHERE status='completed' AND business_date BETWEEN ? AND ?`,
+    [from, to]
+  );
+  const ref = one("SELECT COUNT(*) c, COALESCE(SUM(total),0) t FROM orders WHERE status='refunded' AND business_date BETWEEN ? AND ?", [from, to]);
+  const can = one("SELECT COUNT(*) c FROM orders WHERE status='cancelled' AND business_date BETWEEN ? AND ?", [from, to]);
+  const types = ctx.db.all("SELECT order_type t, COUNT(*) c, COALESCE(SUM(total),0) s FROM orders WHERE status='completed' AND business_date BETWEEN ? AND ? GROUP BY order_type", [from, to]);
+  const pays = ctx.db.all(
+    `SELECT p.method m, COALESCE(SUM(p.amount),0) a FROM payments p JOIN orders o ON o.id=p.order_id
+     WHERE o.status='completed' AND substr(p.created_at,1,10) BETWEEN ? AND ? GROUP BY p.method ORDER BY a DESC`,
+    [from, to]
+  );
+  const top = ctx.db.all(
+    `SELECT i.name n, SUM(i.qty) q, SUM(i.total) r FROM order_items i JOIN orders o ON o.id=i.order_id
+     WHERE o.status='completed' AND o.business_date BETWEEN ? AND ? GROUP BY COALESCE(i.product_id,i.name) ORDER BY r DESC LIMIT 5`,
+    [from, to]
+  );
+  const staff = ctx.db.all("SELECT COALESCE(cashier_name,'-') n, COUNT(*) c, COALESCE(SUM(total),0) s FROM orders WHERE status='completed' AND business_date BETWEEN ? AND ? GROUP BY cashier_id ORDER BY s DESC", [from, to]);
+  const costKnown = one("SELECT COUNT(*) c FROM order_items i JOIN orders o ON o.id=i.order_id WHERE o.status='completed' AND o.business_date BETWEEN ? AND ? AND i.cost_price>0", [from, to]).c;
+
+  const rows = [];
+  const head = (label) => rows.push({ label, value: '', kind: 'head' });
+  const line = (label, value, bold) => rows.push({ label, value: String(value), kind: 'line', bold: !!bold });
+  head('SALES');
+  line('Completed orders', tot.c);
+  line('Gross sales', M(tot.gross));
+  if (tot.disc) line('Discounts', `− ${M(tot.disc)}`);
+  if (tot.tax) line('Tax', M(tot.tax));
+  if (tot.del) line('Delivery charges', M(tot.del));
+  line('NET SALES', M(tot.net), true);
+  if (ref.c) line(`Refunds (${ref.c})`, M(ref.t));
+  if (can.c) line('Cancelled orders', can.c);
+  head('BY SALE TYPE');
+  for (const k of ['dine_in', 'takeaway', 'delivery']) {
+    const r = types.find((x) => x.t === k);
+    line(`${TYPE_LABEL[k]} (${r ? r.c : 0})`, M(r ? r.s : 0));
+  }
+  head('MONEY RECEIVED');
+  for (const p of pays) line(methodLabel(p.m), M(p.a));
+  const recTotal = pays.reduce((s, p) => s + p.a, 0);
+  line('TOTAL RECEIVED', M(recTotal), true);
+  if (tot.due) line('Credit given (due)', M(tot.due));
+  if (top.length) {
+    head('TOP ITEMS');
+    for (const t of top) line(`${t.n} ×${round2(t.q)}`, M(t.r));
+  }
+  if (staff.length) {
+    head('BY CASHIER');
+    for (const st of staff) line(`${st.n} (${st.c})`, M(st.s));
+  }
+  if (costKnown) {
+    head('PROFIT');
+    line('Gross profit', M(tot.netgoods - tot.cost), true);
+  }
+  return {
+    columns: [text('label', 'Item'), text('value', 'Amount')],
+    rows,
+    totals: null,
+    summaryStyle: true,
+    cards: [
+      { label: 'Net Sales', value: round2(tot.net), type: 'money' },
+      { label: 'Orders', value: tot.c, type: 'number' },
+      { label: 'Received', value: round2(recTotal), type: 'money' },
+      { label: 'Discounts', value: round2(tot.disc), type: 'money' },
+    ],
+  };
 }
 
 function sales({ from, to }) {
@@ -303,6 +384,7 @@ function run({ key, from, to }) {
   const r = range(from, to);
   let out;
   switch (key) {
+    case 'daily': out = daily(r); break;
     case 'sales': out = sales(r); break;
     case 'orders': out = orders(r); break;
     case 'dine_in':

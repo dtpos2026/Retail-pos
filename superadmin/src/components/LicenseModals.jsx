@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { KeyRound, Copy, MessageCircle, CheckCircle2, AlertTriangle } from 'lucide-react';
-import { Modal, Button, Field, Input, Select, NumberInput, Check } from './ui';
+import { Modal, Button, Field, Input, Select, NumberInput, Check, Badge } from './ui';
 import { useAdmin, friendly } from '../context';
 import { issueLicense, setLicenseStatus } from '../lib/data';
 import { PLANS, expiryFor, ymd, MACHINE_ID_RE, normalizeMachineId } from '../lib/license';
@@ -24,14 +24,15 @@ export function LicenseForm({ clients, client: fixedClient, license, mode = 'new
     price: mode === 'renew' ? license?.price || '' : '',
     paid: true,
     notes: '',
-    anyMachine: license?.machineId === '*' && mode !== 'transfer',
+    online: mode === 'transfer' ? true : license ? license.machineId === '*' : true, // online device registration (recommended)
+    maxDevices: license?.maxDevices || 1,
   }));
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const set = (k) => (v) => setF((x) => ({ ...x, [k]: v }));
   const client = fixedClient || clients?.find((c) => c.id === f.clientId) || (license && { id: license.clientId, businessName: license.businessName, phone: license.clientPhone });
   const mid = normalizeMachineId(f.machineId);
-  const midOk = f.anyMachine || MACHINE_ID_RE.test(mid);
+  const midOk = f.online || MACHINE_ID_RE.test(mid);
 
   const setPlan = (plan) => setF((x) => ({ ...x, plan, expiresAt: plan === 'custom' ? x.expiresAt || expiryFor('yearly', x.startDate) : expiryFor(plan, x.startDate) }));
   const setStart = (startDate) => setF((x) => ({ ...x, startDate, expiresAt: x.plan === 'custom' ? x.expiresAt : expiryFor(x.plan, startDate) }));
@@ -39,7 +40,7 @@ export function LicenseForm({ clients, client: fixedClient, license, mode = 'new
   const submit = async () => {
     setErr('');
     if (!client) return setErr('Select a client.');
-    if (!midOk) return setErr('Enter the Computer ID shown on the POS activation screen (format XXXX-XXXX-XXXX-XXXX).');
+    if (!midOk) return setErr('Enter the Computer ID shown on the POS activation screen (format XXXX-XXXX-XXXX-XXXX), or choose online device registration.');
     if (f.plan !== 'lifetime' && !f.expiresAt) return setErr('Select an expiry date.');
     setBusy(true);
     try {
@@ -47,7 +48,8 @@ export function LicenseForm({ clients, client: fixedClient, license, mode = 'new
       const lic = await issueLicense({
         id: mode === 'renew' ? license.id : undefined,
         client,
-        machineId: f.anyMachine ? '*' : mid,
+        machineId: f.online ? '*' : mid,
+        maxDevices: f.online ? f.maxDevices : 1,
         plan: f.plan,
         startDate: f.startDate,
         expiresAt: f.plan === 'lifetime' ? null : f.expiresAt,
@@ -87,13 +89,26 @@ export function LicenseForm({ clients, client: fixedClient, license, mode = 'new
             <Select value={f.clientId} onChange={(e) => set('clientId')(e.target.value)} options={[{ value: '', label: '— Select client —' }, ...(clients || []).map((c) => ({ value: c.id, label: `${c.businessName}${c.city ? ` · ${c.city}` : ''}` }))]} />
           </Field>
         )}
-        <Field label="Computer ID (from POS activation screen)" className="full" hint={mode === 'transfer' ? `Old computer ${license.machineId} will be revoked.` : 'Each license works on one computer only.'}>
-          <Input value={f.machineId} disabled={f.anyMachine} onChange={(e) => set('machineId')(e.target.value)} placeholder="XXXX-XXXX-XXXX-XXXX" className="mono" style={{ letterSpacing: 1, fontWeight: 600 }} />
-        </Field>
-        {mode !== 'transfer' && (
-          <div className="full">
-            <Check label="Allow any computer (not recommended — key can be copied to other PCs)" checked={f.anyMachine} onChange={set('anyMachine')} />
+        <div className="full seg-radio">
+          <div className={`radio-card ${f.online ? 'on' : ''}`} onClick={() => set('online')(true)}>
+            <input type="radio" checked={f.online} readOnly style={{ marginTop: 3 }} />
+            <div><b>Online device registration <Badge color="green">Recommended</Badge></b>
+              <span className="small muted">No Computer ID needed. The client activates once (internet needed once), the computer is registered under this license, and you can block / suspend it live. You decide how many computers may register.</span></div>
           </div>
+          <div className={`radio-card ${!f.online ? 'on' : ''}`} onClick={() => set('online')(false)}>
+            <input type="radio" checked={!f.online} readOnly style={{ marginTop: 3 }} />
+            <div><b>Locked to one Computer ID</b>
+              <span className="small muted">Works fully offline on a single computer. Ask the client for the Computer ID shown on the POS activation screen.</span></div>
+          </div>
+        </div>
+        {f.online ? (
+          <Field label="Max devices (computers)" hint="1 = one shop computer. Increase later from Devices any time." className="full">
+            <NumberInput value={f.maxDevices} onChange={set('maxDevices')} />
+          </Field>
+        ) : (
+          <Field label="Computer ID (from POS activation screen)" className="full" hint={mode === 'transfer' ? `Old computer ${license.machineId} will be revoked.` : 'Format XXXX-XXXX-XXXX-XXXX'}>
+            <Input value={f.machineId} onChange={(e) => set('machineId')(e.target.value)} placeholder="XXXX-XXXX-XXXX-XXXX" className="mono" style={{ letterSpacing: 1, fontWeight: 600 }} />
+          </Field>
         )}
         <Field label="Plan"><Select value={f.plan} onChange={(e) => setPlan(e.target.value)} options={PLANS.map((p) => ({ value: p.key, label: p.label }))} /></Field>
         <Field label="Max active users" hint="0 = unlimited"><NumberInput value={f.maxUsers} onChange={set('maxUsers')} /></Field>
@@ -115,7 +130,7 @@ export function KeyResult({ license, onClose }) {
   const { toast } = useAdmin();
   const message = useMemo(
     () =>
-      `Assalam o Alaikum!\n\nYour Retail POS license for *${license.businessName}* is ready.\n\nPlan: ${license.plan}\nValid until: ${license.expiresAt ? fmtDate(license.expiresAt) : 'Lifetime'}\nComputer ID: ${license.machineId}\n\nLicense key (copy all):\n${license.key}\n\nOpen Retail POS → paste the key → Activate License.\nThank you!`,
+      `Assalam o Alaikum!\n\nYour Retail POS license for *${license.businessName}* is ready.\n\nPlan: ${license.plan}\nValid until: ${license.expiresAt ? fmtDate(license.expiresAt) : 'Lifetime'}\n${license.machineId === '*' ? `Devices allowed: ${license.maxDevices || 1}` : `Computer ID: ${license.machineId}`}\n\nLicense key (copy all):\n${license.key}\n\nOpen Retail POS → paste the key → Activate License (internet needed once).\nThank you!`,
     [license]
   );
   const copy = (text, what) => {
@@ -138,7 +153,7 @@ export function KeyResult({ license, onClose }) {
       <div className="col">
         <div className="kv small">
           <div>Client</div><div className="b">{license.businessName}</div>
-          <div>Computer ID</div><div className="mono">{license.machineId === '*' ? 'Any computer' : license.machineId}</div>
+          <div>Activation</div><div>{license.machineId === '*' ? `Online registration · up to ${license.maxDevices || 1} device(s)` : <span className="mono">Locked to {license.machineId}</span>}</div>
           <div>Plan</div><div style={{ textTransform: 'capitalize' }}>{license.plan}</div>
           <div>Expires</div><div>{license.expiresAt ? fmtDate(license.expiresAt) : 'Never (lifetime)'}</div>
           <div>Max users</div><div>{license.maxUsers || 'Unlimited'}</div>

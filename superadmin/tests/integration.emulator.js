@@ -1,0 +1,28 @@
+const assert = require('assert'); const crypto = require('crypto'); const fs = require('fs'); const os = require('os'); const path = require('path');
+process.env.RPOS_FIRESTORE_URL = 'http://127.0.0.1:8080/v1/projects/retail-pos-db7c6/databases/(default)/documents';
+const { privateKey, publicKey } = crypto.generateKeyPairSync('ec', { namedCurve: 'P-256' });
+const R = require('path').join(__dirname, '..', '..', 'electron');
+const cfg = require.resolve(R + '/license/config.js');
+require.cache[cfg] = { id: cfg, filename: cfg, loaded: true, exports: { PUBLIC_KEY_PEM: publicKey.export({ type: 'spki', format: 'pem' }), TRIAL_DAYS: 7, FIREBASE: { projectId: 'retail-pos-db7c6', apiKey: 'k' }, VENDOR: {} } };
+const ctx = require(R + '/core/context'); ctx.paths.userData = fs.mkdtempSync(path.join(os.tmpdir(), 'rpos-int-'));
+const lic = require(R + '/license/license.js');
+const AUTH = 'http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1'; const base = process.env.RPOS_FIRESTORE_URL;
+(async () => {
+  await fetch(`${AUTH}/accounts:signUp?key=k`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'digitaltarget.digital@gmail.com', password: 'Secret#123', returnSecureToken: true }) });
+  const s = await (await fetch(`${AUTH}/accounts:signInWithPassword?key=k`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'digitaltarget.digital@gmail.com', password: 'Secret#123', returnSecureToken: true }) })).json();
+  await fetch(`${AUTH}/projects/retail-pos-db7c6/accounts:update`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer owner' }, body: JSON.stringify({ localId: s.localId, emailVerified: true }) });
+  const t = await (await fetch(`${AUTH}/accounts:signInWithPassword?key=k`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'digitaltarget.digital@gmail.com', password: 'Secret#123', returnSecureToken: true }) })).json();
+  const H = { 'content-type': 'application/json', authorization: `Bearer ${t.idToken}` };
+  const lid = 'INTEG' + Date.now();
+  await fetch(`${base}/licenseStatus/${lid}`, { method: 'PATCH', headers: H, body: JSON.stringify({ fields: { status: { stringValue: 'active' }, maxDevices: { integerValue: '1' }, deviceCount: { integerValue: '0' }, key: { stringValue: 'x' } } }) });
+  const body = Buffer.from(JSON.stringify({ v: 1, lid, cid: 'c', bn: 'Integration Shop', mid: '*', plan: 'yearly', iat: '2026-01-01', exp: '2099-01-01', mu: 0, md: 1 })).toString('base64url');
+  const key = `RPOS1.${body}.${crypto.sign('sha256', Buffer.from(body), { key: privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64url')}`;
+  let st = await lic.activate({ key }); assert.equal(st.state, 'active'); console.log('OK   real activate registered the device via real rules');
+  const did = `${lid}_${lic.machineId()}`;
+  const setStatus = (v) => fetch(`${base}/devices/${did}?updateMask.fieldPaths=status`, { method: 'PATCH', headers: H, body: JSON.stringify({ fields: { status: { stringValue: v } } }) });
+  await setStatus('blocked'); st = await lic.onlineCheck(); assert.equal(st.state, 'blocked'); assert.equal(st.usable, false); console.log('OK   admin blocked -> POS blocked');
+  await setStatus('suspended'); st = await lic.onlineCheck(); assert.equal(st.state, 'suspended'); console.log('OK   admin suspended -> POS suspended');
+  await setStatus('active'); st = await lic.onlineCheck(); assert.equal(st.state, 'active'); assert.equal(st.usable, true); console.log('OK   admin activated -> POS usable again');
+  await fetch(`${base}/devices/${did}`, { method: 'DELETE', headers: H }); st = await lic.onlineCheck(); assert.equal(st.state, 'unregistered'); console.log('OK   admin removed device -> POS asks to register');
+  console.log('INTEGRATION OK');
+})().catch((e) => { console.error('FAIL', e); process.exit(1); });

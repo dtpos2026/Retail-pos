@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { BarChart3, Printer, FileDown, FileSpreadsheet, FileText, Search } from 'lucide-react';
+import { BarChart3, Printer, FileDown, FileSpreadsheet, FileText, Search, Receipt, ImageDown, Eye } from 'lucide-react';
 import { api } from '../lib/api';
 import { useApp } from '../context/AppContext';
 import { formatMoney, formatNumber, formatDate, today, shiftDate } from '../lib/format';
-import { Button, Loading, Empty, Input, Select, SearchBox } from '../components/ui';
+import { Button, Loading, Empty, Input, Select, SearchBox, Modal, Seg } from '../components/ui';
+import ReceiptPreview from '../components/ReceiptPreview';
 
 function startOfWeek(t) {
   const [y, m, d] = t.split('-').map(Number);
@@ -35,6 +36,8 @@ export default function Reports() {
   const [loading, setLoading] = useState(false);
   const [q, setQ] = useState('');
   const [busy, setBusy] = useState('');
+  const [width, setWidth] = useState(settings.receipt.paperWidth);
+  const [previewHtml, setPreviewHtml] = useState(null);
   const cur = settings.general.currency;
 
   useEffect(() => {
@@ -68,6 +71,28 @@ export default function Reports() {
     try {
       const r = await api('reports.export', { key, ...range, format });
       if (!r.canceled) toast(`Saved: ${r.file}`);
+    } catch (e) {
+      toastError(e);
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const thermal = async (kind) => {
+    setBusy(kind);
+    try {
+      const a = { key, ...range, width };
+      if (kind === 't-print') {
+        const r = await api('reports.thermalPrint', a);
+        toast(`Sent to printer (${width}mm)`);
+        return r;
+      }
+      if (kind === 't-png') {
+        const r = await api('reports.thermalPng', a);
+        if (!r.canceled) toast(`Saved: ${r.file}`);
+        return r;
+      }
+      setPreviewHtml(await api('reports.thermalHtml', a));
     } catch (e) {
       toastError(e);
     } finally {
@@ -115,7 +140,11 @@ export default function Reports() {
             <p>{data ? (data.noDate ? 'Current stock position' : data.from === data.to ? formatDate(data.from) : `${formatDate(data.from)} – ${formatDate(data.to)}`) : ''}</p>
           </div>
           <div className="actions">
-            <Button icon={Printer} onClick={doPrint} loading={busy === 'print'} disabled={!data}>Print</Button>
+            <Seg value={width} onChange={setWidth} options={[{ value: 80, label: '80mm' }, { value: 58, label: '58mm' }]} />
+            <Button icon={Eye} onClick={() => thermal('t-view')} loading={busy === 't-view'} disabled={!data} title="Preview the small-paper report">Preview</Button>
+            <Button variant="primary" icon={Receipt} onClick={() => thermal('t-print')} loading={busy === 't-print'} disabled={!data} title="Print on the thermal receipt printer">Print {width}mm</Button>
+            <Button icon={ImageDown} onClick={() => thermal('t-png')} loading={busy === 't-png'} disabled={!data} title="Save as a PNG image (share on WhatsApp)">PNG</Button>
+            <Button icon={Printer} onClick={doPrint} loading={busy === 'print'} disabled={!data}>Print A4</Button>
             <Button icon={FileDown} onClick={() => doExport('pdf')} loading={busy === 'pdf'} disabled={!data}>PDF</Button>
             <Button icon={FileText} onClick={() => doExport('csv')} loading={busy === 'csv'} disabled={!data}>CSV</Button>
             <Button icon={FileSpreadsheet} onClick={() => doExport('excel')} loading={busy === 'excel'} disabled={!data}>Excel</Button>
@@ -179,6 +208,11 @@ export default function Reports() {
           </>
         ) : null}
       </div>
+      {previewHtml && (
+        <Modal title={`${data?.title} — ${width}mm`} icon={Receipt} size="sm" onClose={() => setPreviewHtml(null)} footer={<><Button icon={ImageDown} onClick={() => thermal('t-png')}>Save PNG</Button><Button variant="primary" icon={Receipt} onClick={() => thermal('t-print')}>Print {width}mm</Button></>}>
+          <ReceiptPreview html={previewHtml} maxHeight="60vh" />
+        </Modal>
+      )}
     </div>
   );
 }

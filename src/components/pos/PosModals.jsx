@@ -4,6 +4,7 @@ import { Modal, Button, Field, Input, NumberInput, Seg, Empty, Money, StatusBadg
 import { api } from '../../lib/api';
 import { useApp } from '../../context/AppContext';
 import { formatDateTime, orderTypeLabel, round2 } from '../../lib/format';
+import TableVisual from '../TableVisual';
 
 export function ItemModal({ item, onClose, onSave, onRemove, canDiscount }) {
   const [qty, setQty] = useState(item.qty);
@@ -161,12 +162,12 @@ export function TableModal({ current, onClose, onPick }) {
       {!tables ? null : tables.length === 0 ? (
         <Empty icon={Armchair} title="No tables yet" text="Add tables from the Tables screen." />
       ) : (
-        <div className="tgrid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))' }}>
+        <div className="tgrid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))' }}>
           {tables.map((t) => {
             const running = t.status === 'occupied' && t.id !== current?.id;
             return (
-              <div key={t.id} className={`tcard ${t.status}`} style={{ minHeight: 96 }} onClick={() => onPick(t)}>
-                <div className="tn"><bdi>{t.name}</bdi></div>
+              <div key={t.id} className={`tcard ${t.status}`} style={{ minHeight: 96, alignItems: 'center' }} onClick={() => onPick(t)}>
+                <TableVisual name={t.name} capacity={t.capacity} />
                 <StatusBadge status={t.status} />
                 <div className="small faint">{running ? `Open ${t.order_no}` : `${t.capacity} seats`}</div>
               </div>

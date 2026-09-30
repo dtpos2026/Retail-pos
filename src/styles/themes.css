@@ -1,0 +1,55 @@
+/* ==========================================================================
+   Retail POS themes — pick one in Settings → Appearance.
+   royal (default, Digital Target purple) · crimson (red & white) · gold (black & gold)
+   emerald · sunset · ocean · night (dark)
+   ========================================================================== */
+
+:root, :root[data-theme='royal'] {
+  --primary: #6d28d9; --primary-600: #5b21b6; --primary-50: #f5f0ff; --primary-100: #eadcff; --primary-rgb: 109, 40, 217;
+  --grad-a: #8b5cf6; --grad-b: #5b21b6; --grad-c: #34075f; --nav-a: #8b5cf6; --nav-b: #6d28d9;
+  --sidebar: #2a0a55; --sidebar-2: #150330; --accent: #f5b301; --bg: #f4f2f9;
+}
+:root[data-theme='crimson'] {
+  --primary: #dc2626; --primary-600: #b91c1c; --primary-50: #fef2f2; --primary-100: #fee2e2; --primary-rgb: 220, 38, 38;
+  --grad-a: #ef4444; --grad-b: #c81e1e; --grad-c: #7f1d1d; --nav-a: #ef4444; --nav-b: #b91c1c;
+  --sidebar: #2b0b0d; --sidebar-2: #160506; --accent: #f59e0b; --bg: #faf6f5;
+}
+:root[data-theme='emerald'] {
+  --primary: #059669; --primary-600: #047857; --primary-50: #ecfdf5; --primary-100: #d1fae5; --primary-rgb: 5, 150, 105;
+  --grad-a: #10b981; --grad-b: #059669; --grad-c: #064e3b; --nav-a: #10b981; --nav-b: #047857;
+  --sidebar: #063a2b; --sidebar-2: #031a12; --accent: #f5b301; --bg: #f2f8f5;
+}
+:root[data-theme='sunset'] {
+  --primary: #ea580c; --primary-600: #c2410c; --primary-50: #fff7ed; --primary-100: #ffedd5; --primary-rgb: 234, 88, 12;
+  --grad-a: #fb923c; --grad-b: #ea580c; --grad-c: #7c2d12; --nav-a: #fb923c; --nav-b: #c2410c;
+  --sidebar: #34160a; --sidebar-2: #1a0a04; --accent: #facc15; --bg: #faf6f2;
+}
+:root[data-theme='ocean'] {
+  --primary: #0284c7; --primary-600: #0369a1; --primary-50: #f0f9ff; --primary-100: #e0f2fe; --primary-rgb: 2, 132, 199;
+  --grad-a: #38bdf8; --grad-b: #0284c7; --grad-c: #0c4a6e; --nav-a: #38bdf8; --nav-b: #0369a1;
+  --sidebar: #07304a; --sidebar-2: #031a29; --accent: #f5b301; --bg: #f1f6fa;
+}
+
+/* ---- dark themes -------------------------------------------------------------- */
+:root[data-theme='gold'] {
+  --bg: #0c0b0a; --surface: #17150f; --surface-2: #1e1b14; --surface-3: #29251b;
+  --border: #322d20; --border-strong: #463f2d; --text: #f6efdc; --text-2: #cdc19f; --text-3: #8f8467;
+  --primary: #d4a017; --primary-600: #b8860b; --primary-50: #2b2310; --primary-100: #3b3013; --primary-rgb: 212, 160, 23; --on-primary: #1a1200;
+  --grad-a: #e8b923; --grad-b: #b8860b; --grad-c: #5c4200; --nav-a: #d4a017; --nav-b: #a67c00;
+  --sidebar: #050505; --sidebar-2: #0e0c08; --sidebar-text: #b9ae90; --accent: #f6d365;
+  --success-50: #0f2a1a; --danger-50: #3a1616; --warning-50: #33270b; --info-50: #0d2636;
+  --shadow: 0 1px 3px rgba(0, 0, 0, .5); --shadow-sm: 0 1px 2px rgba(0, 0, 0, .45);
+}
+:root[data-theme='night'] {
+  --bg: #0b1120; --surface: #121a2b; --surface-2: #172135; --surface-3: #1e2a41;
+  --border: #26334d; --border-strong: #34445f; --text: #e6ebf5; --text-2: #aab6cb; --text-3: #71809a;
+  --primary: #8b5cf6; --primary-600: #7c3aed; --primary-50: #251c4d; --primary-100: #2f2366; --primary-rgb: 139, 92, 246;
+  --grad-a: #8b5cf6; --grad-b: #6d28d9; --grad-c: #3b0764; --nav-a: #8b5cf6; --nav-b: #6d28d9;
+  --sidebar: #070c17; --sidebar-2: #0e1628; --accent: #f5b301;
+  --success-50: #0d2a1b; --danger-50: #3a1515; --warning-50: #33250b; --info-50: #0c2638;
+  --shadow: 0 1px 3px rgba(0, 0, 0, .4);
+}
+:root[data-theme='gold'] .toast, :root[data-theme='night'] .toast { background: #f1f5f9; color: #0f172a; }
+:root[data-theme='gold'] .modal-foot, :root[data-theme='night'] .modal-foot { background: var(--surface-2); }
+:root[data-theme='gold'] .btn.success { color: #fff; }
+:root[data-theme='gold'] .preview-frame, :root[data-theme='night'] .preview-frame { background: #fff; }

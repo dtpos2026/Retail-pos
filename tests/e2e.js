@@ -16,10 +16,13 @@ let failed = false;
   const app = await _electron.launch({
     executablePath: require('electron'),
     args: [...(process.platform === 'linux' ? ['--no-sandbox'] : []), DESK],
-    env: { ...process.env, RPOS_USER_DATA: ud },
+    env: { ...process.env, RPOS_USER_DATA: ud, RPOS_PRINT_DUMP: path.join(ud, 'prints') },
   });
   const errors = [];
-  const page = await app.firstWindow();
+  // The splash screen opens first; drive the main window.
+  const isMain = (w) => !/splash\.html/.test(w.url());
+  let page = app.windows().find(isMain);
+  if (!page) page = await app.waitForEvent('window', { predicate: isMain, timeout: 30000 });
   page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
   page.on('console', (m) => m.type() === 'error' && errors.push('console: ' + m.text()));
   await page.setViewportSize({ width: 1366, height: 768 });
@@ -27,6 +30,7 @@ let failed = false;
   const step = async (name, fn) => { try { await fn(); console.log('OK  ', name); } catch (e) { failed = true; console.log('FAIL', name, e.message.split('\n')[0]); await shot('fail-' + name.replace(/\W+/g, '_')); } };
 
   await page.waitForSelector('text=Welcome back');
+  await page.waitForTimeout(1600); // let the entrance animation finish
   await shot('01-login');
   await step('login admin via PIN', async () => {
     await page.click('.user-tile');
@@ -98,7 +102,7 @@ let failed = false;
     await page.waitForSelector('text=Order saved to Table 3');
   });
   await step('tables page and reopen', async () => {
-    await page.click('.sidebar .nav-item >> nth=3');
+    await page.click('a[href="#/tables"]');
     await page.waitForSelector('.tcard.occupied');
     await shot('10-tables');
     await page.click('.tcard.occupied');
@@ -120,6 +124,75 @@ let failed = false;
   await step('users', async () => { await page.click('a[href="#/users"]'); await page.waitForTimeout(500); await shot('23-users'); });
   await step('backup', async () => { await page.click('a[href="#/settings"]'); await page.click('.tabs button:has-text("Backup")'); await page.click('button:has-text("Backup now")'); await page.waitForSelector('text=Backup saved'); await shot('24-backup'); });
   await step('license tab', async () => { await page.click('.tabs button:has-text("License")'); await shot('25-license'); });
+
+  await step('hold / running module', async () => {
+    // hold a takeaway order from POS, then retrieve it
+    await page.click('a[href="#/pos"]');
+    await page.waitForSelector('.pcard');
+    await page.click('.cart-head .seg button:has-text("Takeaway")');
+    await page.click('.pcard:has-text("Lassi")');
+    await page.keyboard.press('F8');
+    await page.waitForSelector('text=held');
+    await page.click('a[href="#/held"]');
+    await page.waitForSelector('.held-card:has-text("Takeaway")');
+    await shot('12b-held');
+    await page.click('.held-card:has-text("Takeaway") button:has-text("Retrieve")');
+    await page.waitForSelector('.citem:has-text("Lassi")');
+  });
+  await step('print pipeline writes an ESC/POS job (no blank top)', async () => {
+    const dump = path.join(ud, 'prints');
+    const before = fs.existsSync(dump) ? fs.readdirSync(dump).length : 0;
+    await page.click('a[href="#/orders"]');
+    await page.waitForSelector('table.table');
+    await page.click('table.table tbody tr:has-text("Completed") >> nth=0');
+    await page.waitForSelector('.modal');
+    await page.click('.modal button:has-text("Reprint")');
+    await page.waitForSelector('text=Receipt sent to printer');
+    const files = fs.readdirSync(dump);
+    if (files.length <= before) throw new Error('no print job written');
+    const escpos = require('../electron/printing/escpos');
+    const j = escpos.decodeJob(fs.readFileSync(path.join(dump, files[files.length - 1])));
+    if (j.cuts !== 1 || j.width !== 384 && j.width !== 576) throw new Error(`bad job ${j.width}x${j.height} cuts ${j.cuts}`);
+    // first printed row must contain ink within the first few millimetres (no blank feed at the top)
+    let firstInk = j.rows.findIndex((r) => r.some((b) => b !== 0));
+    if (firstInk > 24) throw new Error(`blank space at top: ${firstInk} rows`);
+    await page.keyboard.press('Escape');
+  });
+  await step('80mm report preview + print', async () => {
+    await page.click('a[href="#/reports"]');
+    await page.waitForSelector('table.table');
+    await page.click('.seg button:has-text("80mm")');
+    await page.click('button:has-text("Preview")');
+    await page.waitForSelector('iframe.preview-frame');
+    await page.waitForTimeout(700);
+    await shot('21b-report-80mm-preview');
+    await page.keyboard.press('Escape');
+    await page.click('button:has-text("Print 80mm")');
+    await page.waitForSelector('text=Sent to printer');
+  });
+  await step('appearance: switch themes', async () => {
+    await page.click('a[href="#/settings"]');
+    await page.click('.tabs button:has-text("Appearance")');
+    await page.waitForSelector('.theme-card');
+    await shot('27-appearance-royal');
+    for (const [name, file] of [['Crimson', '28-theme-crimson'], ['Black & Gold', '29-theme-gold']]) {
+      await page.click(`.theme-card:has-text("${name}")`);
+      await page.waitForTimeout(300);
+      await shot(file);
+    }
+    await page.click('.theme-card:has-text("Crimson")');
+    await page.click('button:has-text("Save changes")');
+    await page.waitForSelector('text=Settings saved');
+    if ((await page.evaluate(() => document.documentElement.dataset.theme)) !== 'crimson') throw new Error('theme not applied');
+    await page.click('.theme-card:has-text("Royal")');
+    await page.click('button:has-text("Save changes")');
+    await page.waitForSelector('text=Settings saved');
+  });
+  await step('printer settings: thermal method', async () => {
+    await page.click('.tabs button:has-text("Printers")');
+    await page.waitForSelector('text=Print method');
+    await shot('30-printers');
+  });
   await step('cashier restricted', async () => {
     await page.click('.user-chip button');
     await page.click('.modal button:has-text("Log out")');

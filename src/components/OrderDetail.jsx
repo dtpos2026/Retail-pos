@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ReceiptText, Printer, Ticket, Undo2, XCircle, PlayCircle, HandCoins, Eye } from 'lucide-react';
+import { ReceiptText, Printer, Ticket, Undo2, XCircle, PlayCircle, HandCoins, Eye, ImageDown, ChefHat } from 'lucide-react';
 import { api } from '../lib/api';
 import { useApp } from '../context/AppContext';
 import { formatDateTime, formatMoney, formatQty, orderTypeLabel } from '../lib/format';
@@ -60,6 +60,8 @@ export default function OrderDetail({ id, onClose, onChanged }) {
           {o.status === 'completed' && can('refund') && <Button variant="danger-ghost" icon={Undo2} onClick={refund} loading={busy === 'refund'} style={{ marginRight: 'auto' }}>Refund</Button>}
           {o.status === 'pending' && <Button variant="danger-ghost" icon={XCircle} onClick={cancel} loading={busy === 'cancel'} style={{ marginRight: 'auto' }}>Cancel order</Button>}
           <Button icon={Eye} onClick={() => setPreview(true)}>Preview</Button>
+          <Button icon={ImageDown} title="Save the receipt as a PNG image" loading={busy === 'png'} onClick={() => run('png', async () => { const r = await api('print.savePng', { kind: 'receipt', orderId: o.id }); if (!r.canceled) toast('Saved as PNG'); })}>PNG</Button>
+          {o.status === 'pending' && <Button icon={ChefHat} loading={busy === 'kot'} onClick={() => run('kot', () => api('print.kot', { orderId: o.id }), 'Kitchen ticket sent')}>KOT</Button>}
           {o.tokens.length > 0 ? (
             <Button icon={Ticket} loading={busy === 'token'} onClick={() => run('token', () => api('print.tokens', { orderId: o.id }), 'Token sent to printer')}>Print token</Button>
           ) : (

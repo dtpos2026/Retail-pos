@@ -21,6 +21,7 @@ test('panel-signed key verifies with desktop algorithm', async () => {
 });
 
 test('desktop license module accepts panel key', async () => {
+  // (full activation / device / block logic is covered in ../tests/license.test.js)
   const { privateJwk, publicPem } = await generateKeyPair();
   const cfgPath = require.resolve('../../electron/license/config.js');
   require.cache[cfgPath] = { id: cfgPath, filename: cfgPath, loaded: true, exports: { PUBLIC_KEY_PEM: publicPem, TRIAL_DAYS: 7, FIREBASE: { projectId: 'x', apiKey: 'y' }, VENDOR: {} } };
@@ -32,40 +33,17 @@ test('desktop license module accepts panel key', async () => {
   assert.equal(lic.status().state, 'trial');
   const mid = lic.machineId();
   const key = await signLicense(privateJwk, { lid: 'L9', cid: 'C9', bn: 'Test Shop', mid, plan: 'yearly', iat: '2026-01-01', exp: '2099-12-31', mu: 2 });
-  const st = lic.activate({ key });
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => { throw new Error('offline'); }; // machine-locked keys activate offline
+  const st = await lic.activate({ key });
   assert.equal(st.state, 'active');
   assert.equal(st.maxUsers, 2);
   const other = await signLicense(privateJwk, { lid: 'L10', cid: 'C9', bn: 'Test Shop', mid: '0000-0000-0000-0000', plan: 'yearly', iat: '2026-01-01', exp: null, mu: 0 });
-  assert.throws(() => lic.activate({ key: other }), /issued for computer/);
+  await assert.rejects(() => lic.activate({ key: other }), /issued for computer/);
   const expired = await signLicense(privateJwk, { lid: 'L11', cid: 'C9', bn: 'Test Shop', mid: '*', plan: 'monthly', iat: '2020-01-01', exp: '2020-02-01', mu: 0 });
-  assert.throws(() => lic.activate({ key: expired }), /expired/);
+  await assert.rejects(() => lic.activate({ key: expired }), /expired/);
+  globalThis.fetch = realFetch;
 
-  // Online check: renewal (new key, same lid) is picked up; revocation disables; reactivation restores.
-  const renewed = await signLicense(privateJwk, { lid: 'L9', cid: 'C9', bn: 'Test Shop', mid, plan: 'yearly', iat: '2026-06-01', exp: '2100-12-31', mu: 5 });
-  let remote = { status: 'active', key: renewed };
-  const realFetch = globalThis.fetch;
-  globalThis.fetch = async (url) => {
-    assert.match(String(url), /licenseStatus\/L9/);
-    return { ok: true, status: 200, json: async () => ({ fields: { status: { stringValue: remote.status }, key: { stringValue: remote.key } } }) };
-  };
-  try {
-    let s = await lic.onlineCheck();
-    assert.equal(s.expiresAt, '2100-12-31');
-    assert.equal(s.maxUsers, 5);
-    remote = { status: 'revoked', key: renewed };
-    s = await lic.onlineCheck();
-    assert.equal(s.state, 'revoked');
-    assert.equal(s.usable, false);
-    remote = { status: 'active', key: renewed };
-    s = await lic.onlineCheck();
-    assert.equal(s.state, 'active');
-    // Offline: network error leaves state untouched.
-    globalThis.fetch = async () => { throw new Error('offline'); };
-    assert.equal(await lic.onlineCheck(), null);
-    assert.equal(lic.status().state, 'active');
-  } finally {
-    globalThis.fetch = realFetch;
-  }
 });
 
 test('plan expiry and machine id helpers', () => {

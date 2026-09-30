@@ -18,7 +18,7 @@ function renderReport(report) {
   const period = report.noDate ? `As of ${formatDateTime(new Date())}` : report.from === report.to ? formatDate(report.from) : `${formatDate(report.from)} – ${formatDate(report.to)}`;
   const head = report.columns.map((c) => `<th class="${c.type === 'text' ? 'l' : 'r'}">${esc(c.label)}</th>`).join('');
   const rows = report.rows
-    .map((r) => `<tr>${report.columns.map((c) => `<td class="${c.type === 'text' ? 'l' : 'r'}"><bdi>${esc(cellValue(c, r[c.key], currency))}</bdi></td>`).join('')}</tr>`)
+    .map((r) => `<tr class="${r.kind === 'head' ? 'sec' : r.bold ? 'bd' : ''}">${report.columns.map((c) => `<td class="${c.type === 'text' ? 'l' : 'r'}"><bdi>${esc(cellValue(c, r[c.key], currency))}</bdi></td>`).join('')}</tr>`)
     .join('');
   const totals = report.totals
     ? `<tr class="tot">${report.columns.map((c) => `<td class="${c.type === 'text' ? 'l' : 'r'}">${esc(cellValue(c, report.totals[c.key], currency))}</td>`).join('')}</tr>`
@@ -39,6 +39,8 @@ body{font-family:'Segoe UI',Arial,'RPOS Urdu',sans-serif;font-size:11px;color:#1
 table{width:100%;border-collapse:collapse}
 th{background:#f1f1f1;font-weight:600;border-bottom:1px solid #999;padding:5px 6px}
 td{border-bottom:1px solid #e5e5e5;padding:4px 6px}
+tr.sec td{background:#e9e4f5;font-weight:700;letter-spacing:.5px}
+tr.bd td{font-weight:700}
 tr.tot td{font-weight:700;border-top:2px solid #111;background:#fafafa}
 .l{text-align:left}.r{text-align:right}
 .note{margin-top:8px;font-size:10px;color:#555}

@@ -9,11 +9,18 @@ export function useApp() {
   return useContext(AppCtx);
 }
 
+export function applyAppearance(a) {
+  const root = document.documentElement;
+  root.dataset.theme = a?.theme || 'royal';
+  root.dataset.anim = a?.animations === false ? 'off' : 'on';
+}
+
 export function AppProvider({ children }) {
   const [user, setUser] = useState(null);
   const [settings, setSettings] = useState(null);
   const [license, setLicense] = useState(null);
   const [info, setInfo] = useState(null);
+  const [pub, setPublic] = useState(null); // theme + shop name/logo, available before login
   const [toasts, setToasts] = useState([]);
   const [dialog, setDialog] = useState(null);
   const idRef = useRef(0);
@@ -36,7 +43,7 @@ export function AppProvider({ children }) {
   const reloadSettings = useCallback(async () => {
     const s = await api('settings.getAll');
     setSettings(s);
-    document.documentElement.dataset.theme = s.general?.theme === 'dark' ? 'dark' : 'light';
+    applyAppearance(s.appearance);
     return s;
   }, []);
 
@@ -44,6 +51,12 @@ export function AppProvider({ children }) {
     const l = await api('license.status');
     setLicense(l);
     return l;
+  }, []);
+
+  // Live license changes pushed by the main process (blocked / suspended / renewed while the app is open).
+  useEffect(() => {
+    if (!window.pos?.on) return undefined;
+    return window.pos.on('license', (st) => setLicense(st));
   }, []);
 
   const logout = useCallback(async () => {
@@ -64,8 +77,8 @@ export function AppProvider({ children }) {
   const can = useCallback((perm) => !!user && (user.role === 'admin' || user.permissions.includes(perm)), [user]);
 
   const value = useMemo(
-    () => ({ user, setUser, settings, setSettings, reloadSettings, license, setLicense, reloadLicense, info, setInfo, toast, toastError, confirm, logout, can }),
-    [user, settings, reloadSettings, license, reloadLicense, info, toast, toastError, confirm, logout, can]
+    () => ({ user, setUser, settings, setSettings, reloadSettings, license, setLicense, reloadLicense, info, setInfo, pub, setPublic, toast, toastError, confirm, logout, can }),
+    [user, settings, reloadSettings, license, reloadLicense, info, pub, toast, toastError, confirm, logout, can]
   );
 
   const close = (ok) => {

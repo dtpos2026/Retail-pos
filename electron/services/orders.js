@@ -69,8 +69,16 @@ function list({ search, from, to, status, orderType, paymentStatus, cashierId, l
   );
 }
 
-function pending() {
-  return list({ status: 'pending', limit: 200 });
+function pending({ withItems } = {}) {
+  const rows = list({ status: 'pending', limit: 200 });
+  if (!withItems || !rows.length) return rows;
+  const items = ctx.db.all(
+    `SELECT order_id, name, qty, total, notes FROM order_items WHERE order_id IN (${rows.map(() => '?').join(',')}) ORDER BY id`,
+    rows.map((r) => r.id)
+  );
+  const by = {};
+  for (const i of items) (by[i.order_id] = by[i.order_id] || []).push(i);
+  return rows.map((r) => ({ ...r, items: by[r.id] || [] }));
 }
 
 /**

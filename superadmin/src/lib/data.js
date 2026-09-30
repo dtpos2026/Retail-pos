@@ -106,6 +106,7 @@ export async function issueLicense(input) {
     iat: ymd(new Date()),
     exp: input.expiresAt || null,
     mu: Number(input.maxUsers) || 0,
+    md: Math.max(1, Number(input.maxDevices) || 1),
   };
   const key = await signLicense(cfg.privateJwk, payload);
   const record = {
@@ -125,10 +126,14 @@ export async function issueLicense(input) {
     issuedAt: payload.iat,
     updatedAt: serverTimestamp(),
   };
+  const maxDevices = Math.max(1, Number(input.maxDevices) || 1);
+  record.maxDevices = maxDevices;
   const batch = writeBatch(db);
   if (input.id) batch.update(ref, record);
   else batch.set(ref, { ...record, createdAt: serverTimestamp(), createdBy: me() });
-  batch.set(doc(db, 'licenseStatus', ref.id), { status: 'active', key, expiresAt: payload.exp, updatedAt: serverTimestamp() });
+  // Public status doc: merge so the live device counter survives renewals.
+  const status = { status: 'active', key, expiresAt: payload.exp, maxDevices, updatedAt: serverTimestamp() };
+  batch.set(doc(db, 'licenseStatus', ref.id), input.id ? status : { ...status, deviceCount: 0 }, { merge: true });
   await batch.commit();
   await logActivity(input.id ? 'license.renew' : 'license.create', `${input.id ? 'Re-issued' : 'Issued'} ${payload.plan} license for ${payload.bn}${payload.exp ? ` until ${payload.exp}` : ' (lifetime)'}`, { licenseId: ref.id, clientId: payload.cid });
   return { id: ref.id, ...record };
@@ -137,7 +142,7 @@ export async function issueLicense(input) {
 export async function setLicenseStatus(lic, status) {
   const batch = writeBatch(db);
   batch.update(doc(db, 'licenses', lic.id), { status, updatedAt: serverTimestamp() });
-  batch.set(doc(db, 'licenseStatus', lic.id), { status, key: lic.key, expiresAt: lic.expiresAt || null, updatedAt: serverTimestamp() });
+  batch.set(doc(db, 'licenseStatus', lic.id), { status, key: lic.key, expiresAt: lic.expiresAt || null, updatedAt: serverTimestamp() }, { merge: true });
   await batch.commit();
   await logActivity(`license.${status}`, `License for ${lic.businessName} set to ${status}`, { licenseId: lic.id, clientId: lic.clientId });
 }
@@ -148,6 +153,33 @@ export async function deleteLicense(lic) {
   batch.set(doc(db, 'licenseStatus', lic.id), { status: 'revoked', key: '', expiresAt: null, updatedAt: serverTimestamp() });
   await batch.commit();
   await logActivity('license.delete', `Deleted license for ${lic.businessName}`, { licenseId: lic.id });
+}
+
+// ------------------------------------------------------------------ devices
+export async function setDeviceStatus(device, status) {
+  await updateDoc(doc(db, 'devices', device.id), { status });
+  await logActivity(`device.${status}`, `Device ${device.name || device.machineId} of ${device.businessName} set to ${status}`, { licenseId: device.licenseId });
+}
+
+/** Remove a device and free its slot (the POS must register again). */
+export async function removeDevice(device) {
+  const batch = writeBatch(db);
+  batch.delete(doc(db, 'devices', device.id));
+  const lsRef = doc(db, 'licenseStatus', device.licenseId);
+  const ls = await getDoc(lsRef);
+  if (ls.exists()) batch.update(lsRef, { deviceCount: Math.max(0, (ls.data().deviceCount || 1) - 1), updatedAt: serverTimestamp() });
+  await batch.commit();
+  await logActivity('device.remove', `Removed device ${device.name || device.machineId} of ${device.businessName}`, { licenseId: device.licenseId });
+}
+
+/** Change how many computers may use a license. */
+export async function setMaxDevices(lic, n) {
+  const max = Math.max(1, Number(n) || 1);
+  const batch = writeBatch(db);
+  batch.update(doc(db, 'licenses', lic.id), { maxDevices: max, updatedAt: serverTimestamp() });
+  batch.set(doc(db, 'licenseStatus', lic.id), { maxDevices: max, updatedAt: serverTimestamp() }, { merge: true });
+  await batch.commit();
+  await logActivity('license.devices', `Device limit of ${lic.businessName} set to ${max}`, { licenseId: lic.id });
 }
 
 // ------------------------------------------------------------------ admins

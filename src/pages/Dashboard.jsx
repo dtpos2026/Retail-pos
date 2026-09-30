@@ -8,6 +8,7 @@ import { useApp } from '../context/AppContext';
 import { formatMoney, formatTime, formatQty, orderTypeLabel } from '../lib/format';
 import { Stat, Loading, Empty, StatusBadge, Button, Money, PageHead } from '../components/ui';
 import BarChart from '../components/BarChart';
+import { HeroBanner } from '../components/Banner';
 
 const DAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -41,10 +42,10 @@ export default function Dashboard() {
 
   return (
     <div className="col" style={{ gap: 18 }}>
-      <PageHead title={`${greeting}, ${user.name.split(' ')[0]}`} sub="Here is how your business is doing today.">
-        <Button icon={RefreshCw} onClick={load}>Refresh</Button>
-        {can('pos') && <Button variant="primary" icon={ShoppingCart} onClick={() => nav('/pos')}>New Sale</Button>}
-      </PageHead>
+      <HeroBanner title={`${greeting}, ${user.name.split(' ')[0]}`} subtitle={settings.business.name && settings.business.name !== 'My Business' ? `Here is how ${settings.business.name} is doing today.` : 'Here is how your business is doing today.'}>
+        <Button icon={RefreshCw} onClick={load} style={{ background: 'rgba(255,255,255,.16)', color: '#fff', borderColor: 'rgba(255,255,255,.3)' }}>Refresh</Button>
+        {can('pos') && <Button icon={ShoppingCart} onClick={() => nav('/pos')} style={{ background: '#fff', color: 'var(--primary-600)', borderColor: '#fff' }}>New Sale</Button>}
+      </HeroBanner>
 
       <div className="grid grid-4">
         <Stat hero icon={Wallet} label="Today's Sales" value={m(t.sales)} hint={`${t.orders} orders · avg ${m(t.avgOrder)}`} />

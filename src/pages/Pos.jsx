@@ -9,6 +9,7 @@ import { useApp } from '../context/AppContext';
 import { usePos, cartFromOrder } from '../context/PosContext';
 import { calcOrder, formatMoney, formatQty, initials, round2 } from '../lib/format';
 import { Button, Seg, Empty, NumberInput, Loading } from '../components/ui';
+import { PromoBanner } from '../components/Banner';
 import { CategoryIcon } from '../components/CategoryIcon';
 import PaymentModal from '../components/pos/PaymentModal';
 import { ItemModal, DiscountModal, CustomerModal, TableModal, HeldOrdersModal, CustomItemModal } from '../components/pos/PosModals';
@@ -35,9 +36,15 @@ export default function Pos() {
   const [modal, setModal] = useState(null);
   const [busy, setBusy] = useState(false);
   const [lastSale, setLastSale] = useState(null);
+  const [heldCount, setHeldCount] = useState(0);
   const searchRef = useRef(null);
 
   const types = TYPE_OPTIONS.filter((t) => sales[t.key]);
+
+  const loadHeld = useCallback(() => api('orders.pending').then((r) => setHeldCount(r.length)).catch(() => {}), []);
+  useEffect(() => {
+    loadHeld();
+  }, [loadHeld, cart.orderId]);
 
   const loadProducts = useCallback(() => api('products.list', { activeOnly: true }).then(setProducts).catch(toastError), [toastError]);
 
@@ -190,6 +197,7 @@ export default function Pos() {
       } else {
         toast(cart.orderType === 'dine_in' ? `Order saved to ${o.table_name}` : `Order ${o.order_no} held`);
         newOrder(cart.orderType);
+        loadHeld();
       }
     } catch (e) {
       toastError(e);
@@ -309,6 +317,7 @@ export default function Pos() {
           </div>
           <Button icon={PlusSquare} onClick={() => setModal('custom')} title="Sell an item that is not in the list">Open Item</Button>
         </div>
+        <PromoBanner />
         <div className="cats">
           <button className={`cat-chip ${!cat ? 'on' : ''}`} style={!cat ? { background: 'var(--text)' } : undefined} onClick={() => setCat(null)}>
             <LayoutGrid size={16} /> All
@@ -378,7 +387,9 @@ export default function Pos() {
             <Button size="sm" variant={cart.customer.name ? 'soft' : undefined} icon={UserRound} onClick={() => setModal('customer')} title="Customer (F4)" className="grow" style={{ justifyContent: 'flex-start', overflow: 'hidden' }}>
               <span className="ellipsis"><bdi>{cart.customer.name || cart.customer.mobile || (cart.orderType === 'delivery' ? 'Add delivery customer' : 'Walk-in customer')}</bdi></span>
             </Button>
-            <Button size="sm" icon={PauseCircle} onClick={() => setModal('held')} title="Held orders (F7)" />
+            <Button size="sm" icon={PauseCircle} onClick={() => setModal('held')} title="Held & running orders (F7) — full list in the sidebar: Hold / Running">
+              Held{heldCount > 0 && <span className="badge amber" style={{ padding: '0 7px' }}>{heldCount}</span>}
+            </Button>
           </div>
           {cart.orderNo && (
             <div className="row small">
@@ -393,16 +404,25 @@ export default function Pos() {
         <div className="cart-items">
           {cart.items.length === 0 ? (
             lastSale ? (
-              <div className="empty">
-                <div className="ic" style={{ background: 'var(--success-50)', color: 'var(--success)' }}><CheckCircle2 size={30} /></div>
-                <h4>{lastSale.order_no} completed</h4>
-                <p>Total {formatMoney(lastSale.total, cur)} · Paid {formatMoney(lastSale.paid + lastSale.change_amount, cur)}</p>
-                {lastSale.change_amount > 0 && <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--success)' }}>Change {formatMoney(lastSale.change_amount, cur)}</div>}
-                {lastSale.token_no && <div className="badge indigo" style={{ fontSize: 15 }}>Token #{lastSale.token_no}</div>}
-                <div className="row" style={{ marginTop: 8 }}>
-                  <Button size="sm" icon={Printer} onClick={() => api('print.receipt', { orderId: lastSale.id, reprint: true }).then(() => toast('Receipt sent to printer')).catch(toastError)}>Reprint</Button>
-                  {lastSale.token_no && <Button size="sm" onClick={() => api('print.tokens', { orderId: lastSale.id }).then(() => toast('Token sent to printer')).catch(toastError)}>Token</Button>}
+              <div className="sale-success">
+                <div className="confetti">
+                  {Array.from({ length: 16 }, (_, i) => (
+                    <i key={i} style={{ background: ['#16a34a', 'var(--primary)', '#f59e0b', '#ef4444', '#0ea5e9'][i % 5], '--x': `${Math.cos((i / 16) * 6.283) * (90 + (i % 3) * 30)}px`, '--y': `${Math.sin((i / 16) * 6.283) * (70 + (i % 4) * 22)}px`, '--rot': `${i * 47}deg`, animationDelay: `${(i % 4) * 30}ms` }} />
+                  ))}
                 </div>
+                <div className="badge-ok">
+                  <svg viewBox="0 0 84 84"><circle cx="42" cy="42" r="40" /><path d="M24 43l13 13 24-27" /></svg>
+                </div>
+                <h4>{lastSale.order_no} completed</h4>
+                <div className="muted">Total {formatMoney(lastSale.total, cur)} · Received {formatMoney(lastSale.paid + lastSale.change_amount, cur)}</div>
+                {lastSale.change_amount > 0 && <div className="change">Change {formatMoney(lastSale.change_amount, cur)}</div>}
+                {lastSale.token_no && <div className="badge indigo" style={{ fontSize: 16, padding: '5px 14px' }}>Token #{lastSale.token_no}</div>}
+                <div className="row wrap" style={{ marginTop: 10, justifyContent: 'center' }}>
+                  <Button size="sm" icon={Printer} onClick={() => api('print.receipt', { orderId: lastSale.id, reprint: true }).then(() => toast('Receipt sent to printer')).catch(toastError)}>Print receipt</Button>
+                  {lastSale.token_no && <Button size="sm" onClick={() => api('print.tokens', { orderId: lastSale.id }).then(() => toast('Token sent to printer')).catch(toastError)}>Print token</Button>}
+                  <Button size="sm" onClick={() => api('print.savePng', { kind: 'receipt', orderId: lastSale.id }).then((r) => !r.canceled && toast('Saved as PNG')).catch(toastError)}>Save PNG</Button>
+                </div>
+                <div className="faint small" style={{ marginTop: 8 }}>Ready for the next customer</div>
               </div>
             ) : (
               <Empty icon={ShoppingCart} title="Cart is empty" text="Click a product or scan a barcode to add it." />

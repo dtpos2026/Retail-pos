@@ -53,6 +53,14 @@ const routes = {
       defaultAdmin: ctx.db.get("SELECT COUNT(*) c FROM users WHERE username = 'admin'").c > 0 && auth.verifySecret(seed.DEFAULT_ADMIN.password, ctx.db.get("SELECT password_hash FROM users WHERE username = 'admin'")?.password_hash),
     }),
   },
+  // Safe to show before login: theme + shop name/logo for the login screen.
+  'app.public': {
+    open: true,
+    fn: () => {
+      const b = settings.get('business');
+      return { appearance: settings.get('appearance'), business: { name: b.name, logo: b.logo } };
+    },
+  },
   'app.openDataFolder': { perm: 'settings', fn: () => shell.openPath(ctx.paths.userData) },
   'app.openLogs': { perm: 'settings', fn: () => shell.openPath(ctx.paths.logs) },
   'app.relaunch': {
@@ -64,6 +72,7 @@ const routes = {
   },
   'license.status': { open: true, fn: () => license.status() },
   'license.activate': { open: true, fn: (a) => license.activate(a) },
+  'license.registerDevice': { open: true, fn: () => license.registerDevice() },
   'license.refresh': { open: true, fn: async () => (await license.onlineCheck()) || license.status() },
   'license.remove': { perm: 'settings', fn: () => license.removeLicense() },
 
@@ -125,7 +134,7 @@ const routes = {
   'orders.save': { perm: 'pos', fn: (a) => orders.save(a) },
   'orders.get': { any: ['orders', 'pos', 'tables'], fn: (a) => orders.get(a) },
   'orders.list': { any: ['orders', 'reports'], fn: (a) => orders.list(a) },
-  'orders.pending': { any: ['orders', 'pos', 'tables'], fn: () => orders.pending() },
+  'orders.pending': { any: ['orders', 'pos', 'tables'], fn: (a) => orders.pending(a) },
   'orders.cancel': { any: ['pos', 'refund'], fn: (a) => orders.cancel(a) },
   'orders.refund': { perm: 'refund', fn: (a) => orders.refund(a) },
   'orders.receivePayment': { any: ['orders', 'pos'], fn: (a) => orders.receivePayment(a) },
@@ -168,11 +177,33 @@ const routes = {
     },
   },
 
+  'reports.thermalHtml': { perm: 'reports', fn: (a) => printService.reportHtml(a) },
+  'reports.thermalPrint': { perm: 'reports', fn: (a) => printService.printReportThermal(a) },
+  'reports.thermalPng': {
+    perm: 'reports',
+    fn: async (a) => {
+      const w = Number(a.width) || settings.get('receipt').paperWidth;
+      return savePng(`${a.key}_${a.from}${a.to !== a.from ? '_to_' + a.to : ''}_${w}mm.png`, printService.reportHtml({ ...a, width: w }), w);
+    },
+  },
+
   // ---- printing ------------------------------------------------------------
   'print.printers': { fn: () => printService.listPrinters() },
   'print.templates': { fn: () => printService.TEMPLATES },
   'print.receiptHtml': { fn: (a) => printService.receiptHtml(a) },
   'print.tokenHtml': { fn: (a) => printService.tokenHtmls(a) },
+  'print.tokenDesigns': { fn: () => printService.TOKEN_DESIGNS },
+  'print.kotHtml': { fn: (a) => printService.kotHtml(a) },
+  'print.kot': { any: ['pos', 'orders', 'tables'], fn: (a) => printService.printKot(a) },
+  'print.savePng': {
+    any: ['pos', 'orders', 'tables', 'tokens'],
+    fn: async ({ kind = 'receipt', orderId, index = 0 }) => {
+      const cfg = settings.get(kind === 'receipt' ? 'receipt' : 'token');
+      const html = kind === 'receipt' ? printService.receiptHtml({ orderId }) : kind === 'kot' ? printService.kotHtml({ orderId }) : printService.tokenHtmls({ orderId })[index];
+      const o = require('../services/orders').get({ id: orderId });
+      return savePng(`${kind === 'receipt' ? 'Receipt' : kind === 'kot' ? 'KOT' : 'Token'}-${o.order_no}.png`, html, cfg.paperWidth);
+    },
+  },
   'print.receipt': { any: ['pos', 'orders', 'tables'], fn: (a) => printService.printReceipt(a) },
   'print.tokens': { any: ['pos', 'orders', 'tokens'], fn: (a) => printService.printTokens(a) },
   'print.afterSale': { perm: 'pos', fn: (a) => printService.printAfterSale(a) },
@@ -218,7 +249,19 @@ const routes = {
   'data.factoryReset': { perm: 'settings', fn: () => seed.factoryReset() },
 };
 
-const LICENSE_FREE = new Set(['app.info', 'app.relaunch', 'license.status', 'license.activate', 'license.refresh', 'auth.current', 'auth.logout']);
+async function savePng(defaultName, html, widthMm) {
+  const r = await dialog.showSaveDialog(win(), {
+    title: 'Save as PNG',
+    defaultPath: require('path').join(app.getPath('pictures'), defaultName),
+    filters: [{ name: 'PNG image', extensions: ['png'] }],
+  });
+  if (r.canceled || !r.filePath) return { canceled: true };
+  fs.writeFileSync(r.filePath, await printService.renderPng(html, widthMm));
+  shell.showItemInFolder(r.filePath);
+  return { file: r.filePath };
+}
+
+const LICENSE_FREE = new Set(['app.info', 'app.relaunch', 'license.status', 'license.activate', 'license.registerDevice', 'license.refresh', 'auth.current', 'auth.logout']);
 
 async function handle(method, args) {
   const route = routes[method];

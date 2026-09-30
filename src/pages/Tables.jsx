@@ -5,6 +5,7 @@ import { api } from '../lib/api';
 import { useApp } from '../context/AppContext';
 import { formatTime } from '../lib/format';
 import { PageHead, Button, Loading, Empty, StatusBadge, Money, Modal, Field, Input, NumberInput } from '../components/ui';
+import TableVisual from '../components/TableVisual';
 
 export default function Tables() {
   const { toast, toastError, confirm, can } = useApp();
@@ -93,14 +94,14 @@ export default function Tables() {
           <Empty icon={Armchair} title="No tables yet" text="Add your restaurant tables to take dine-in orders." action={admin && <Button variant="primary" icon={Plus} onClick={bulk}>Add tables</Button>} />
         </div>
       ) : (
-        <div className="tgrid">
+        <div className="floor">
           {tables.map((t) => (
             <div key={t.id} className={`tcard ${t.status}`} onClick={() => open(t)}>
-              <div className="row">
-                <div className="tn grow"><bdi>{t.name}</bdi></div>
+              <TableVisual name={t.name} capacity={t.capacity} />
+              <div className="row" style={{ justifyContent: 'center', gap: 10 }}>
                 <StatusBadge status={t.status} />
+                <span className="small muted row" style={{ gap: 5 }}><Users size={14} /> {t.capacity}</span>
               </div>
-              <div className="small muted row" style={{ gap: 6 }}><Users size={14} /> {t.capacity} seats</div>
               {t.status === 'occupied' && t.order_no ? (
                 <div className="col" style={{ gap: 4, marginTop: 'auto' }}>
                   <div className="small muted row" style={{ gap: 6 }}><Clock3 size={14} /> {t.order_no} · since {formatTime(t.order_created)}</div>

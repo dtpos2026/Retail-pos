@@ -13,6 +13,18 @@ Retail-pos/                  ← POS software (Windows, offline). Run npm comman
 └── docs/                    setup guides
 ```
 
+
+## What's new in v1.1.0
+
+- **Printing rebuilt** — direct *Thermal (ESC/POS)* printing: **no blank paper at the top**, exact length, precise cut and near-instant start. The Windows-driver method stays available. → [docs/PRINTER_SETUP.md](docs/PRINTER_SETUP.md)
+- **11 receipt designs** (added Boxed Grid, Bold Restaurant, Tax Invoice + QR, Luxury, Ticket), **5 token designs**, **kitchen slips (KOT)**, optional **QR code**, **amount in words**.
+- **80 mm / 58 mm reports** — every report prints compactly on thermal paper or saves as **PNG**; new **Day Summary (Z Report)**.
+- **Hold / Running** module in the sidebar (hold, running dine-in tables, retrieve, KOT, print bill, cancel).
+- **7 themes** — *Royal Purple* (Digital Target, default), *Crimson Red & White*, *Black & Gold*, Emerald, Sunset, Ocean, Night — plus a promo **banner**, **splash screen**, animated login, floor-plan **tables**, animated order-success screen.
+- **Device licensing** — one license = N computers; register once, then it is saved; **block / suspend / remove devices live** from the Super Admin panel; server-enforced limit. → [docs/LICENSING.md](docs/LICENSING.md)
+- **Super Admin panel redesign** — dashboard with charts, Devices page, device limit per license.
+- **Developed by Digital Target** branding and version number everywhere (login, sidebar, splash, About, receipts, reports).
+
 ## Quick commands (Windows CMD)
 
 **POS software** (in the main folder):
@@ -55,15 +67,16 @@ npx firebase-tools deploy
 | **Reports** | Sales (daily / weekly / monthly / custom), Orders, Dine-In, Takeaway, Delivery, Product Sales, Category Sales, Payments, Credit / Due, Discounts, Profit, Cashier, Inventory, Stock Movements. Print, **PDF**, **CSV**, **Excel (.xlsx)**. |
 | **Users** | Admin, Manager, Cashier, Kitchen and Delivery roles with per-user permission checkboxes. Cashiers cannot open Settings, Users or Reports unless granted. |
 | **Receipt printing** | 6 real templates (Classic, Modern, Minimal, Restaurant, Retail Invoice, Compact), 58 mm and 80 mm, logo (size and alignment), margins, fonts, footer, show/hide fields, compact mode, copies, live preview identical to the print, test print, and embedded Urdu font. |
-| **Printers** | Any Windows printer (USB, Bluetooth, network) for receipts and a separate token/kitchen printer. Silent printing, page length fitted to the content (no wasted paper), clear error when printing fails. |
+| **Printers** | Any Windows printer (USB, Bluetooth, network) for receipts and a separate token/kitchen printer. Direct thermal ESC/POS printing (no blank paper, exact cut) or Windows driver mode; silent printing; clear error when printing fails. |
 | **Backup & Restore** | Backup now, backup to USB / folder, automatic daily backup (keeps the last N), restore with a safety copy, last-backup indicator. |
 | **Data safety** | SQLite WAL + `synchronous=FULL`, every sale in one transaction, integrity check at start-up, crash handlers, friendly error messages (technical details only in logs). |
-| **License** | 7-day trial, then offline activation with a signed key bound to the computer ID. Optional online check picks up renewals and revocations. |
+| **License** | 7-day trial, then activation with a signed key. The computer registers once (online) and is remembered; the Super Admin can block / suspend / remove devices live and set the device limit. Renewals and revocations are picked up automatically when online. |
 
 ### Super Admin panel (web, Firebase)
 - Sign-in with email/password or Google. Head admin: **digitaltarget.digital@gmail.com** (verified email required).
 - Clients: business, owner, phone/WhatsApp, email, city, address, type, notes, status.
-- License generation per computer: plan (Trial / Monthly / Quarterly / Half-yearly / Yearly / Lifetime / Custom), expiry, max users, price, paid, notes, **WhatsApp-ready message**.
+- License generation: plan (Trial / Monthly / Quarterly / Half-yearly / Yearly / Lifetime / Custom), expiry, max users, **max devices**, online device registration or Computer-ID lock, price, paid, notes, **WhatsApp-ready message**.
+- **Devices**: live list of every registered computer (online dot, last seen, Windows/POS version) with Block / Unblock / Suspend / Activate / Remove.
 - Renew / extend, transfer to a new PC, suspend, revoke, reactivate, delete.
 - Dashboard: clients, active / expiring / expired / revoked licenses, revenue (month and all-time), unpaid.
 - Extra admins (managed by the head admin), and an activity log of every change.
@@ -90,7 +103,7 @@ Requirements: **Node.js 22+** (Windows 10/11 for building the installer).
 ```bash
 npm install
 npm run dev          # development: Vite + Electron with hot reload
-npm test             # 17 service tests (sales, tables, tokens, inventory, reports, backup/restore, permissions, templates…)
+npm test             # 31 service tests (sales, tables, tokens, inventory, reports, backup/restore, permissions, templates…)
 npm start            # build the UI and run the production app
 ```
 
@@ -127,11 +140,10 @@ Then in Firebase Console: enable **Authentication → Email/Password and Google*
 
 ## 5. Licensing flow
 
-1. The customer installs Retail POS, which runs a **7-day trial**. The activation screen and **Settings → License** show a **Computer ID** such as `B456-AE5F-9A6B-9C13`.
-2. The customer sends the Computer ID (WhatsApp).
-3. In the Super Admin panel: **Clients → add client → Generate license**, enter the Computer ID, choose the plan and click **Generate**, then **Copy WhatsApp message**.
-4. The customer pastes the key in Retail POS and clicks **Activate**. The key works **offline** because it is verified with the public key built into the app.
-5. Renewals and revocations are written to Firestore. Whenever the POS happens to be online, it picks them up automatically, and customers can also paste a new key.
+1. The customer installs Retail POS, which runs a **7-day trial**.
+2. In the Super Admin panel: **Clients → add client → Generate license** (online device registration, max devices 1), **Copy WhatsApp message** and send it.
+3. The customer pastes the key in Retail POS → **Activate** (internet needed **once**). The computer is registered and remembered — it never asks again and works fully **offline**.
+4. You control the device live from **Devices** (block / suspend / remove) and the limit per license. Renewals and revocations reach the POS automatically whenever it is online.
 
 Details and security notes: [docs/LICENSING.md](docs/LICENSING.md).
 
@@ -180,8 +192,9 @@ The UI never touches the database. It calls named methods, and the main process 
 - [docs/DATABASE.md](docs/DATABASE.md): tables, columns, backup format
 
 ## 9. Known limitations
+- **Live control needs internet.** Block / suspend / revoke reach a POS only when it goes online (it checks every 5 minutes). A permanently offline POS keeps working until the license expires.
 - **Revocation needs internet.** A revoked or suspended license stops a POS only after that POS connects once. A permanently offline POS keeps working until its license expiry date. Keep plans time-limited (e.g. yearly) for this reason.
-- **Auto-cut** is performed by the printer driver. Enable "cut after document" in the driver settings. The app sizes each page to the content so the cut lands right after the receipt.
+- **Real-printer testing:** thermal printing was verified up to the ESC/POS bytes (decoded back to images in tests) but could not be run on a physical printer in the build environment — please run **Settings → Printers → Test receipt** once on the shop's printer and adjust *Extra feed* / *Cut* if needed.
 - **Bluetooth printers** must be paired and installed as a Windows printer. The app does not include its own Bluetooth stack.
 - The NSIS **installer must be built on Windows** (or with the included GitHub Actions workflow). On Linux/macOS you can build the portable EXE and ZIP.
 - Cloud sync, multi-branch, web ordering and a mobile app are **not** included. The architecture is ready for them.

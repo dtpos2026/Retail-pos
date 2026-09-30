@@ -6,14 +6,15 @@ import { Loading } from './ui';
  * Renders the exact HTML that will be sent to the printer inside an iframe,
  * scaled to the paper width, so what you see is what prints.
  */
-export default function ReceiptPreview({ args, method = 'print.receiptHtml', index = 0, maxHeight }) {
-  const [html, setHtml] = useState(null);
+export default function ReceiptPreview({ args, method = 'print.receiptHtml', index = 0, maxHeight, html: fixed }) {
+  const [html, setHtml] = useState(fixed || null);
   const [error, setError] = useState('');
   const [height, setHeight] = useState(400);
   const ref = useRef(null);
   const key = JSON.stringify(args);
 
   useEffect(() => {
+    if (fixed) return undefined;
     let alive = true;
     const t = setTimeout(() => {
       api(method, args)
@@ -24,7 +25,7 @@ export default function ReceiptPreview({ args, method = 'print.receiptHtml', ind
       alive = false;
       clearTimeout(t);
     };
-  }, [key, method, index]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [key, method, index, fixed]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onLoad = () => {
     const doc = ref.current?.contentDocument;

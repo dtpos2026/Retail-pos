@@ -1,14 +1,17 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Copy, RefreshCw, Ban, PlayCircle, ArrowRightLeft, Trash2, Eye, PauseCircle } from 'lucide-react';
+import { Copy, RefreshCw, Ban, PlayCircle, ArrowRightLeft, Trash2, Eye, PauseCircle, Monitor } from 'lucide-react';
 import { Button, Badge, Empty } from './ui';
 import { useAdmin } from '../context';
 import { setLicenseStatus, deleteLicense } from '../lib/data';
+import DevicesModal from './DevicesModal';
 import { fmtDate, money, licenseState } from '../lib/format';
 import { LicenseForm, KeyResult } from './LicenseModals';
 
 export default function LicenseTable({ licenses, showClient = true }) {
-  const { toast, toastError, confirm, isHead } = useAdmin();
+  const { toast, toastError, confirm, isHead, devices } = useAdmin();
+  const [manage, setManage] = useState(null);
+  const count = (id) => (devices || []).filter((d) => d.licenseId === id).length;
   const [form, setForm] = useState(null);
   const [result, setResult] = useState(null);
   const nav = useNavigate();
@@ -49,7 +52,7 @@ export default function LicenseTable({ licenses, showClient = true }) {
           <thead>
             <tr>
               {showClient && <th>Client</th>}
-              <th>Computer ID</th><th>Plan</th><th>Expires</th><th className="num">Users</th><th className="num">Price</th><th>Status</th><th />
+              <th>Devices</th><th>Plan</th><th>Expires</th><th className="num">Users</th><th className="num">Price</th><th>Status</th><th />
             </tr>
           </thead>
           <tbody>
@@ -60,7 +63,12 @@ export default function LicenseTable({ licenses, showClient = true }) {
                   {showClient && (
                     <td><a href={`#/clients/${l.clientId}`} className="b" style={{ color: 'var(--text)', textDecoration: 'none' }} onClick={(e) => { e.preventDefault(); nav(`/clients/${l.clientId}`); }}>{l.businessName}</a><div className="small faint">{l.clientPhone}</div></td>
                   )}
-                  <td className="mono small">{l.machineId === '*' ? <Badge color="amber">Any PC</Badge> : l.machineId}</td>
+                  <td>
+                    <Button size="sm" variant="soft" icon={Monitor} onClick={() => setManage(l)} title="Manage devices of this license">
+                      {count(l.id)} / {l.machineId === '*' ? l.maxDevices || 1 : 1}
+                    </Button>
+                    {l.machineId !== '*' && <div className="small mono faint" style={{ marginTop: 3 }}>{l.machineId}</div>}
+                  </td>
                   <td style={{ textTransform: 'capitalize' }}>{String(l.plan).replace('_', ' ')}</td>
                   <td className="nowrap">{l.expiresAt ? fmtDate(l.expiresAt) : 'Lifetime'}</td>
                   <td className="num">{l.maxUsers || '∞'}</td>
@@ -91,6 +99,7 @@ export default function LicenseTable({ licenses, showClient = true }) {
         />
       )}
       {result && <KeyResult license={result} onClose={() => setResult(null)} />}
+      {manage && <DevicesModal license={manage} onClose={() => setManage(null)} />}
     </>
   );
 }

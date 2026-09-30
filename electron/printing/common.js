@@ -2,6 +2,8 @@
 
 const fs = require('fs');
 const path = require('path');
+const settings = require('../services/settings');
+const escpos = require('./escpos');
 
 const FONT_FAMILIES = {
   sans: "Arial, 'Segoe UI', Tahoma",
@@ -44,13 +46,24 @@ function t(s) {
   return `<bdi>${esc(s)}</bdi>`;
 }
 
-function baseCss({ paperWidth, marginTop, marginRight, marginBottom, marginLeft, fontSize, fontFamily, compact }) {
+/**
+ * Width (mm) the receipt <body> must have. Thermal (ESC/POS) mode prints the printable area
+ * (72 mm on 80 mm paper, 48 mm on 58 mm paper); driver mode uses the full paper width.
+ */
+function bodyWidthMm(paperMm) {
+  const pr = settings.get('printer');
+  if (pr.method === 'driver') return Number(paperMm);
+  return escpos.mmForDots(escpos.dotsForPaper(paperMm, pr.dots));
+}
+
+function baseCss({ paperWidth, bodyWidth, marginTop, marginRight, marginBottom, marginLeft, fontSize, fontFamily, compact }) {
   const fam = FONT_FAMILIES[fontFamily] || FONT_FAMILIES.sans;
+  const bw = bodyWidth || paperWidth;
   const lh = compact ? 1.2 : 1.35;
   return `${urduFontCss()}
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{background:#fff;color:#000}
-body{width:${paperWidth}mm;padding:${marginTop}mm ${marginRight}mm ${marginBottom}mm ${marginLeft}mm;
+body{width:${bw}mm;padding:${marginTop}mm ${marginRight}mm ${marginBottom}mm ${marginLeft}mm;
   font-family:${fam},'RPOS Urdu',sans-serif;font-size:${fontSize}px;line-height:${lh};
   -webkit-print-color-adjust:exact;print-color-adjust:exact;overflow:hidden}
 bdi{unicode-bidi:isolate}
@@ -59,7 +72,7 @@ td,th{vertical-align:top}
 .r{text-align:right}.c{text-align:center}.l{text-align:left}
 .b{font-weight:700}
 .logo{display:flex;margin-bottom:${compact ? 1 : 2}mm}
-.logo img{display:block;max-height:28mm;object-fit:contain;filter:grayscale(100%) contrast(1.2)}
+.logo img{display:block;max-height:34mm;object-fit:contain;filter:grayscale(100%) contrast(1.25)}
 .nowrap{white-space:nowrap}
 .note{font-size:.85em;font-style:italic}
 `;
@@ -76,4 +89,4 @@ function wrap(css, body, title = 'Receipt') {
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title><style>${css}</style></head><body>${body}</body></html>`;
 }
 
-module.exports = { FONT_FAMILIES, urduFontCss, esc, t, baseCss, logoHtml, wrap };
+module.exports = { FONT_FAMILIES, urduFontCss, esc, t, baseCss, logoHtml, wrap, bodyWidthMm };

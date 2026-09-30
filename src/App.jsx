@@ -1,6 +1,6 @@
 import { Component, useEffect, useState } from 'react';
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom';
-import { useApp } from './context/AppContext';
+import { useApp, applyAppearance } from './context/AppContext';
 import { PosProvider } from './context/PosContext';
 import { api } from './lib/api';
 import { Loading, Button } from './components/ui';
@@ -10,6 +10,7 @@ import Activation from './pages/Activation';
 import Dashboard from './pages/Dashboard';
 import Pos from './pages/Pos';
 import Orders from './pages/Orders';
+import Held from './pages/Held';
 import Tables from './pages/Tables';
 import Products from './pages/Products';
 import Categories from './pages/Categories';
@@ -23,6 +24,7 @@ import Settings from './pages/Settings';
 export const MODULES = [
   { path: '/dashboard', perm: 'dashboard', element: <Dashboard /> },
   { path: '/pos', perm: 'pos', element: <Pos /> },
+  { path: '/held', perm: 'pos', element: <Held /> },
   { path: '/orders', perm: 'orders', element: <Orders /> },
   { path: '/tables', perm: 'tables', element: <Tables /> },
   { path: '/products', perm: 'products', element: <Products /> },
@@ -60,13 +62,18 @@ class ErrorBoundary extends Component {
 }
 
 export default function App() {
-  const { user, setUser, license, reloadLicense, reloadSettings, setInfo, can } = useApp();
+  const { user, setUser, license, reloadLicense, reloadSettings, setInfo, can, setPublic } = useApp();
   const [booting, setBooting] = useState(true);
 
   useEffect(() => {
     (async () => {
       try {
         setInfo(await api('app.info'));
+        const pub = await api('app.public').catch(() => null);
+        if (pub) {
+          applyAppearance(pub.appearance);
+          setPublic(pub);
+        }
         const lic = await reloadLicense();
         if (lic.usable) {
           const u = await api('auth.current');
@@ -81,11 +88,11 @@ export default function App() {
         setBooting(false);
       }
     })();
-  }, [reloadLicense, reloadSettings, setInfo, setUser]);
+  }, [reloadLicense, reloadSettings, setInfo, setUser, setPublic]);
 
   if (booting) return <Loading />;
-  if (license && !license.usable) return <Activation />;
-  if (!user) return <Login />;
+  const blocked = license && !license.usable;
+  if (!user) return blocked ? <Activation /> : <Login />;
 
   const home = can('pos') ? '/pos' : MODULES.find((m) => can(m.perm))?.path || '/pos';
   return (
@@ -102,6 +109,12 @@ export default function App() {
           </ErrorBoundary>
         </Shell>
       </PosProvider>
+      {/* Blocked / suspended / expired while the app is open: lock the screen but keep the cart alive underneath. */}
+      {blocked && (
+        <div className="lock-overlay">
+          <Activation />
+        </div>
+      )}
     </HashRouter>
   );
 }

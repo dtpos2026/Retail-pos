@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { CheckCircle2, XCircle, Info, AlertTriangle } from 'lucide-react';
 import { auth } from './firebase';
-import { resolveRole } from './lib/data';
+import { resolveRole, watch } from './lib/data';
 import { Modal, Button, Input } from './components/ui';
 
 const Ctx = createContext(null);
@@ -11,6 +11,7 @@ export const useAdmin = () => useContext(Ctx);
 export function AdminProvider({ children }) {
   const [user, setUser] = useState(undefined); // undefined = loading
   const [role, setRole] = useState(null);
+  const [devices, setDevices] = useState(null); // live list of every registered device
   const [toasts, setToasts] = useState([]);
   const [dialog, setDialog] = useState(null);
   const idRef = useRef(0);
@@ -29,6 +30,14 @@ export function AdminProvider({ children }) {
     []
   );
 
+  useEffect(() => {
+    if (!role) {
+      setDevices(null);
+      return undefined;
+    }
+    return watch('devices', setDevices, () => setDevices([]));
+  }, [role]);
+
   const toast = useCallback((message, type = 'success') => {
     const id = ++idRef.current;
     setToasts((t) => [...t.slice(-2), { id, message, type }]);
@@ -44,7 +53,7 @@ export function AdminProvider({ children }) {
 
   const logout = useCallback(() => signOut(auth), []);
 
-  const value = useMemo(() => ({ user, role, setRole, isHead: role === 'head', toast, toastError, confirm, logout }), [user, role, toast, toastError, confirm, logout]);
+  const value = useMemo(() => ({ user, role, setRole, isHead: role === 'head', devices, toast, toastError, confirm, logout }), [user, role, devices, toast, toastError, confirm, logout]);
 
   const close = (ok) => {
     const d = dialog;

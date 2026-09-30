@@ -12,6 +12,7 @@ const router = require('./ipc/router');
 const products = require('./services/products');
 const backup = require('./services/backup');
 const license = require('./license/license');
+const printer = require('./printing/printer');
 
 const isDev = !app.isPackaged && process.env.RPOS_DEV_SERVER;
 
@@ -67,6 +68,36 @@ function registerProtocol() {
   });
 }
 
+let splash = null;
+let splashAt = 0;
+const SPLASH_MIN_MS = 2300;
+
+function createSplash() {
+  splashAt = Date.now();
+  const w = new BrowserWindow({
+    width: 560,
+    height: 380,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    movable: true,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    show: false,
+    hasShadow: false,
+    icon: path.join(__dirname, '..', 'build', 'icon.png'),
+    webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false },
+  });
+  w.once('ready-to-show', () => w.show());
+  w.loadFile(path.join(__dirname, '..', 'assets', 'splash.html'), { query: { v: app.getVersion() } });
+  return w;
+}
+
+function closeSplash() {
+  if (splash && !splash.isDestroyed()) splash.destroy();
+  splash = null;
+}
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1366,
@@ -86,11 +117,17 @@ function createWindow() {
     },
   });
   win.once('ready-to-show', () => {
-    win.maximize();
-    win.show();
+    // Keep the splash up long enough to be seen, then reveal the app.
+    const wait = Math.max(0, SPLASH_MIN_MS - (Date.now() - splashAt));
+    setTimeout(() => {
+      win.maximize();
+      win.show();
+      closeSplash();
+      setTimeout(() => printer.warmUp(), 800);
+    }, wait);
   });
   win.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^https?:\/\//.test(url)) shell.openExternal(url);
+    if (/^(https?:\/\/|mailto:|tel:)/.test(url)) shell.openExternal(url);
     return { action: 'deny' };
   });
   win.webContents.on('will-navigate', (e, url) => {
@@ -114,6 +151,7 @@ async function start() {
   logger.init(ctx.paths.logs);
   logger.info(`Retail POS ${app.getVersion()} starting`);
   Menu.setApplicationMenu(null);
+  splash = createSplash();
   openDatabase();
   registerProtocol();
 
@@ -121,14 +159,30 @@ async function start() {
 
   createWindow();
 
-  // Background jobs: auto backup + optional online license check.
+  // Background jobs: auto backup + live license / device check.
   setTimeout(() => backup.autoIfDue(), 15000);
   setInterval(() => backup.autoIfDue(), 60 * 60 * 1000);
-  setTimeout(() => license.onlineCheck().catch(() => {}), 5000);
-  setInterval(() => license.onlineCheck().catch(() => {}), 6 * 60 * 60 * 1000);
+  license.onChange((st) => {
+    for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.webContents.send('license', st);
+  });
+  scheduleLicenseCheck(4000);
+}
+
+/** Checks in every 5 minutes (every 45 s while blocked, so an un-block shows up quickly). Silent when offline. */
+function scheduleLicenseCheck(delay) {
+  setTimeout(async () => {
+    try {
+      await license.onlineCheck();
+    } catch (err) {
+      logger.warn('License check failed', err.message);
+    }
+    const st = license.status();
+    scheduleLicenseCheck(st.usable ? 5 * 60 * 1000 : 45 * 1000);
+  }, delay).unref?.();
 }
 
 function fatal(err) {
+  closeSplash();
   logger.error('Fatal startup error', err);
   dialog.showErrorBox('Retail POS', `Retail POS could not start.\n\n${err && err.message ? err.message : err}\n\nLogs: ${ctx.paths.logs || ''}`);
   app.exit(1);
@@ -141,6 +195,7 @@ app.on('window-all-closed', () => app.quit());
 
 app.on('will-quit', () => {
   try {
+    printer.shutdown();
     if (ctx.db && ctx.db.db) ctx.db.close();
   } catch (err) {
     logger.error('Error closing database', err);

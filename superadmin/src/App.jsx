@@ -1,5 +1,5 @@
 import { HashRouter, NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Building2, KeyRound, ShieldCheck, Settings as SettingsIcon, History, LogOut } from 'lucide-react';
+import { LayoutDashboard, Building2, KeyRound, ShieldCheck, Settings as SettingsIcon, History, LogOut, Monitor } from 'lucide-react';
 import { useAdmin } from './context';
 import { Loading, Button } from './components/ui';
 import { initials } from './lib/format';
@@ -9,12 +9,15 @@ import Clients from './pages/Clients';
 import Licenses from './pages/Licenses';
 import Admins from './pages/Admins';
 import Settings from './pages/Settings';
+import Devices from './pages/Devices';
+import { DtMark, DevFooter, BRAND } from './components/Brand';
 import Activity from './pages/Activity';
 
 const NAV = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/clients', label: 'Clients', icon: Building2 },
   { to: '/licenses', label: 'Licenses', icon: KeyRound },
+  { to: '/devices', label: 'Devices', icon: Monitor },
   { to: '/activity', label: 'Activity Log', icon: History },
   { to: '/admins', label: 'Admins', icon: ShieldCheck, head: true },
   { to: '/settings', label: 'Settings', icon: SettingsIcon },
@@ -28,10 +31,10 @@ function Shell({ children }) {
     <div className="shell">
       <aside className="sidebar">
         <div className="brand">
-          <div className="brand-logo admin"><img src="/icon.png" alt="" style={{ background: 'transparent' }} /></div>
+          <div className="brand-logo"><DtMark size={24} /></div>
           <div className="brand-text">
-            <div className="brand-name">Retail POS</div>
-            <div className="brand-sub">Super Admin</div>
+            <div className="brand-name">{BRAND.product}</div>
+            <div className="brand-sub">{BRAND.panel}</div>
           </div>
         </div>
         <nav className="nav">
@@ -42,6 +45,7 @@ function Shell({ children }) {
             </NavLink>
           ))}
         </nav>
+        <div className="sidebar-foot"><DevFooter /></div>
       </aside>
       <div className="main">
         <header className="topbar">
@@ -56,7 +60,7 @@ function Shell({ children }) {
             <Button variant="ghost" size="sm" icon={LogOut} onClick={logout} title="Sign out" />
           </div>
         </header>
-        <main className="content">{children}</main>
+        <main className="content"><div key={loc.pathname} className="page-in">{children}</div></main>
       </div>
     </div>
   );
@@ -76,6 +80,7 @@ export default function App() {
           <Route path="/clients" element={<Clients />} />
           <Route path="/clients/:id" element={<Clients />} />
           <Route path="/licenses" element={<Licenses />} />
+          <Route path="/devices" element={<Devices />} />
           <Route path="/activity" element={<Activity />} />
           {isHead && <Route path="/admins" element={<Admins />} />}
           <Route path="/settings" element={<Settings />} />
