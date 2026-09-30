@@ -71,7 +71,7 @@ export default function Shell({ children }) {
         <div className="brand">
           <div className="brand-logo">{biz.logo ? <img src={biz.logo} alt="" /> : <DtMark size={24} />}</div>
           <div className="brand-text">
-            <div className="brand-name">Retail POS</div>
+            <div className="brand-name">DT Retail POS</div>
             <div className="brand-sub">
               <bdi>{biz.name && biz.name !== 'My Business' ? biz.name : 'Simple Offline POS'}</bdi>
             </div>
@@ -96,7 +96,7 @@ export default function Shell({ children }) {
       </aside>
       <div className="main">
         <header className="topbar">
-          <h1>{current?.label || 'Retail POS'}</h1>
+          <h1>{current?.label || 'DT Retail POS'}</h1>
           <div className="spacer" />
           <Clock />
           <div className="user-chip">

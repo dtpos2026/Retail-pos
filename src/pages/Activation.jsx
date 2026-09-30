@@ -105,7 +105,7 @@ const GATE = {
 
 export default function Activation() {
   const { license, user, logout, info } = useApp();
-  const g = GATE[license?.state] || { icon: ShieldAlert, color: 'var(--warning)', title: 'Activate Retail POS' };
+  const g = GATE[license?.state] || { icon: ShieldAlert, color: 'var(--warning)', title: 'Activate DT Retail POS' };
   const Icon = g.icon;
   return (
     <div className="auth">

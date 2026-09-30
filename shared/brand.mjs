@@ -2,7 +2,7 @@
 // Fill in the empty fields (phone, WhatsApp, website, Facebook, Instagram) and they appear automatically.
 export const BRAND = {
   developer: 'Digital Target',
-  product: 'Retail POS',
+  product: 'DT Retail POS',
   tagline: 'Simple Offline POS for Small Businesses',
   email: 'digitaltarget.digital@gmail.com',
   phone: '',

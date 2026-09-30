@@ -1,7 +1,7 @@
 {
   "name": "retail-pos",
-  "productName": "Retail POS",
-  "version": "1.1.1",
+  "productName": "DT Retail POS",
+  "version": "1.1.2",
   "description": "Retail POS — Simple Offline POS for Small Businesses",
   "author": {
     "name": "Digital Target",
@@ -37,7 +37,7 @@
   },
   "build": {
     "appId": "digital.digitaltarget.retailpos",
-    "productName": "Retail POS",
+    "productName": "DT Retail POS",
     "copyright": "Copyright © 2026 Digital Target",
     "directories": {
       "output": "release",
@@ -70,7 +70,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Retail POS",
+      "shortcutName": "DT Retail POS",
       "deleteAppDataOnUninstall": false,
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico",

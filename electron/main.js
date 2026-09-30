@@ -19,6 +19,10 @@ const isDev = !app.isPackaged && process.env.RPOS_DEV_SERVER;
 // Custom scheme for product images stored in the database.
 protocol.registerSchemesAsPrivileged([{ scheme: 'posimg', privileges: { standard: true, secure: true, supportFetchAPI: true } }]);
 
+// Keep the data folder (%APPDATA%\Retail POS) even though the product is now called "DT Retail POS",
+// so existing databases, license and device registration are found after an update.
+app.setPath('userData', path.join(app.getPath('appData'), 'Retail POS'));
+
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
@@ -56,7 +60,7 @@ function openDatabase() {
     logger.error('Database integrity check failed');
     dialog.showMessageBoxSync({
       type: 'warning',
-      title: 'Retail POS',
+      title: 'DT Retail POS',
       message: 'The database may be damaged (for example after a power failure).',
       detail: 'Please go to Settings → Backup & Restore and restore your latest backup. Contact support if the problem continues.',
     });
@@ -114,7 +118,7 @@ function createWindow() {
     minHeight: 680,
     show: false,
     backgroundColor: '#f4f6fb',
-    title: 'Retail POS',
+    title: 'DT Retail POS',
     icon: path.join(__dirname, '..', 'build', 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -198,7 +202,7 @@ function scheduleLicenseCheck(delay) {
 function fatal(err) {
   closeSplash();
   logger.error('Fatal startup error', err);
-  dialog.showErrorBox('Retail POS', `Retail POS could not start.\n\n${err && err.message ? err.message : err}\n\nLogs: ${ctx.paths.logs || ''}`);
+  dialog.showErrorBox('DT Retail POS', `DT Retail POS could not start.\n\n${err && err.message ? err.message : err}\n\nLogs: ${ctx.paths.logs || ''}`);
   app.exit(1);
 }
 

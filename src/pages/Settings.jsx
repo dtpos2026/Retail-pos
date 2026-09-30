@@ -368,7 +368,7 @@ function PrinterTab() {
         <div className="b" style={{ fontSize: 15 }}>Printer setup help</div>
         <div className="row" style={{ alignItems: 'flex-start' }}><Usb size={18} className="faint" /><div><b>USB thermal printer:</b> install the driver from the printer CD/website. It then appears in the list above (e.g. "POS-80", "XP-58", "BlackCopper").</div></div>
         <div className="row" style={{ alignItems: 'flex-start' }}><Bluetooth size={18} className="faint" /><div><b>Bluetooth printer:</b> pair it in Windows Settings → Bluetooth &amp; devices, then install its driver so Windows lists it as a printer. It will then appear above.</div></div>
-        <div className="row" style={{ alignItems: 'flex-start' }}><ReceiptText size={18} className="faint" /><div><b>Paper size:</b> choose 58mm or 80mm in the Receipt tab (and Tokens tab). In thermal mode Retail POS controls the length itself, so the Windows paper setting does not matter.</div></div>
+        <div className="row" style={{ alignItems: 'flex-start' }}><ReceiptText size={18} className="faint" /><div><b>Paper size:</b> choose 58mm or 80mm in the Receipt tab (and Tokens tab). In thermal mode DT Retail POS controls the length itself, so the Windows paper setting does not matter.</div></div>
         <div className="row" style={{ alignItems: 'flex-start' }}><Zap size={18} className="faint" /><div><b>Blank paper at the top?</b> Use the <b>Thermal — fast</b> method. If your printer prints strange characters, switch to <b>Windows driver</b>.</div></div>
         <div className="row" style={{ alignItems: 'flex-start' }}><AlertTriangle size={18} className="faint" /><div><b>Cut position:</b> adjust <b>Extra feed</b> so the cut lands right after the last line. Choose <b>Compatibility cut</b> for older printers.</div></div>
       </div>
@@ -740,7 +740,7 @@ function GeneralTab() {
         <div className="card card-pad col small">
           <div className="b" style={{ fontSize: 14 }}>About</div>
           <div className="kv">
-            <div>Software</div><div>Retail POS v{info?.version}</div>
+            <div>Software</div><div>DT Retail POS v{info?.version}</div>
             <div>Data folder</div><div className="ellipsis">{info?.dataFolder}</div>
           </div>
           <div className="row">
