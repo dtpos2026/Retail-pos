@@ -101,7 +101,9 @@ export default function Shell({ children }) {
   }, [loc.pathname, can]);
 
   // Collapse the sidebar on the POS screen to give products more room.
-  useEffect(() => setCollapsed(loc.pathname === '/pos'), [loc.pathname]);
+  useEffect(() => {
+    setCollapsed(loc.pathname === '/pos');
+  }, [loc.pathname]);
 
   const doLogout = async () => {
     if (await confirm({ title: 'Log out?', message: 'Any items in the current cart that are not saved will be lost.', confirmText: 'Log out' })) logout();

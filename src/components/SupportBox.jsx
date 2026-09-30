@@ -18,8 +18,12 @@ export default function SupportBox({ compact }) {
     setErr('');
     api('support.list').then(setMsgs).catch((e) => { setErr(e.message); setMsgs([]); });
   };
-  useEffect(load, []); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => end.current?.scrollIntoView({ block: 'end' }), [msgs]);
+  useEffect(() => {
+    load();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    end.current?.scrollIntoView({ block: 'end' });
+  }, [msgs]);
 
   const send = async () => {
     setBusy(true);

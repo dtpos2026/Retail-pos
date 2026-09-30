@@ -205,7 +205,7 @@ function status() {
   const base = { machineId: mid, configured: configured(), vendor: VENDOR, version: VERSION, lastOnlineCheck: s.lastOnlineCheck || null };
 
   if (!configured()) {
-    if (packaged()) return { ...base, state: 'needs_key', usable: false, message: 'Connect to the internet once to set up licensing for this software.' };
+    if (packaged() || process.env.RPOS_FORCE_LICENSE) return { ...base, state: 'needs_key', usable: false, message: 'Connect to the internet once to set up licensing for this software.' };
     return { ...base, state: 'unconfigured', usable: true, message: 'Developer build — licensing not configured.' };
   }
   if (clockTampered(s)) {

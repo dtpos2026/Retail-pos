@@ -11,9 +11,12 @@ import './styles/themes.css';
 import './styles/extras.css';
 import App from './App';
 import { AppProvider } from './context/AppContext';
+import RootBoundary from './components/RootBoundary';
 
 createRoot(document.getElementById('root')).render(
-  <AppProvider>
-    <App />
-  </AppProvider>
+  <RootBoundary>
+    <AppProvider>
+      <App />
+    </AppProvider>
+  </RootBoundary>
 );
