@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Copy, RefreshCw, Ban, PlayCircle, ArrowRightLeft, Trash2, Eye, PauseCircle, Monitor } from 'lucide-react';
+import { Copy, RefreshCw, Ban, PlayCircle, ArrowRightLeft, Trash2, Eye, PauseCircle, Monitor, Hourglass } from 'lucide-react';
 import { Button, Badge, Empty } from './ui';
 import { useAdmin } from '../context';
 import { setLicenseStatus, deleteLicense } from '../lib/data';
@@ -17,16 +17,17 @@ export default function LicenseTable({ licenses, showClient = true }) {
   const nav = useNavigate();
 
   const status = async (l, s) => {
-    const labels = { revoked: 'Revoke', suspended: 'Suspend', active: 'Reactivate' };
+    const labels = { revoked: 'Revoke', suspended: 'Suspend', active: 'Reactivate', pending: 'Mark payment pending for' };
     const ok = await confirm({
-      title: `${labels[s]} license for ${l.businessName}?`,
-      message: s === 'active' ? 'The POS will work again after its next online check (or re-activation with the key).' : 'The POS stops working the next time it is online. An offline POS keeps working until it connects or the license expires.',
+      title: `${labels[s]} ${s === 'pending' ? '' : 'license for '}${l.businessName}?`,
+      message: s === 'active' ? 'The POS will work again after its next online check (or re-activation with the key).' : 'The POS stops working the next time it is online. An offline POS keeps working until it connects or the license expires. You can add a message the shop will see.',
       danger: s !== 'active',
-      confirmText: labels[s],
+      confirmText: labels[s].replace(' for', ''),
+      input: s === 'active' ? undefined : 'Message shown to the shop (optional)',
     });
-    if (!ok) return;
+    if (ok === false) return;
     try {
-      await setLicenseStatus(l, s);
+      await setLicenseStatus(l, s, typeof ok === 'string' ? ok : '');
       toast('License updated');
     } catch (e) {
       toastError(e);
@@ -80,6 +81,7 @@ export default function LicenseTable({ licenses, showClient = true }) {
                     {l.status !== 'revoked' && <Button size="sm" variant="ghost" icon={RefreshCw} title="Renew / extend" onClick={() => setForm({ mode: 'renew', license: l })} />}
                     {l.status !== 'revoked' && <Button size="sm" variant="ghost" icon={ArrowRightLeft} title="Transfer to new computer" onClick={() => setForm({ mode: 'transfer', license: l })} />}
                     {l.status === 'active' && <Button size="sm" variant="ghost" icon={PauseCircle} title="Suspend" onClick={() => status(l, 'suspended')} />}
+                    {l.status === 'active' && <Button size="sm" variant="ghost" icon={Hourglass} title="Payment pending (blocks the POS)" onClick={() => status(l, 'pending')} />}
                     {l.status === 'active' && <Button size="sm" variant="ghost" icon={Ban} title="Revoke" onClick={() => status(l, 'revoked')} />}
                     {l.status !== 'active' && <Button size="sm" variant="ghost" icon={PlayCircle} title="Reactivate" onClick={() => status(l, 'active')} />}
                     {isHead && l.status === 'revoked' && <Button size="sm" variant="ghost" icon={Trash2} title="Delete" onClick={() => remove(l)} />}

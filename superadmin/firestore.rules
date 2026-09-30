@@ -91,6 +91,48 @@ service cloud.firestore {
       allow write: if isHead();
     }
 
+    // ---- Support: one thread per license (the license id is an unguessable random id). -------------
+    // The shop's POS can read its own thread and post notes ("from == 'shop'"); only admins answer / delete.
+    match /supportThreads/{licenseId} {
+      allow get: if true;
+      allow list: if isAdmin();
+      allow create, update: if isAdmin() || (
+        request.resource.data.keys().hasOnly(['businessName', 'lastText', 'lastAt', 'unreadAdmin'])
+        && request.resource.data.unreadAdmin == true
+        && request.resource.data.lastText is string
+        && request.resource.data.lastText.size() < 300
+        && exists(/databases/$(database)/documents/licenseStatus/$(licenseId))
+      );
+      allow delete: if isAdmin();
+
+      match /messages/{messageId} {
+        allow read: if true;
+        allow create: if isAdmin() || (
+          request.resource.data.keys().hasOnly(['from', 'text', 'createdAt', 'businessName'])
+          && request.resource.data.from == 'shop'
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() < 2000
+          && request.resource.data.createdAt is timestamp
+        );
+        allow update, delete: if isAdmin();
+      }
+    }
+
+    // ---- Billing (Digital Target's own invoices) — staff only, plus the public verification record. ----
+    match /invoices/{invoiceId} {
+      allow read, write: if isAdmin();
+    }
+    match /billingProfile/{docId} {
+      allow read, write: if isAdmin();
+    }
+    // What an invoice QR opens: one record per random code. Anyone holding the code can read that one record.
+    match /invoiceVerify/{code} {
+      allow get: if true;
+      allow list: if isAdmin();
+      allow write: if isAdmin();
+    }
+
     match /admins/{email} {
       allow read: if isAdmin();
       allow write: if isHead();

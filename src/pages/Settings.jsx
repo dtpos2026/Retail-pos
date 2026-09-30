@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Store, ReceiptText, Printer, Ticket, Percent, Wallet, Boxes, DatabaseBackup, KeyRound, SlidersHorizontal, Save, Upload, X, RefreshCw,
-  FolderOpen, HardDriveDownload, RotateCcw, CheckCircle2, AlertTriangle, Usb, Bluetooth, Database, Trash2, FlaskConical, FileText, Lock, Palette, ChefHat, Zap, MoveHorizontal, Landmark,
+  FolderOpen, HardDriveDownload, RotateCcw, CheckCircle2, AlertTriangle, Usb, Bluetooth, Database, Trash2, FlaskConical, FileText, Lock, Palette, ChefHat, Zap, MoveHorizontal, Landmark, LifeBuoy,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { useApp } from '../context/AppContext';
@@ -10,6 +10,7 @@ import { formatDateTime, fileSize, formatDate } from '../lib/format';
 import { Button, Field, Input, NumberInput, Select, ToggleRow, Seg, Tabs, Loading, Check, Badge, Empty, Switch } from '../components/ui';
 import ReceiptPreview from '../components/ReceiptPreview';
 import { LicenseActivateForm } from './Activation';
+import SupportBox from '../components/SupportBox';
 import { applyAppearance } from '../context/AppContext';
 import { BRAND } from '@shared/brand.mjs';
 import { DT_LOCKUP_WHITE, ContactButtons } from '../components/Brand';
@@ -25,6 +26,7 @@ const TABS = [
   { key: 'inventory', label: 'Inventory', icon: Boxes },
   { key: 'backup', label: 'Backup & Restore', icon: DatabaseBackup },
   { key: 'license', label: 'License', icon: KeyRound },
+  { key: 'support', label: 'Support', icon: LifeBuoy },
   { key: 'general', label: 'General', icon: SlidersHorizontal },
 ];
 
@@ -684,6 +686,14 @@ function BackupTab() {
 }
 
 // ------------------------------------------------------------------ License
+function SupportTab() {
+  return (
+    <div className="card card-pad" style={{ maxWidth: 720 }}>
+      <SupportBox />
+    </div>
+  );
+}
+
 function LicenseTab() {
   const { license, setLicense, confirm, toastError } = useApp();
   if (!license) return <Loading />;
@@ -802,7 +812,7 @@ export default function Settings() {
   const [tab, setTab] = useState('business');
   const { settings } = useApp();
   if (!settings) return <Loading />;
-  const C = { business: BusinessTab, appearance: AppearanceTab, receipt: ReceiptTab, printer: PrinterTab, token: TokenTab, sales: SalesTab, payment: PaymentTab, inventory: InventoryTab, backup: BackupTab, license: LicenseTab, general: GeneralTab }[tab];
+  const C = { business: BusinessTab, appearance: AppearanceTab, receipt: ReceiptTab, printer: PrinterTab, token: TokenTab, sales: SalesTab, payment: PaymentTab, inventory: InventoryTab, backup: BackupTab, license: LicenseTab, support: SupportTab, general: GeneralTab }[tab];
   return (
     <div>
       <Tabs tabs={TABS} value={tab} onChange={setTab} />

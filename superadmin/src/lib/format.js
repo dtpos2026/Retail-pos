@@ -31,6 +31,7 @@ export function daysLeft(ymd) {
 export function licenseState(l) {
   if (l.status === 'revoked') return { key: 'revoked', label: 'Revoked', color: 'red' };
   if (l.status === 'suspended') return { key: 'suspended', label: 'Suspended', color: 'amber' };
+  if (l.status === 'pending') return { key: 'pending', label: 'Pending payment', color: 'amber' };
   const left = daysLeft(l.expiresAt);
   if (left !== null && left <= 0) return { key: 'expired', label: 'Expired', color: 'red' };
   if (left !== null && left <= 15) return { key: 'expiring', label: `Expires in ${left}d`, color: 'amber' };

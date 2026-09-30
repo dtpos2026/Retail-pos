@@ -154,10 +154,11 @@ export async function issueLicense(input) {
   return { id: ref.id, ...record };
 }
 
-export async function setLicenseStatus(lic, status) {
+/** status: active | suspended | revoked | pending (payment pending). `message` is shown to the shop. */
+export async function setLicenseStatus(lic, status, message = '') {
   const batch = writeBatch(db);
-  batch.update(doc(db, 'licenses', lic.id), { status, updatedAt: serverTimestamp() });
-  batch.set(doc(db, 'licenseStatus', lic.id), { status, key: lic.key, expiresAt: lic.expiresAt || null, updatedAt: serverTimestamp() }, { merge: true });
+  batch.update(doc(db, 'licenses', lic.id), { status, statusMessage: String(message || ''), updatedAt: serverTimestamp() });
+  batch.set(doc(db, 'licenseStatus', lic.id), { status, message: String(message || ''), key: lic.key, expiresAt: lic.expiresAt || null, updatedAt: serverTimestamp() }, { merge: true });
   await batch.commit();
   await logActivity(`license.${status}`, `License for ${lic.businessName} set to ${status}`, { licenseId: lic.id, clientId: lic.clientId });
 }
@@ -185,6 +186,68 @@ export async function removeDevice(device) {
   if (ls.exists()) batch.update(lsRef, { deviceCount: Math.max(0, (ls.data().deviceCount || 1) - 1), updatedAt: serverTimestamp() });
   await batch.commit();
   await logActivity('device.remove', `Removed device ${device.name || device.machineId} of ${device.businessName}`, { licenseId: device.licenseId });
+}
+
+/** Put a computer on the map (admin-set position; the POS never reports a location by itself). */
+export async function setDeviceLocation(device, lat, lng, label = '') {
+  const la = Number(lat);
+  const ln = Number(lng);
+  if (!Number.isFinite(la) || !Number.isFinite(ln) || Math.abs(la) > 90 || Math.abs(ln) > 180) throw new Error('Latitude / longitude are not valid.');
+  await updateDoc(doc(db, 'devices', device.id), { lat: la, lng: ln, locationLabel: String(label || ''), locationBy: me() });
+  await logActivity('device.location', `Set location of ${device.name || device.machineId} (${device.businessName})`, { licenseId: device.licenseId });
+}
+
+export async function clearDeviceLocation(device) {
+  await updateDoc(doc(db, 'devices', device.id), { lat: null, lng: null, locationLabel: '' });
+}
+
+// ------------------------------------------------------------------ backup / export / import
+export async function loadRegistry() {
+  const [c, l] = await Promise.all([getDocs(collection(db, 'clients')), getDocs(collection(db, 'licenses'))]);
+  return { clients: c.docs.map((d) => ({ id: d.id, ...d.data() })), licenses: l.docs.map((d) => ({ id: d.id, ...d.data() })) };
+}
+
+const plainTs = (v) => (v && typeof v.toDate === 'function' ? v.toDate().toISOString() : v);
+const cleanDoc = (o) => Object.fromEntries(Object.entries(o).filter(([k]) => k !== 'id').map(([k, v]) => [k, plainTs(v)]));
+
+export async function exportBackup() {
+  const { clients, licenses } = await loadRegistry();
+  return { app: 'retail-pos-superadmin', v: 1, exportedAt: new Date().toISOString(), clients: clients.map((c) => ({ id: c.id, ...cleanDoc(c) })), licenses: licenses.map((l) => ({ id: l.id, ...cleanDoc(l) })) };
+}
+
+/** Merge a backup: existing records are kept unless the backup copy is newer (updatedAt). */
+export async function importBackup(json) {
+  if (!json || json.app !== 'retail-pos-superadmin' || !Array.isArray(json.clients) || !Array.isArray(json.licenses)) throw new Error('This is not a Retail POS Super Admin backup file.');
+  const cur = await loadRegistry();
+  const have = (list, id) => list.find((x) => x.id === id);
+  let clients = 0;
+  let licenses = 0;
+  const toDate = (v) => (typeof v === 'string' && v ? new Date(v) : null);
+  for (const c of json.clients) {
+    const old = have(cur.clients, c.id);
+    if (old) continue;
+    const { id, createdAt, updatedAt, ...rest } = c;
+    await setDoc(doc(db, 'clients', id), { ...rest, createdAt: toDate(createdAt) || serverTimestamp(), updatedAt: serverTimestamp() });
+    clients++;
+  }
+  for (const l of json.licenses) {
+    if (have(cur.licenses, l.id)) continue;
+    const { id, createdAt, updatedAt, ...rest } = l;
+    const batch = writeBatch(db);
+    batch.set(doc(db, 'licenses', id), { ...rest, createdAt: toDate(createdAt) || serverTimestamp(), updatedAt: serverTimestamp() });
+    batch.set(doc(db, 'licenseStatus', id), { status: rest.status || 'active', message: rest.statusMessage || '', key: rest.key || '', expiresAt: rest.expiresAt || null, maxDevices: rest.maxDevices || 1, deviceCount: 0, updatedAt: serverTimestamp() }, { merge: true });
+    await batch.commit();
+    licenses++;
+  }
+  await logActivity('backup.import', `Imported backup: ${clients} clients, ${licenses} licenses`);
+  return { clients, licenses };
+}
+
+export function licensesCsv(licenses) {
+  const q = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const head = ['Business', 'Phone', 'Plan', 'Status', 'Issued', 'Expires', 'Max devices', 'Max users', 'Price', 'Paid', 'Key'];
+  const rows = licenses.map((l) => [l.businessName, l.clientPhone, l.plan, l.status, l.issuedAt, l.expiresAt || 'Lifetime', l.maxDevices || 1, l.maxUsers || 0, l.price || 0, l.paid ? 'yes' : 'no', l.key]);
+  return '\uFEFF' + [head, ...rows].map((r) => r.map(q).join(',')).join('\r\n');
 }
 
 /** Change how many computers may use a license. */

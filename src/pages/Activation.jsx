@@ -5,6 +5,7 @@ import { useApp } from '../context/AppContext';
 import { Button, Field, Badge } from '../components/ui';
 import { BRAND } from '@shared/brand.mjs';
 import { DtMark, DT_LOCKUP_WHITE } from '../components/Brand';
+import SupportBox from '../components/SupportBox';
 
 /** Activation / device registration form — used on the full-screen gate and inside Settings → License. */
 export function LicenseActivateForm({ onDone }) {
@@ -54,7 +55,7 @@ export function LicenseActivateForm({ onDone }) {
   };
 
   const needsRegister = license?.state === 'unregistered';
-  const locked = ['blocked', 'suspended', 'revoked'].includes(license?.state);
+  const locked = ['blocked', 'suspended', 'revoked', 'pending'].includes(license?.state);
   const needsKey = license?.state === 'needs_key';
 
   return (
@@ -111,6 +112,7 @@ const GATE = {
   trial_expired: { icon: ShieldAlert, color: 'var(--warning)', title: 'Trial ended' },
   invalid: { icon: ShieldAlert, color: 'var(--danger)', title: 'Wrong computer' },
   clock: { icon: ShieldAlert, color: 'var(--danger)', title: 'Check date & time' },
+  pending: { icon: PauseCircle, color: 'var(--warning)', title: 'Payment pending' },
   needs_key: { icon: Wifi, color: 'var(--primary)', title: 'Set up licensing' },
   unlicensed: { icon: KeyRound, color: 'var(--primary)', title: 'Activate DT Retail POS' },
 };
@@ -151,6 +153,9 @@ export default function Activation() {
           <div className="mt">
             <LicenseActivateForm />
           </div>
+          {license?.licenseId && ['blocked', 'suspended', 'revoked', 'pending', 'expired'].includes(license?.state) && (
+            <div className="card card-pad mt"><SupportBox compact /></div>
+          )}
           {user && (
             <div className="mt center">
               <Button variant="ghost" icon={LogOut} onClick={logout}>Log out</Button>

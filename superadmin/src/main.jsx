@@ -10,9 +10,17 @@ import './styles/extras.css';
 import './styles/panel.css';
 import App from './App';
 import { AdminProvider } from './context';
+import VerifyInvoice from './pages/VerifyInvoice';
+
+// An invoice QR opens  …/?verify=CODE  : a public page, no sign-in.
+const verify = new URLSearchParams(location.search).get('verify');
 
 createRoot(document.getElementById('root')).render(
-  <AdminProvider>
-    <App />
-  </AdminProvider>
+  verify ? (
+    <AdminProvider><VerifyInvoice code={verify.toUpperCase()} /></AdminProvider>
+  ) : (
+    <AdminProvider>
+      <App />
+    </AdminProvider>
+  )
 );

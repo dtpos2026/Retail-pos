@@ -32,6 +32,33 @@ async function main() {
   assert.notEqual(anon.status, 200, 'anonymous cannot overwrite the public key');
   console.log('OK   public key readable by POS, writable by head admin only');
 
+  // support: shop posts + reads its thread, cannot impersonate admin, cannot list threads
+  await cloud.sendMessage({ lid: 'L1', businessName: 'Shop', text: 'Hello from the shop' });
+  const thread = await cloud.listMessages('L1');
+  assert.equal(thread.length, 1); assert.equal(thread[0].from, 'shop'); assert.equal(thread[0].text, 'Hello from the shop');
+  const fake = await fetch(`${base}/supportThreads/L1/messages`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ fields: { from: S('admin'), text: S('pay me'), businessName: S('x') } }) });
+  assert.notEqual(fake.status, 200, 'shop cannot post as admin');
+  const lst = await fetch(`${base}/supportThreads`);
+  assert.notEqual(lst.status, 200, 'threads cannot be listed without sign-in');
+  const noLic = await fetch(`${base}:commit`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ writes: [{ update: { name: `projects/retail-pos-db7c6/databases/(default)/documents/supportThreads/NOPE`, fields: { businessName: S('x'), lastText: S('hi'), unreadAdmin: { booleanValue: true } } }, updateTransforms: [{ fieldPath: 'lastAt', setToServerValue: 'REQUEST_TIME' }] }] }) });
+  assert.notEqual(noLic.status, 200, 'thread needs an existing license');
+  const adminReply = await fetch(`${base}/supportThreads/L1/messages`, { method: 'POST', headers: H, body: JSON.stringify({ fields: { from: S('admin'), text: S('Answer'), createdAt: { timestampValue: new Date().toISOString() } } }) });
+  assert.equal(adminReply.status, 200, 'admin can reply');
+  assert.equal((await cloud.listMessages('L1')).length, 2);
+  console.log('OK   support thread: shop posts/reads, cannot impersonate or list; admin replies');
+
+  // billing: staff only, public verification record by code
+  assert.equal((await admin.set('invoices/I1', { invoiceNo: S('DT-2026-0001') })).status, 200);
+  assert.equal((await admin.set('invoiceVerify/ABCDEFGH23456789', { invoiceNo: S('DT-2026-0001'), restaurant: S('Shop') })).status, 200);
+  assert.equal((await fetch(`${base}/invoiceVerify/ABCDEFGH23456789`)).status, 200, 'anyone with the code can verify');
+  assert.notEqual((await fetch(`${base}/invoiceVerify`)).status, 200, 'verification records cannot be listed');
+  assert.notEqual((await fetch(`${base}/invoices/I1`)).status, 200, 'invoices are staff only');
+  assert.equal((await admin.set('licenseStatus/L1', { status: S('pending'), message: S('Payment due'), key: S('k1'), maxDevices: { integerValue: '1' }, deviceCount: { integerValue: '0' } })).status, 200);
+  const pst = await cloud.fetchState('L1', 'ZZZZ');
+  assert.equal(pst.license.status, 'pending'); assert.equal(pst.license.message, 'Payment due');
+  assert.equal((await admin.set('licenseStatus/L1', { status: S('active'), message: S(''), key: S('k1'), maxDevices: { integerValue: '1' }, deviceCount: { integerValue: '0' } })).status, 200);
+  console.log('OK   invoices staff-only; verify record public by code; pending status + message readable by POS');
+
   // 1) first device registers
   const a = await cloud.registerDevice({ lid: 'L1', machineId: 'AAAA-AAAA-AAAA-AAAA', businessName: 'Shop', version: '1.1.0' });
   assert.equal(a.status, 'active'); assert.equal(a.created, true); console.log('OK   first device registered');

@@ -3,6 +3,7 @@ import { signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, sendPa
 import { LogIn, Mail, KeyRound, ShieldAlert, RefreshCw, LogOut, Building2, BadgeCheck, CloudOff, Monitor, ShieldCheck } from 'lucide-react';
 import { auth } from '../firebase';
 import { resolveRole } from '../lib/data';
+import { testCloud } from '../lib/health';
 import { useAdmin, friendly } from '../context';
 import { Button, Field, Input } from '../components/ui';
 import { DtMark, Floaters, DT_LOCKUP_WHITE, DT_LOCKUP_PURPLE, BRAND } from '../components/Brand';
@@ -48,6 +49,7 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
+  const [checks, setChecks] = useState(null);
 
   const run = async (key, fn) => {
     setBusy(key);
@@ -105,6 +107,8 @@ export default function Login() {
             Forgot password
           </Button>
           {error && <div className="badge red" style={{ padding: '10px 12px', borderRadius: 10, whiteSpace: 'normal' }}>{error}</div>}
+          <Button type="button" variant="ghost" icon={CloudOff} onClick={async () => { setBusy('test'); setChecks(await testCloud()); setBusy(''); }} loading={busy === 'test'}>Test cloud connection</Button>
+          {checks && checks.map((c) => <div key={c.text} className={`badge ${c.ok ? 'green' : 'red'}`} style={{ padding: '8px 12px', borderRadius: 10, whiteSpace: 'normal' }}>{c.ok ? '✓' : '✗'} {c.text}</div>)}
         </form>
       </div>
     </div>

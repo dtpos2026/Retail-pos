@@ -1,12 +1,20 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { Building2, Plus, Pencil, Trash2, Phone, MapPin, Mail, KeyRound, ArrowLeft } from 'lucide-react';
-import { watch, saveClient, deleteClient, where } from '../lib/data';
+import { Building2, Plus, Pencil, Trash2, Phone, MapPin, Mail, KeyRound, ArrowLeft, Download, Upload, FileSpreadsheet } from 'lucide-react';
+import { watch, saveClient, deleteClient, where, exportBackup, importBackup, licensesCsv } from '../lib/data';
 import { useAdmin } from '../context';
 import { fmtDate, licenseState, tsToDate } from '../lib/format';
 import { PageHead, Button, SearchBox, Loading, Empty, Modal, Field, Input, Select, Badge } from '../components/ui';
 import LicenseTable from '../components/LicenseTable';
 import { LicenseForm, KeyResult } from '../components/LicenseModals';
+
+function download(name, type, content) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([content], { type }));
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
 
 const TYPES = [
   { value: 'restaurant', label: 'Restaurant / Dhaba' },
@@ -108,7 +116,7 @@ function ClientDetail({ client, onBack }) {
 }
 
 export default function Clients() {
-  const { toastError } = useAdmin();
+  const { toastError, toast } = useAdmin();
   const { id } = useParams();
   const [params, setParams] = useSearchParams();
   const nav = useNavigate();
@@ -140,6 +148,19 @@ export default function Clients() {
       .sort((a, b) => (tsToDate(b.createdAt) || 0) - (tsToDate(a.createdAt) || 0));
   }, [clients, q]);
 
+  const fileRef = useRef(null);
+  const restore = async (e) => {
+    const f = e.target.files?.[0];
+    e.target.value = '';
+    if (!f) return;
+    try {
+      const r = await importBackup(JSON.parse(await f.text()));
+      toast(`Imported ${r.clients} clients and ${r.licenses} licenses (existing records were kept)`);
+    } catch (err) {
+      toastError(err);
+    }
+  };
+
   if (!clients) return <Loading />;
   const current = id && clients.find((c) => c.id === id);
   if (id && current) return <ClientDetail client={current} onBack={() => nav('/clients')} />;
@@ -147,6 +168,10 @@ export default function Clients() {
   return (
     <div className="col" style={{ gap: 16 }}>
       <PageHead title="Clients" sub={`${clients.length} businesses`}>
+        <Button icon={FileSpreadsheet} onClick={() => download('licenses.csv', 'text/csv;charset=utf-8', licensesCsv(licenses))}>Export CSV</Button>
+        <Button icon={Download} onClick={async () => { try { download(`retail-pos-backup-${new Date().toISOString().slice(0, 10)}.json`, 'application/json', JSON.stringify(await exportBackup(), null, 2)); toast('Backup downloaded'); } catch (e) { toastError(e); } }}>Backup</Button>
+        <Button icon={Upload} onClick={() => fileRef.current?.click()}>Import</Button>
+        <input ref={fileRef} type="file" accept=".json,application/json" hidden onChange={restore} />
         <Button variant="primary" icon={Plus} onClick={() => setAdding(true)}>Add client</Button>
       </PageHead>
       <div className="card card-pad"><SearchBox value={q} onChange={setQ} placeholder="Search business, owner, phone, city…" /></div>

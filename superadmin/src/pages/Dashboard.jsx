@@ -72,6 +72,9 @@ export default function Dashboard() {
   const blocked = devices.filter((d) => d.status !== 'active').length;
   const soon = licenses.filter((l) => l.status === 'active' && l.expiresAt && daysLeft(l.expiresAt) <= 30).sort((a, b) => a.expiresAt.localeCompare(b.expiresAt)).slice(0, 6);
   const recentDevices = [...devices].sort((a, b) => (tsToDate(b.lastSeen) || 0) - (tsToDate(a.lastSeen) || 0)).slice(0, 6);
+  const windows = [[0, 7, 'Within 7 days', '#dc2626'], [8, 14, '8–14 days', '#ea580c'], [15, 30, '15–30 days', '#d97706'], [31, 60, '31–60 days', '#0ea5e9'], [61, 90, '61–90 days', '#16a34a']].map(([a, b, label, color]) => ({
+    label, color, n: licenses.filter((l) => l.status === 'active' && l.expiresAt && daysLeft(l.expiresAt) >= a && daysLeft(l.expiresAt) <= b).length,
+  }));
   const planTotal = Object.values(stats.plans).reduce((s, v) => s + v, 0) || 1;
 
   return (
@@ -123,6 +126,18 @@ export default function Dashboard() {
             <div className="row"><span className="muted">All-time revenue</span><span className="grow" /><b>{money(stats.revenueTotal)}</b></div>
             <div className="row"><span className="muted">Unpaid</span><span className="grow" /><b style={{ color: stats.unpaid ? 'var(--danger)' : undefined }}>{money(stats.unpaid)}</b></div>
           </div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-head"><AlarmClock size={17} /><h3>Renewals — next 90 days</h3></div>
+        <div className="card-pad grid" style={{ gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
+          {windows.map((w) => (
+            <div key={w.label} style={{ borderLeft: `4px solid ${w.color}`, padding: '4px 12px' }}>
+              <div style={{ fontSize: 26, fontWeight: 800 }}>{w.n}</div>
+              <div className="small muted">{w.label}</div>
+            </div>
+          ))}
         </div>
       </div>
 

@@ -1,5 +1,5 @@
 import { HashRouter, NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Building2, KeyRound, ShieldCheck, Settings as SettingsIcon, History, LogOut, Monitor } from 'lucide-react';
+import { LayoutDashboard, Building2, KeyRound, ShieldCheck, Settings as SettingsIcon, History, LogOut, Monitor, Receipt, LifeBuoy, MapPin, BadgeCheck } from 'lucide-react';
 import { useAdmin } from './context';
 import { Loading, Button } from './components/ui';
 import { initials } from './lib/format';
@@ -12,12 +12,22 @@ import Settings from './pages/Settings';
 import Devices from './pages/Devices';
 import { DtMark, DevFooter, BRAND } from './components/Brand';
 import Activity from './pages/Activity';
+import Billing from './pages/Billing';
+import Support from './pages/Support';
+import DeviceMap from './pages/DeviceMap';
+import VerifyKey from './pages/VerifyKey';
+import { watchThreads } from './lib/support';
+import { useEffect, useState } from 'react';
 
 const NAV = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/clients', label: 'Clients', icon: Building2 },
   { to: '/licenses', label: 'Licenses', icon: KeyRound },
   { to: '/devices', label: 'Devices', icon: Monitor },
+  { to: '/map', label: 'Device map', icon: MapPin },
+  { to: '/billing', label: 'Billing', icon: Receipt },
+  { to: '/support', label: 'Support', icon: LifeBuoy, badge: 'support' },
+  { to: '/verify', label: 'Verify key', icon: BadgeCheck },
   { to: '/activity', label: 'Activity Log', icon: History },
   { to: '/admins', label: 'Admins', icon: ShieldCheck, head: true },
   { to: '/settings', label: 'Settings', icon: SettingsIcon },
@@ -27,6 +37,8 @@ function Shell({ children }) {
   const { user, role, logout, isHead } = useAdmin();
   const loc = useLocation();
   const current = NAV.find((n) => loc.pathname.startsWith(n.to));
+  const [unread, setUnread] = useState(0);
+  useEffect(() => watchThreads((t) => setUnread(t.filter((x) => x.unreadAdmin).length), () => {}), []);
   return (
     <div className="shell">
       <aside className="sidebar">
@@ -42,6 +54,7 @@ function Shell({ children }) {
             <NavLink key={n.to} to={n.to} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title={n.label}>
               <n.icon size={19} />
               <span className="nav-label">{n.label}</span>
+              {n.badge === 'support' && unread > 0 && <span className="badge-dot">{unread}</span>}
             </NavLink>
           ))}
         </nav>
@@ -81,6 +94,10 @@ export default function App() {
           <Route path="/clients/:id" element={<Clients />} />
           <Route path="/licenses" element={<Licenses />} />
           <Route path="/devices" element={<Devices />} />
+          <Route path="/map" element={<DeviceMap />} />
+          <Route path="/billing" element={<Billing />} />
+          <Route path="/support" element={<Support />} />
+          <Route path="/verify" element={<VerifyKey />} />
           <Route path="/activity" element={<Activity />} />
           {isHead && <Route path="/admins" element={<Admins />} />}
           <Route path="/settings" element={<Settings />} />

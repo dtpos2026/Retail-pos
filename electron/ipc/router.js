@@ -75,6 +75,8 @@ const routes = {
   'license.status': { open: true, fn: () => license.status() },
   'license.activate': { open: true, fn: (a) => license.activate(a) },
   'license.registerDevice': { open: true, fn: () => license.registerDevice() },
+  'support.list': { open: true, fn: () => license.supportMessages() },
+  'support.send': { open: true, fn: (a) => license.sendSupport(a) },
   'license.refresh': { open: true, fn: async () => (await license.onlineCheck()) || license.status() },
   'license.remove': { perm: 'settings', fn: () => license.removeLicense() },
 
@@ -289,7 +291,7 @@ async function saveXlsx(buffer, defaultName) {
   return { file: r.filePath };
 }
 
-const LICENSE_FREE = new Set(['app.info', 'app.relaunch', 'license.status', 'license.activate', 'license.registerDevice', 'license.refresh', 'auth.current', 'auth.logout']);
+const LICENSE_FREE = new Set(['app.info', 'app.relaunch', 'license.status', 'license.activate', 'license.registerDevice', 'license.refresh', 'support.list', 'support.send', 'auth.current', 'auth.logout']);
 
 async function handle(method, args) {
   const route = routes[method];

@@ -137,6 +137,34 @@ async function registerDevice({ lid, machineId, businessName, version }) {
   return { status: 'active', created: true, license: { ...license, deviceCount: count + 1 } };
 }
 
+const newId = () => require('crypto').randomBytes(10).toString('hex');
+
+/** Messages of this license's support thread, oldest first. */
+async function listMessages(lid) {
+  const res = await call(`${root()}/supportThreads/${encodeURIComponent(lid)}/messages?pageSize=100&orderBy=createdAt`);
+  if (res.status === 404) return [];
+  if (!res.ok) throw new CloudError(`Server refused the request (${res.status}).`, { status: res.status });
+  const json = await res.json();
+  return (json.documents || []).map((d) => ({ id: d.name.split('/').pop(), ...parseDoc(d) }));
+}
+
+/** Post a note from the shop (rules only allow from == 'shop'). */
+async function sendMessage({ lid, businessName, text }) {
+  const t = String(text || '').trim().slice(0, 1900);
+  if (!t) throw new CloudError('Write a message first.');
+  await commit([
+    {
+      update: { name: docName(`supportThreads/${lid}/messages/${newId()}`), fields: { from: str('shop'), text: str(t), businessName: str(businessName) } },
+      updateTransforms: [{ fieldPath: 'createdAt', setToServerValue: 'REQUEST_TIME' }],
+      currentDocument: { exists: false },
+    },
+    {
+      update: { name: docName(`supportThreads/${lid}`), fields: { businessName: str(businessName), lastText: str(t.slice(0, 280)), unreadAdmin: { booleanValue: true } } },
+      updateTransforms: [{ fieldPath: 'lastAt', setToServerValue: 'REQUEST_TIME' }],
+    },
+  ]);
+}
+
 /** Tell the server this device is alive (last seen, version, name). Best effort. */
 async function heartbeat({ lid, machineId, version }) {
   const info = deviceInfo(version);
@@ -150,4 +178,4 @@ async function heartbeat({ lid, machineId, version }) {
   ]);
 }
 
-module.exports = { CloudError, getPublicKey, fetchState, registerDevice, heartbeat };
+module.exports = { CloudError, getPublicKey, fetchState, registerDevice, heartbeat, listMessages, sendMessage };

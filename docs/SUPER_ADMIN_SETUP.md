@@ -69,3 +69,31 @@ VITE_USE_EMULATORS=1 npm run dev                             # terminal 2
 - Licenses → the **1 / 1** button → change **Max devices** for a license.
 
 **Redeploy the rules after updating** (`npx firebase-tools deploy --only firestore:rules`) — the device limit is enforced by `firestore.rules`.
+
+## 7. What is in the panel (v1.2)
+
+| Page | What you do there |
+| --- | --- |
+| Dashboard | Numbers from your real data, revenue, **renewals in the next 90 days** (5 windows), devices online |
+| Clients | Client registry, **Export CSV**, **Backup** (JSON) and **Import** (existing records are kept) |
+| Licenses | Issue / renew / transfer keys. Row actions: Suspend, **Payment pending**, Revoke, Reactivate — each can carry a **message the shop sees** |
+| Devices | Every computer: block / suspend / remove, live online status, device limit per license |
+| Device map | Leaflet map. Select a device → click its place on the map (positions are set by you, nothing is tracked) |
+| Billing | Invoices (A4 and 80 mm, print / save as PDF), numbering `DT-2026-0001`, totals, invoice settings (logo, signature, prefix, currency). Each invoice has a **QR**: scanning it opens `…/?verify=CODE`, a public page that shows only masked data |
+| Support | Two-way messages with each client. Clients write from **POS → Settings → Support** (also from the locked screen when blocked / payment pending) |
+| Verify key | Paste a key: checks the signature and shows plan, expiry, devices and whether it is in your registry |
+| Activity log / Admins / Settings | As before (signing key is published automatically for the POS) |
+
+Sign-in screen: **Test cloud connection** checks Firestore, the deployed rules and Email/Password sign-in without touching any data.
+
+### Deploy checklist
+1. `cd superadmin && npm install && npm run build`
+2. `npx firebase-tools login` then `npx firebase-tools deploy` (hosting **and** `firestore.rules` — the new Support / Billing rules are required).
+3. Open the panel as the head admin once (publishes the license public key).
+4. In *Billing → Invoice settings* enter your phone, WhatsApp, address, logo and — if the panel is on a custom domain — the **Verification page URL**.
+5. Press **Test cloud connection** on the sign-in page: all lines must be green.
+
+### Honest limits
+* Support threads are readable by anyone who knows the license id (a long random id). Do not put secrets in messages.
+* A computer that is offline cannot be controlled; block / suspend / pending apply the next time it goes online (about 5 minutes; 45 seconds while locked).
+* Map tiles come from OpenStreetMap and need internet in the browser.

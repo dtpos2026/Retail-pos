@@ -135,6 +135,24 @@ test('live control: block, suspend, un-block, remove device, revoke license', as
   assert.deepEqual([...new Set(seen)], ['blocked', 'suspended', 'active', 'unregistered', 'revoked']);
 });
 
+test('payment pending blocks with the admin message; suspended shows the admin message; active restores', async () => {
+  reset();
+  db.set('licenseStatus/L9', { status: 'active', maxDevices: 1, deviceCount: 0, key: 'x' });
+  await lic.activate({ key: sign({ ...base, lid: 'L9', mid: '*' }) });
+  db.get('licenseStatus/L9').status = 'pending';
+  db.get('licenseStatus/L9').message = 'Please pay the March invoice';
+  let st = await lic.onlineCheck();
+  assert.equal(st.state, 'pending'); assert.equal(st.usable, false); assert.equal(st.message, 'Please pay the March invoice');
+  db.get('licenseStatus/L9').status = 'suspended';
+  db.get('licenseStatus/L9').message = 'Suspended for maintenance';
+  st = await lic.onlineCheck();
+  assert.equal(st.usable, false); assert.equal(st.message, 'Suspended for maintenance');
+  db.get('licenseStatus/L9').status = 'active';
+  db.get('licenseStatus/L9').message = '';
+  st = await lic.onlineCheck();
+  assert.equal(st.state, 'active'); assert.equal(st.usable, true);
+});
+
 test('renewal: a newer key for the same license is picked up automatically', async () => {
   reset();
   db.set('licenseStatus/L5', { status: 'active', maxDevices: 1, deviceCount: 0, key: 'x' });

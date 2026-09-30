@@ -231,8 +231,12 @@ function status() {
       if (payload.mid !== '*' && payload.mid !== mid) {
         return { ...info, state: 'invalid', usable: false, message: 'This license belongs to a different computer.' };
       }
+      if (s.hold && s.hold.status === 'pending') {
+        return { ...info, state: 'pending', usable: false, message: s.hold.message || 'Your license payment is pending. Please contact your provider.' };
+      }
       if (s.revoked === payload.lid) {
-        return { ...info, state: 'revoked', usable: false, message: 'This license has been deactivated by your provider.' };
+        const suspended = s.hold && s.hold.status === 'suspended';
+        return { ...info, state: 'revoked', usable: false, message: (s.hold && s.hold.message) || (suspended ? 'This license has been suspended by your provider.' : 'This license has been deactivated by your provider.') };
       }
       // Device registration: license keys that are not locked to this computer need an online registration once.
       if (!dev && payload.mid === '*') {
@@ -325,6 +329,30 @@ async function registerDevice() {
   return notify(before);
 }
 
+/** Support thread of this license (needs internet). */
+async function supportMessages() {
+  const payload = keyPayload();
+  if (!payload) throw new AppError('Activate a license first.');
+  try {
+    return await cloud.listMessages(payload.lid);
+  } catch (err) {
+    if (err instanceof cloud.CloudError && err.offline) throw new AppError('Internet is needed to read support messages.', 'OFFLINE');
+    throw new AppError('Could not load messages right now.');
+  }
+}
+
+async function sendSupport({ text }) {
+  const payload = keyPayload();
+  if (!payload) throw new AppError('Activate a license first.');
+  try {
+    await cloud.sendMessage({ lid: payload.lid, businessName: payload.bn, text });
+  } catch (err) {
+    if (err instanceof cloud.CloudError) throw new AppError(err.offline ? 'Internet is needed to send a message.' : err.message || 'Could not send the message.', err.offline ? 'OFFLINE' : 'SUPPORT');
+    throw err;
+  }
+  return true;
+}
+
 async function activate({ key }) {
   if (!(await ensureKey())) throw new AppError('Could not set up licensing. Connect to the internet and try again.', 'OFFLINE');
   const { payload, key: clean } = decode(key);
@@ -401,6 +429,8 @@ async function onlineCheck() {
   if (license) {
     if (license.status === 'revoked' || license.status === 'suspended') s.revoked = payload.lid;
     else if (s.revoked === payload.lid) delete s.revoked;
+    if (['revoked', 'suspended', 'pending'].includes(license.status)) s.hold = { status: license.status, message: license.message || '' };
+    else delete s.hold;
     if (license.maxDevices) s.maxDevices = Number(license.maxDevices);
     if (license.status === 'active' && license.key && license.key !== s.key) {
       try {
@@ -438,4 +468,4 @@ async function onlineCheck() {
   return notify(before);
 }
 
-module.exports = { status, ensureKey, activate, registerDevice, removeLicense, isUsable, maxUsers, onlineCheck, onChange, machineId, decode, VERSION };
+module.exports = { status, ensureKey, supportMessages, sendSupport, activate, registerDevice, removeLicense, isUsable, maxUsers, onlineCheck, onChange, machineId, decode, VERSION };
