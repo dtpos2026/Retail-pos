@@ -53,7 +53,7 @@ function t(s) {
 function bodyWidthMm(paperMm) {
   const pr = settings.get('printer');
   if (pr.method === 'driver') return Number(paperMm);
-  return escpos.mmForDots(escpos.dotsForPaper(paperMm, pr.dots));
+  return escpos.mmForDots(escpos.effectiveDots(paperMm, pr).content);
 }
 
 function baseCss({ paperWidth, bodyWidth, marginTop, marginRight, marginBottom, marginLeft, fontSize, fontFamily, compact }) {

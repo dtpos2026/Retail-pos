@@ -158,6 +158,34 @@ let failed = false;
     if (firstInk > 24) throw new Error(`blank space at top: ${firstInk} rows`);
     await page.keyboard.press('Escape');
   });
+  await step('every receipt design has balanced left/right margins (58 + 80mm)', async () => {
+    const dump = path.join(ud, 'prints');
+    const escpos = require('../electron/printing/escpos');
+    const inv = async (m, a) => {
+      const res = await page.evaluate(([mm, aa]) => window.pos.invoke(mm, aa), [m, a]);
+      if (!res.ok) throw new Error(`${m}: ${res.error && res.error.message}`);
+      return res.data;
+    };
+    const all = await inv('settings.getAll');
+    const templates = await inv('print.templates');
+    const bad = [];
+    for (const width of [80, 58]) {
+      for (const t of templates) {
+        await inv('settings.set', { section: 'receipt', values: { ...all.receipt, template: t.key, paperWidth: width } });
+        const before = fs.readdirSync(dump).length;
+        await inv('print.test', { kind: 'receipt' });
+        const files = fs.readdirSync(dump).map((f) => ({ f, t: fs.statSync(path.join(dump, f)).mtimeMs })).sort((a, b) => a.t - b.t);
+        if (files.length <= before) throw new Error('no job for ' + t.key);
+        const j = escpos.decodeJob(fs.readFileSync(path.join(dump, files[files.length - 1].f)));
+        let minX = j.width, maxX = -1;
+        for (const r of j.rows) for (let x = 0; x < j.width; x++) if (r[x >> 3] & (0x80 >> (x & 7))) { if (x < minX) minX = x; if (x > maxX) maxX = x; }
+        const left = minX, right = j.width - 1 - maxX;
+        if (Math.abs(left - right) > 12 || left < 1 || right < 1) bad.push(`${t.key}@${width}: left ${left} right ${right}`);
+      }
+    }
+    await inv('settings.set', { section: 'receipt', values: all.receipt });
+    if (bad.length) throw new Error('unbalanced: ' + bad.join('; '));
+  });
   await step('80mm report preview + print', async () => {
     await page.click('a[href="#/reports"]');
     await page.waitForSelector('table.table');

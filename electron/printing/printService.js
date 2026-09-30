@@ -7,7 +7,7 @@ const receiptData = require('./receiptData');
 const { renderReceipt, TEMPLATES } = require('./receiptTemplates');
 const { renderToken, renderKot, TOKEN_DESIGNS } = require('./tokenTemplate');
 const { renderThermalReport } = require('./reportThermal');
-const { esc } = require('./common');
+const { esc, bodyWidthMm } = require('./common');
 const { AppError } = require('../core/errors');
 
 // printer.js needs Electron; load lazily so the HTML builders stay testable in plain Node.
@@ -103,8 +103,39 @@ function testPageHtml() {
   return html.replace('<body>', `<body>${banner}`);
 }
 
+/** Frame drawn edge to edge: shows at a glance whether left and right margins are equal. */
+function marginTestHtml(widthMm) {
+  const bw = bodyWidthMm(widthMm);
+  const pr = settings.get('printer');
+  let ticks = '';
+  for (let mm = 0; mm <= Math.floor(bw); mm += 5) {
+    const long = mm % 10 === 0;
+    ticks += `<i style="position:absolute;left:${mm}mm;top:0;height:${long ? 4 : 2.2}mm;border-left:1px solid #000"></i>`;
+    if (long && mm > 0 && mm < bw - 6) ticks += `<span style="position:absolute;left:${mm - 2}mm;top:4.2mm;font-size:9px">${mm}</span>`;
+  }
+  return `<!doctype html><html><head><meta charset="utf-8"><style>
+*{box-sizing:border-box;margin:0;padding:0}html,body{background:#fff;color:#000}
+body{width:${bw}mm;font-family:Arial,sans-serif;font-size:12px}
+.frame{border:3px solid #000;padding:2mm;text-align:center;line-height:1.45}
+.row{display:flex;justify-content:space-between;font-weight:700}
+.ruler{position:relative;height:9mm;border-bottom:1px solid #000;margin-bottom:2mm}
+</style></head><body>
+<div class="ruler">${ticks}</div>
+<div class="frame">
+  <div class="row"><span>◄ LEFT</span><span>RIGHT ►</span></div>
+  <div class="b" style="font-weight:700;font-size:15px;margin:1mm 0">MARGIN TEST</div>
+  <div>Paper ${widthMm} mm · width ${bw.toFixed(1)} mm · balance ${Number(pr.shift) || 0}</div>
+  <div style="font-size:10px;margin-top:1mm">Both black borders must be the same distance from the paper edges. If the LEFT gap is bigger, lower Side balance (e.g. -8); if the RIGHT gap is bigger, raise it (e.g. +8).</div>
+</div>
+</body></html>`;
+}
+
 async function testPrint({ kind = 'receipt', printerName }) {
   const pr = settings.get('printer');
+  if (kind === 'margins') {
+    const w = settings.get('receipt').paperWidth;
+    return printer().printHtml(marginTestHtml(w), { printerName: printerName ?? pr.receiptPrinter, widthMm: w, jobKey: 'test:margins' });
+  }
   if (kind === 'token') {
     const [html] = tokenHtmls({ sample: true });
     return printer().printHtml(html, { printerName: printerName ?? tokenPrinter(), widthMm: settings.get('token').paperWidth, jobKey: 'test:token' });
@@ -137,6 +168,8 @@ module.exports = {
   printAfterSale,
   printReportThermal,
   testPrint,
-  listPrinters: () => printer().listPrinters(),
+  marginTestHtml,
+  printerStatus: (a) => printer().printerStatus(a),
+  listPrinters: (a) => printer().listPrinters(a || {}),
   renderPng: (html, widthMm) => printer().renderPng(html, { widthMm }),
 };

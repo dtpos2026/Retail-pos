@@ -188,7 +188,8 @@ const routes = {
   },
 
   // ---- printing ------------------------------------------------------------
-  'print.printers': { fn: () => printService.listPrinters() },
+  'print.printers': { fn: (a) => printService.listPrinters(a) },
+  'print.status': { fn: (a) => printService.printerStatus(a) },
   'print.templates': { fn: () => printService.TEMPLATES },
   'print.receiptHtml': { fn: (a) => printService.receiptHtml(a) },
   'print.tokenHtml': { fn: (a) => printService.tokenHtmls(a) },

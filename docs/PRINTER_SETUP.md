@@ -17,6 +17,11 @@ If a thermal printer prints strange characters, switch to *Windows driver*.
 - **Print darkness** — light / normal / dark (bolder text on faded paper).
 - **Print width (dots)** — Auto = 384 dots for 58 mm, 576 dots for 80 mm. Change only if your printer uses another width (e.g. 512 or 640).
 
+- **Side balance (dots)** — makes the left and right margins equal. Press **Margin test**: if the left gap is bigger use a negative value (e.g. −8), if the right gap is bigger use a positive one (+8). 8 dots = 1 mm.
+
+### Automatic printer detection
+Leave *Receipt printer* on **Auto-detect thermal printer**. DT Retail POS recognises thermal printers by name (POS-80, XP-80, RP326, TM-T20, …), ignores PDF/XPS/OneNote, refreshes the list every 20 seconds and keeps the print helper awake, so printing starts instantly even after the printer was switched on later. If the first attempt fails (printer just woke up / was re-plugged) it re-detects and retries automatically. The top bar shows the printer status (green = ready).
+
 ## USB thermal printer (most common)
 1. Install the driver from the printer CD / website (it appears in Windows as e.g. *POS-80*, *XP-58*).
 2. In Retail POS → **Settings → Printers**, choose the **Receipt printer** (optionally a separate **Token / kitchen printer**).

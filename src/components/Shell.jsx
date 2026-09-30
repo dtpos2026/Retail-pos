@@ -26,6 +26,29 @@ export const NAV = [
   { to: '/settings', label: 'Settings', icon: SettingsIcon, perm: 'settings' },
 ];
 
+/** Small live indicator of the receipt printer (auto-detected, refreshed every 20 s). */
+function PrinterPill() {
+  const [st, setSt] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    const load = () => api('print.status').then((s) => alive && setSt(s)).catch(() => {});
+    load();
+    const t = setInterval(load, 20000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, []);
+  if (!st) return null;
+  const color = st.ready ? 'var(--success)' : st.name ? 'var(--warning)' : 'var(--danger)';
+  return (
+    <div className="chip" style={{ cursor: 'default', padding: '6px 12px', fontSize: 12.5 }} title={st.name ? `${st.name}${st.ready ? ' — ready' : st.offline ? ' — offline' : ' — not found'}` : 'No printer found'}>
+      <i style={{ width: 8, height: 8, borderRadius: 8, background: color, display: 'inline-block' }} />
+      <span style={{ maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{st.name || 'No printer'}</span>
+    </div>
+  );
+}
+
 function Clock() {
   const [now, setNow] = useState(new Date());
   useEffect(() => {
@@ -98,6 +121,7 @@ export default function Shell({ children }) {
         <header className="topbar">
           <h1>{current?.label || 'DT Retail POS'}</h1>
           <div className="spacer" />
+          <PrinterPill />
           <Clock />
           <div className="user-chip">
             <div className="avatar">{initials(user.name)}</div>

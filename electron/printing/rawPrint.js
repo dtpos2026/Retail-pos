@@ -226,4 +226,16 @@ function shutdown() {
   }
 }
 
-module.exports = { sendRaw, warmUp, shutdown };
+/** Keep-alive: makes sure the helper process is running and answering. Resolves true when ready. */
+async function ping() {
+  if (process.platform !== 'win32') return false;
+  try {
+    await start();
+    return (await send({ cmd: 'ping' }, 5000)) === 'OK';
+  } catch {
+    shutdown();
+    return false;
+  }
+}
+
+module.exports = { sendRaw, warmUp, shutdown, ping };

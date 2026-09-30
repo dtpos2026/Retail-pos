@@ -19,6 +19,24 @@ function dotsForPaper(paperMm, override) {
   return Number(paperMm) === 58 ? 384 : 576;
 }
 
+/**
+ * Dots the receipt content is laid out in. A horizontal `shift` (dots, + = right) reserves that many dots
+ * on one side, so both side margins can be balanced for printers whose head is not centred on the paper.
+ */
+function effectiveDots(paperMm, pr = {}) {
+  const total = dotsForPaper(paperMm, pr.dots);
+  const shift = Math.max(-96, Math.min(96, Math.round(Number(pr.shift) || 0)));
+  return { total, shift, content: total - Math.abs(shift) };
+}
+
+/** Place a grayscale image of `w` dots inside a `total`-dot wide row, `left` dots from the left edge (white fill). */
+function padGray(gray, w, h, total, left) {
+  if (total === w && !left) return gray;
+  const out = new Uint8Array(total * h).fill(255);
+  for (let y = 0; y < h; y++) out.set(gray.subarray(y * w, (y + 1) * w), y * total + left);
+  return out;
+}
+
 /** Printable width in millimetres for a dot count. */
 function mmForDots(dots) {
   return dots / 8;
@@ -165,4 +183,4 @@ function decodeJob(buf) {
   return { rowBytes, width: rowBytes * 8, height: rows.length, rows, cuts, feedDots: feeds };
 }
 
-module.exports = { dotsForPaper, mmForDots, DARKNESS, packBitmap, trimBlankTail, buildJob, decodeJob };
+module.exports = { effectiveDots, padGray, dotsForPaper, mmForDots, DARKNESS, packBitmap, trimBlankTail, buildJob, decodeJob };

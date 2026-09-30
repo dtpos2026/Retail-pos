@@ -10,6 +10,7 @@ const { AppError } = require('../core/errors');
 const escpos = require('./escpos');
 const rasterize = require('./rasterize');
 const rawPrint = require('./rawPrint');
+const detect = require('./detect');
 
 const MICRONS_PER_PX = 25400 / 96;
 let queue = Promise.resolve();
@@ -18,31 +19,108 @@ const inFlight = new Set();
 /** Developer / test hook: write the ESC/POS job to a folder instead of a printer. */
 const dumpDir = () => (!app.isPackaged && process.env.RPOS_PRINT_DUMP) || null;
 
-async function listPrinters() {
-  const win = BrowserWindow.getAllWindows()[0];
-  if (!win) return [];
-  const printers = await win.webContents.getPrintersAsync();
-  return printers.map((p) => ({
-    name: p.name,
-    displayName: p.displayName || p.name,
-    description: p.description || '',
-    isDefault: !!p.isDefault,
-    status: p.status,
-  }));
+// ---------------------------------------------------------------------------------------
+// Printer discovery: cached list, background refresh, automatic choice of the thermal printer
+// ---------------------------------------------------------------------------------------
+
+const LIST_TTL = 15000;
+let cache = { list: [], at: 0 };
+let refreshing = null;
+
+function mapPrinter(p) {
+  return { name: p.name, displayName: p.displayName || p.name, description: p.description || '', isDefault: !!p.isDefault, status: p.status };
+}
+
+/** Ask Windows for the installed printers (uses any open window; hidden worker windows are fine). */
+function refreshPrinters() {
+  if (refreshing) return refreshing;
+  const win = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed());
+  if (!win) return Promise.resolve(cache.list);
+  refreshing = win.webContents
+    .getPrintersAsync()
+    .then((list) => {
+      cache = { list: list.map(mapPrinter), at: Date.now() };
+      return cache.list;
+    })
+    .catch((err) => {
+      logger.warn('Printer list failed', err.message);
+      return cache.list;
+    })
+    .finally(() => {
+      refreshing = null;
+    });
+  return refreshing;
+}
+
+/** Printer list; instant when the cache is fresh (printing never waits for Windows to enumerate printers). */
+async function listPrinters({ fresh = false } = {}) {
+  if (fresh || !cache.at || Date.now() - cache.at > LIST_TTL) await refreshPrinters();
+  return cache.list;
+}
+
+/** Name of the printer to use for a job: the chosen one, else the auto-detected thermal printer, else the Windows default. */
+function autoName(list) {
+  const pr = settings.get('printer');
+  if (pr.autoDetect === false) return (list.find((p) => p.isDefault) || {}).name || '';
+  const p = detect.pickThermal(list);
+  return p ? p.name : '';
 }
 
 async function resolvePrinter(name) {
-  const printers = await listPrinters();
+  let printers = await listPrinters();
+  if (!printers.length) printers = await listPrinters({ fresh: true });
   if (!printers.length) throw new AppError('No printer is installed on this computer. Install your printer driver in Windows first.');
   if (!name) {
-    const def = printers.find((p) => p.isDefault);
-    if (!def) throw new AppError('No printer selected. Choose a printer in Settings → Printers.');
-    return def.name;
+    const auto = autoName(printers);
+    if (!auto) throw new AppError('No printer selected. Choose a printer in Settings → Printers.');
+    return auto;
   }
   if (!printers.some((p) => p.name === name)) {
-    throw new AppError(`Printer "${name}" was not found. Check that it is connected and turned on, or choose another printer in Settings.`);
+    printers = await listPrinters({ fresh: true }); // it may have just been plugged in / switched on
+    if (!printers.some((p) => p.name === name)) throw new AppError(`Printer "${name}" was not found. Check that it is connected and turned on, or choose another printer in Settings.`);
   }
   return name;
+}
+
+/** What the UI shows: which printer is in use and whether it looks ready. */
+async function printerStatus({ fresh = false } = {}) {
+  const list = await listPrinters({ fresh });
+  const pr = settings.get('printer');
+  const chosen = pr.receiptPrinter;
+  const name = chosen || autoName(list);
+  const p = list.find((x) => x.name === name);
+  const helper = pr.method === 'thermal' && process.platform === 'win32' ? await rawPrint.ping() : null;
+  return {
+    name: name || '',
+    auto: !chosen,
+    found: !!p,
+    offline: p ? detect.isOffline(p) : false,
+    ready: !!p && !detect.isOffline(p) && helper !== false,
+    helper,
+    count: list.length,
+    virtual: p ? detect.isVirtual(p) : false,
+  };
+}
+
+let monitor = null;
+
+/** Keeps the printer path alive: fresh printer list, print helper running, render worker warm. */
+function startMonitor() {
+  if (monitor) return;
+  const tick = async () => {
+    try {
+      await refreshPrinters();
+      if (settings.get('printer').method === 'thermal') {
+        rasterize.warmUp();
+        await rawPrint.ping();
+      }
+    } catch (err) {
+      logger.warn('Printer monitor', err.message);
+    }
+  };
+  monitor = setInterval(tick, 20000);
+  monitor.unref?.();
+  tick();
 }
 
 // ---------------------------------------------------------------------------------------
@@ -51,14 +129,17 @@ async function resolvePrinter(name) {
 
 function thermalGeometry(widthMm) {
   const pr = settings.get('printer');
-  const dots = escpos.dotsForPaper(widthMm, pr.dots);
-  return { dots, cssWidthMm: escpos.mmForDots(dots), pr };
+  const { total, shift, content } = escpos.effectiveDots(widthMm, pr);
+  return { dots: total, content, shift, cssWidthMm: escpos.mmForDots(content), pr };
 }
 
 async function buildThermalJob(html, { widthMm, copies = 1 }) {
-  const { dots, cssWidthMm, pr } = thermalGeometry(widthMm);
-  const img = await rasterize.renderBgra(html, { cssWidthMm, pixelWidth: dots });
-  const gray = rasterize.toGray(img);
+  const { dots, content, shift, cssWidthMm, pr } = thermalGeometry(widthMm);
+  const img = await rasterize.renderBgra(html, { cssWidthMm, pixelWidth: content });
+  const left = Math.max(0, shift); // + shift: unused dots on the left, content moves right
+  const gray = escpos.padGray(rasterize.toGray(img), img.width, img.height, dots, left);
+  img.imgRects = img.imgRects.map((r) => ({ ...r, x: r.x + left }));
+  img.width = dots;
   const looksBlank = !gray.some((v) => v < 200);
   if (looksBlank) throw new AppError('The receipt image came out blank. Switch to "Windows driver" print method in Settings → Printers and try again.');
   const bitmap = escpos.trimBlankTail(
@@ -69,6 +150,33 @@ async function buildThermalJob(html, { widthMm, copies = 1 }) {
   return { job, bitmap };
 }
 
+/**
+ * A printer that just woke up, was re-plugged or whose helper died can fail the very first attempt.
+ * Re-detect (fresh list, helper restart) and retry a couple of times before reporting an error.
+ */
+async function sendWithRetry(requested, deviceName, job, doc) {
+  let name = deviceName;
+  let lastErr;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      await rawPrint.sendRaw(name, job, doc);
+      return;
+    } catch (err) {
+      lastErr = err;
+      logger.warn('Print attempt failed', attempt + 1, name, err.message);
+      if (attempt === 2) break;
+      await new Promise((r) => setTimeout(r, 500 + attempt * 700));
+      rawPrint.shutdown();
+      try {
+        name = await resolvePrinter(requested);
+      } catch (e2) {
+        lastErr = e2;
+      }
+    }
+  }
+  throw lastErr;
+}
+
 async function printThermal(html, { printerName, widthMm, copies = 1, jobKey }) {
   const dump = dumpDir();
   const deviceName = dump ? '(dump)' : await resolvePrinter(printerName);
@@ -77,7 +185,7 @@ async function printThermal(html, { printerName, widthMm, copies = 1, jobKey }) 
     fs.mkdirSync(dump, { recursive: true });
     fs.writeFileSync(path.join(dump, `${String(jobKey || 'job').replace(/[^\w.-]+/g, '_')}-${Date.now()}.escpos`), job);
   } else {
-    await rawPrint.sendRaw(deviceName, job, `Retail POS ${jobKey || ''}`.trim());
+    await sendWithRetry(printerName, deviceName, job, `DT Retail POS ${jobKey || ''}`.trim());
   }
   logger.info('Printed (thermal)', jobKey || '', 'on', deviceName, `${job.length} bytes`);
   return { printer: deviceName, method: 'thermal' };
@@ -202,6 +310,12 @@ function warmUp() {
     rasterize.warmUp();
     rawPrint.warmUp();
   }
+  startMonitor();
 }
 
-module.exports = { listPrinters, printHtml, renderPng, printWithDialog, htmlToPdf, warmUp, buildThermalJob, shutdown: rawPrint.shutdown };
+module.exports = { listPrinters, printerStatus, refreshPrinters, printHtml, renderPng, printWithDialog, htmlToPdf, warmUp, buildThermalJob, shutdown: () => {
+    if (monitor) clearInterval(monitor);
+    monitor = null;
+    rawPrint.shutdown();
+  },
+};

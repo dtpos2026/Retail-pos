@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Store, ReceiptText, Printer, Ticket, Percent, Wallet, Boxes, DatabaseBackup, KeyRound, SlidersHorizontal, Save, Upload, X, RefreshCw,
-  FolderOpen, HardDriveDownload, RotateCcw, CheckCircle2, AlertTriangle, Usb, Bluetooth, Database, Trash2, FlaskConical, FileText, Lock, Palette, ChefHat, Zap,
+  FolderOpen, HardDriveDownload, RotateCcw, CheckCircle2, AlertTriangle, Usb, Bluetooth, Database, Trash2, FlaskConical, FileText, Lock, Palette, ChefHat, Zap, MoveHorizontal,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { useApp } from '../context/AppContext';
@@ -303,17 +303,23 @@ function PrinterTab() {
   const { toast, toastError } = useApp();
   const [printers, setPrinters] = useState(null);
   const [testing, setTesting] = useState('');
-  const load = () => api('print.printers').then(setPrinters).catch((e) => { toastError(e); setPrinters([]); });
+  const [status, setStatus] = useState(null);
+  const load = (fresh = false) => {
+    api('print.printers', { fresh }).then(setPrinters).catch((e) => { toastError(e); setPrinters([]); });
+    api('print.status', { fresh }).then(setStatus).catch(() => {});
+  };
   useEffect(() => {
     load();
+    const t = setInterval(() => api('print.status').then(setStatus).catch(() => {}), 10000);
+    return () => clearInterval(t);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  const opts = [{ value: '', label: '— Windows default printer —' }, ...(printers || []).map((p) => ({ value: p.name, label: `${p.displayName}${p.isDefault ? ' (default)' : ''}` }))];
+  const opts = [{ value: '', label: '— Auto-detect thermal printer (recommended) —' }, ...(printers || []).map((p) => ({ value: p.name, label: `${p.displayName}${p.isDefault ? ' (default)' : ''}` }))];
   const test = async (kind) => {
     if (s.dirty && !(await s.save())) return;
     setTesting(kind);
     try {
       const r = await api('print.test', { kind });
-      toast(`Test ${kind} printed on ${r.printer}`);
+      toast(`Test ${kind === 'margins' ? 'margin page' : kind} printed on ${r.printer}`);
     } catch (e) {
       toastError(e);
     } finally {
@@ -325,8 +331,17 @@ function PrinterTab() {
       <div className="card card-pad col" style={{ gap: 16 }}>
         <div className="row">
           <div className="b grow">Installed printers ({printers ? printers.length : '…'})</div>
-          <Button size="sm" icon={RefreshCw} onClick={load}>Refresh</Button>
+          <Button size="sm" icon={RefreshCw} onClick={() => load(true)}>Detect again</Button>
         </div>
+        {status && (
+          <div className="row" style={{ gap: 10, padding: '10px 12px', borderRadius: 10, background: status.ready ? 'var(--success-50, #e8f7ee)' : 'var(--warning-50, #fff4e0)' }}>
+            {status.ready ? <CheckCircle2 size={18} color="var(--success)" /> : <AlertTriangle size={18} color="var(--warning)" />}
+            <div className="grow small">
+              {status.name ? <><b>{status.name}</b> {status.auto ? '(auto-detected)' : ''} — {status.ready ? 'ready, connected' : status.offline ? 'offline: turn the printer on / check the cable' : !status.found ? 'not found: connect it, then press Detect again' : 'print helper is starting…'}</> : 'No printer found. Install the driver in Windows and press Detect again.'}
+              {status.virtual && <div style={{ color: 'var(--danger)' }}>This looks like a virtual (PDF/XPS) printer, not a thermal printer.</div>}
+            </div>
+          </div>
+        )}
         <Field label="Receipt printer" hint="Used for bills and receipts.">
           <Select value={s.v.receiptPrinter} onChange={(e) => s.set('receiptPrinter')(e.target.value)} options={opts} />
         </Field>
@@ -347,6 +362,11 @@ function PrinterTab() {
               <Field label="Paper cut"><Select value={s.v.cut} onChange={(e) => s.set('cut')(e.target.value)} options={[{ value: 'partial', label: 'Partial cut' }, { value: 'full', label: 'Full cut' }, { value: 'none', label: 'No cut (tear)' }]} /></Field>
               <Field label="Extra feed (mm)" hint="Blank space after the receipt"><NumberInput value={s.v.feedMm} onChange={(x) => s.set('feedMm')(Number(x))} /></Field>
               <Field label="Print darkness"><Select value={s.v.darkness} onChange={(e) => s.set('darkness')(e.target.value)} options={[{ value: 'light', label: 'Light' }, { value: 'normal', label: 'Normal' }, { value: 'dark', label: 'Dark / bold' }]} /></Field>
+              <Field label="Side balance (dots)" hint="Left/right equal: − moves print left, + moves it right"><div className="row" style={{ gap: 6 }}>
+                <Button size="sm" onClick={() => s.set('shift')(Math.max(-96, (Number(s.v.shift) || 0) - 4))} title="Move print left">◄</Button>
+                <div className="input b center" style={{ minWidth: 56, textAlign: 'center' }}>{Number(s.v.shift) > 0 ? '+' : ''}{Number(s.v.shift) || 0}</div>
+                <Button size="sm" onClick={() => s.set('shift')(Math.min(96, (Number(s.v.shift) || 0) + 4))} title="Move print right">►</Button>
+              </div></Field>
               <Field label="Print width (dots)" hint="Auto: 384 (58mm) / 576 (80mm)"><Select value={String(s.v.dots)} onChange={(e) => s.set('dots')(Number(e.target.value))} options={[{ value: '0', label: 'Auto' }, { value: '384', label: '384 (48 mm)' }, { value: '448', label: '448 (56 mm)' }, { value: '512', label: '512 (64 mm)' }, { value: '576', label: '576 (72 mm)' }, { value: '640', label: '640 (80 mm)' }]} /></Field>
               <div className="full" style={{ gridColumn: '1 / -1' }}><Check label="Compatibility cut for older printers (feed, then cut)" checked={s.v.compatCut} onChange={s.set('compatCut')} /></div>
             </div>
@@ -360,12 +380,14 @@ function PrinterTab() {
           <Button icon={Printer} loading={testing === 'receipt'} onClick={() => test('receipt')}>Test receipt</Button>
           <Button icon={Ticket} loading={testing === 'token'} onClick={() => test('token')}>Test token</Button>
           <Button icon={ChefHat} loading={testing === 'kot'} onClick={() => test('kot')}>Test kitchen slip</Button>
+          <Button icon={MoveHorizontal} loading={testing === 'margins'} onClick={() => test('margins')}>Margin test</Button>
           <div className="grow" />
           <Button variant="primary" icon={Save} onClick={() => s.save()} loading={s.saving} disabled={!s.dirty}>Save</Button>
         </div>
       </div>
       <div className="card card-pad col small" style={{ gap: 12 }}>
         <div className="b" style={{ fontSize: 15 }}>Printer setup help</div>
+        <div className="row" style={{ alignItems: 'flex-start' }}><MoveHorizontal size={18} className="faint" /><div><b>Uneven side margins?</b> Press <b>Margin test</b>. If the left gap is bigger, set <b>Side balance</b> to a negative number (e.g. −8); if the right gap is bigger, use a positive number (e.g. 8). Each 8 dots = 1 mm.</div></div>
         <div className="row" style={{ alignItems: 'flex-start' }}><Usb size={18} className="faint" /><div><b>USB thermal printer:</b> install the driver from the printer CD/website. It then appears in the list above (e.g. "POS-80", "XP-58", "BlackCopper").</div></div>
         <div className="row" style={{ alignItems: 'flex-start' }}><Bluetooth size={18} className="faint" /><div><b>Bluetooth printer:</b> pair it in Windows Settings → Bluetooth &amp; devices, then install its driver so Windows lists it as a printer. It will then appear above.</div></div>
         <div className="row" style={{ alignItems: 'flex-start' }}><ReceiptText size={18} className="faint" /><div><b>Paper size:</b> choose 58mm or 80mm in the Receipt tab (and Tokens tab). In thermal mode DT Retail POS controls the length itself, so the Windows paper setting does not matter.</div></div>

@@ -58,6 +58,35 @@ test('ESC/POS: bitmap -> job -> decode round trip, band split, cut', () => {
   assert.equal(escpos.dotsForPaper(80, 640), 640);
 });
 
+test('side balance: content width shrinks and is padded so both margins can be equalised', () => {
+  const e = escpos.effectiveDots(80, { shift: 8 });
+  assert.deepEqual(e, { total: 576, shift: 8, content: 568 });
+  assert.equal(escpos.effectiveDots(80, { shift: -16 }).content, 560);
+  assert.equal(escpos.effectiveDots(58, {}).content, 384);
+  assert.equal(escpos.effectiveDots(80, { shift: 999 }).shift, 96);
+  const gray = new Uint8Array([0, 0, 0, 0]); // 2x2 black
+  const out = escpos.padGray(gray, 2, 2, 6, 3);
+  assert.equal(out.length, 12);
+  assert.deepEqual([...out.slice(0, 6)], [255, 255, 255, 0, 0, 255]);
+  assert.equal(escpos.padGray(gray, 2, 2, 2, 0), gray);
+});
+
+test('printer auto-detect prefers the thermal printer and ignores virtual ones', () => {
+  const detect = require('../electron/printing/detect');
+  const list = [
+    { name: 'Microsoft Print to PDF', isDefault: true, status: 0 },
+    { name: 'OneNote (Desktop)', status: 0 },
+    { name: 'HP LaserJet 1020', status: 0 },
+    { name: 'XP-80C', status: 0 },
+  ];
+  assert.equal(detect.pickThermal(list).name, 'XP-80C');
+  assert.equal(detect.pickThermal([{ name: 'Microsoft XPS Document Writer' }, { name: 'HP LaserJet 1020', isDefault: true }]).name, 'HP LaserJet 1020');
+  assert.equal(detect.pickThermal([{ name: 'Microsoft Print to PDF' }]), null);
+  assert.equal(detect.pickThermal([{ name: 'POS-80', status: 0x80 }, { name: 'RP326 Receipt Printer', status: 0 }]).name, 'RP326 Receipt Printer');
+  assert.ok(detect.isOffline({ status: 0x80 }));
+  assert.equal(detect.pickThermal([]), null);
+});
+
 test('dithering only touches picture regions and keeps text pixels', () => {
   const w = 64;
   const h = 32;
