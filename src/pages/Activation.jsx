@@ -50,10 +50,12 @@ export function LicenseActivateForm({ onDone }) {
     const st = await run('refresh', () => api('license.refresh'));
     if (st?.usable) toast('License is active again.');
     else if (st) toast(st.message || 'Still not active.', 'warn');
+    if (st && st.state !== 'needs_key') setError('');
   };
 
   const needsRegister = license?.state === 'unregistered';
   const locked = ['blocked', 'suspended', 'revoked'].includes(license?.state);
+  const needsKey = license?.state === 'needs_key';
 
   return (
     <div className="col" style={{ gap: 16 }}>
@@ -69,6 +71,14 @@ export function LicenseActivateForm({ onDone }) {
           <div className="row"><MonitorSmartphone size={18} color="var(--primary)" /><b>Register this device</b></div>
           <div className="small muted">Your license key is saved. This computer must be registered once (internet needed). It will not ask again after that.</div>
           <Button variant="primary" size="lg" icon={Wifi} onClick={register} loading={busy === 'register'}>Register this device</Button>
+        </div>
+      )}
+
+      {needsKey && (
+        <div className="card card-pad col" style={{ background: 'var(--primary-50)', borderColor: 'transparent', gap: 10 }}>
+          <div className="row"><Wifi size={18} color="var(--primary)" /><b>Internet needed once</b></div>
+          <div className="small muted">DT Retail POS downloads its licensing setup from your provider the first time it starts. After that it works fully offline.</div>
+          <Button variant="primary" size="lg" icon={RefreshCw} onClick={refresh} loading={busy === 'refresh'}>Connect &amp; set up</Button>
         </div>
       )}
 
@@ -101,6 +111,8 @@ const GATE = {
   trial_expired: { icon: ShieldAlert, color: 'var(--warning)', title: 'Trial ended' },
   invalid: { icon: ShieldAlert, color: 'var(--danger)', title: 'Wrong computer' },
   clock: { icon: ShieldAlert, color: 'var(--danger)', title: 'Check date & time' },
+  needs_key: { icon: Wifi, color: 'var(--primary)', title: 'Set up licensing' },
+  unlicensed: { icon: KeyRound, color: 'var(--primary)', title: 'Activate DT Retail POS' },
 };
 
 export default function Activation() {

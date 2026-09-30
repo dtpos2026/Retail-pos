@@ -91,8 +91,60 @@ function b64urlDecode(s) {
   return Buffer.from(s.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
 }
 
+/*
+ * Public key: embedded in config.js when present, otherwise downloaded once from the provider's Super Admin
+ * (Firestore publicConfig/signing, written only by the head admin) and cached in userData/license-key.pem.
+ */
+let publicKey = PUBLIC_KEY_PEM;
+const keyFile = () => path.join(ctx.paths.userData, 'license-key.pem');
+
+let keyTried = 0;
+function loadKey() {
+  if (publicKey.includes('BEGIN PUBLIC KEY')) return;
+  if (Date.now() - keyTried < 3000) return;
+  keyTried = Date.now();
+  try {
+    const pem = fs.readFileSync(keyFile(), 'utf8');
+    crypto.createPublicKey(pem);
+    publicKey = pem;
+  } catch {
+    /* none cached yet */
+  }
+}
+
 function configured() {
-  return PUBLIC_KEY_PEM.includes('BEGIN PUBLIC KEY');
+  loadKey();
+  return publicKey.includes('BEGIN PUBLIC KEY');
+}
+
+const packaged = () => {
+  try {
+    return !!require('electron').app.isPackaged;
+  } catch {
+    return false;
+  }
+};
+
+/** Download the provider's public key (internet needed once). Resolves true when licensing is configured. */
+async function ensureKey() {
+  if (configured()) return true;
+  const before = status();
+  try {
+    const doc = await cloud.getPublicKey();
+    if (doc && typeof doc.publicPem === 'string' && doc.publicPem.includes('BEGIN PUBLIC KEY')) {
+      crypto.createPublicKey(doc.publicPem);
+      fs.mkdirSync(path.dirname(keyFile()), { recursive: true });
+      fs.writeFileSync(keyFile(), doc.publicPem, 'utf8');
+      publicKey = doc.publicPem;
+      keyTried = 0;
+      logger.info('License public key downloaded');
+      notify(before);
+      return true;
+    }
+  } catch (err) {
+    logger.info('Public key not available yet', err.message);
+  }
+  return false;
 }
 
 /** Returns the payload when the signature is valid, otherwise throws AppError. */
@@ -102,7 +154,7 @@ function decode(key) {
   if (parts.length !== 3 || parts[0] !== 'RPOS1') throw new AppError('This is not a valid Retail POS license key.');
   let ok = false;
   try {
-    ok = crypto.verify('sha256', Buffer.from(parts[1]), { key: PUBLIC_KEY_PEM, dsaEncoding: 'ieee-p1363' }, b64urlDecode(parts[2]));
+    ok = crypto.verify('sha256', Buffer.from(parts[1]), { key: publicKey, dsaEncoding: 'ieee-p1363' }, b64urlDecode(parts[2]));
   } catch (err) {
     logger.warn('License verify error', err.message);
   }
@@ -151,6 +203,7 @@ function status() {
   const base = { machineId: mid, configured: configured(), vendor: VENDOR, version: VERSION, lastOnlineCheck: s.lastOnlineCheck || null };
 
   if (!configured()) {
+    if (packaged()) return { ...base, state: 'needs_key', usable: false, message: 'Connect to the internet once to set up licensing for this software.' };
     return { ...base, state: 'unconfigured', usable: true, message: 'Developer build — licensing not configured.' };
   }
   if (clockTampered(s)) {
@@ -199,6 +252,7 @@ function status() {
 
   const used = Math.floor((Date.now() - new Date(s.trialStart).getTime()) / DAY);
   const left = Math.max(0, TRIAL_DAYS - used);
+  if (TRIAL_DAYS <= 0) return { ...base, state: 'unlicensed', usable: false, message: 'Enter your license key to start using DT Retail POS.' };
   if (left > 0) return { ...base, state: 'trial', usable: true, trialDaysLeft: left, message: `Trial version — ${left} day(s) left.` };
   return { ...base, state: 'trial_expired', usable: false, trialDaysLeft: 0, message: 'Your trial has ended. Please activate a license to continue.' };
 }
@@ -270,7 +324,7 @@ async function registerDevice() {
 }
 
 async function activate({ key }) {
-  if (!configured()) throw new AppError('Licensing is not configured in this build.');
+  if (!(await ensureKey())) throw new AppError('Could not set up licensing. Connect to the internet and try again.', 'OFFLINE');
   const { payload, key: clean } = decode(key);
   const mid = machineId();
   if (payload.mid !== '*' && payload.mid !== mid) {
@@ -329,6 +383,7 @@ function maxUsers() {
  */
 async function onlineCheck() {
   const s = load();
+  if (!configured()) await ensureKey();
   const payload = keyPayload();
   if (!configured() || !payload) return null;
   const mid = machineId();
@@ -381,4 +436,4 @@ async function onlineCheck() {
   return notify(before);
 }
 
-module.exports = { status, activate, registerDevice, removeLicense, isUsable, maxUsers, onlineCheck, onChange, machineId, decode, VERSION };
+module.exports = { status, ensureKey, activate, registerDevice, removeLicense, isUsable, maxUsers, onlineCheck, onChange, machineId, decode, VERSION };

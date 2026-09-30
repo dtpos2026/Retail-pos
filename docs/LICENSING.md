@@ -9,7 +9,7 @@
 
 
 ## How it works
-- The Super Admin panel owns an **ECDSA P-256 key pair**. The private key signs licenses. The POS contains only the **public key** (`electron/license/config.js`), so it can verify licenses but never create them.
+- The Super Admin panel owns an **ECDSA P-256 key pair**. The private key signs licenses. The POS only needs the **public key**, so it can verify licenses but never create them. **You do not paste anything:** the panel publishes the public key automatically (Firestore `publicConfig/signing`, written by the head admin only). Every installed POS downloads it once on its first launch (internet needed once) and from then on asks for a license key. Embedding it in `electron/license/config.js` is optional.
 - A license key looks like `RPOS1.<payload>.<signature>` (base64url). Payload:
 
 | Field | Meaning |
@@ -30,13 +30,15 @@
 ## POS states
 | State | Meaning | POS usable |
 |---|---|---|
-| `trial` | first 7 days after installation | yes |
+| `needs_key` | installed build has not yet downloaded the public key (first launch, no internet) | no — "Connect & set up" screen |
+| `unlicensed` | key downloaded, no license entered yet (trial is off: `TRIAL_DAYS = 0`) | no — activation screen |
+| `trial` | only when `TRIAL_DAYS` > 0 in `config.js` | yes |
 | `active` | valid key for this computer | yes (warning 7 days before expiry) |
 | `trial_expired` / `expired` | activation or renewal needed | no — activation screen |
 | `revoked` | revoked or suspended in the panel (seen during an online check) | no |
 | `invalid` | key belongs to another computer | no |
 | `clock` | Windows date was moved back more than 2 days | no, until the date is fixed |
-| `unconfigured` | no public key in `config.js` (developer build) | yes, with a banner |
+| `unconfigured` | unpackaged development run without a key (never for installed builds) | yes, with a banner |
 
 When the POS is blocked, all data stays safe. Only the activation screen is shown until a valid key is entered.
 

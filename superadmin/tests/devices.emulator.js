@@ -23,6 +23,15 @@ async function main() {
   const r0 = await admin.set('licenseStatus/L1', { status: S('active'), key: S('k1'), maxDevices: { integerValue: '1' }, deviceCount: { integerValue: '0' } });
   assert.equal(r0.status, 200, 'admin can create licenseStatus');
 
+  // public key: anyone can read it, only the head admin can publish it
+  const pk = await admin.set('publicConfig/signing', { publicPem: S('-----BEGIN PUBLIC KEY-----\nX\n-----END PUBLIC KEY-----') });
+  assert.equal(pk.status, 200, 'head admin can publish the public key');
+  const got = await cloud.getPublicKey();
+  assert.ok(got && got.publicPem.includes('BEGIN PUBLIC KEY'), 'POS can read the public key without signing in');
+  const anon = await fetch(`${base}/publicConfig/signing`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ fields: { publicPem: S('evil') } }) });
+  assert.notEqual(anon.status, 200, 'anonymous cannot overwrite the public key');
+  console.log('OK   public key readable by POS, writable by head admin only');
+
   // 1) first device registers
   const a = await cloud.registerDevice({ lid: 'L1', machineId: 'AAAA-AAAA-AAAA-AAAA', businessName: 'Shop', version: '1.1.0' });
   assert.equal(a.status, 'active'); assert.equal(a.created, true); console.log('OK   first device registered');

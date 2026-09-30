@@ -35,8 +35,8 @@ export function AppProvider({ children }) {
 
   /** Promise-based confirmation dialog. */
   const confirm = useCallback(
-    ({ title = 'Are you sure?', message, confirmText = 'Confirm', danger = false, input }) =>
-      new Promise((resolve) => setDialog({ title, message, confirmText, danger, input, resolve, value: '' })),
+    ({ title = 'Are you sure?', message, confirmText = 'Confirm', danger = false, input, inputValue = '' }) =>
+      new Promise((resolve) => setDialog({ title, message, confirmText, danger, input, resolve, value: inputValue })),
     []
   );
 

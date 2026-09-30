@@ -81,6 +81,11 @@ function deviceInfo(version) {
   return { name: os.hostname(), os: `${os.platform()} ${os.release()}`.slice(0, 60), appVersion: version };
 }
 
+/** Public signing key published by the Super Admin (world-readable, admin-write). */
+async function getPublicKey() {
+  return getDoc('publicConfig/signing');
+}
+
 /** Read license + this device's document. */
 async function fetchState(lid, machineId) {
   const [license, device] = await Promise.all([getDoc(`licenseStatus/${encodeURIComponent(lid)}`), getDoc(`devices/${encodeURIComponent(`${lid}_${machineId}`)}`)]);
@@ -145,4 +150,4 @@ async function heartbeat({ lid, machineId, version }) {
   ]);
 }
 
-module.exports = { CloudError, fetchState, registerDevice, heartbeat };
+module.exports = { CloudError, getPublicKey, fetchState, registerDevice, heartbeat };

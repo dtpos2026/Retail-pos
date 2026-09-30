@@ -104,6 +104,8 @@ const DEFAULTS = {
       { key: 'other', label: 'Other', enabled: true },
     ],
     quickCash: [100, 500, 1000, 5000],
+    bankAccounts: [], // [{ id, bankName, title, accountNo, iban, branch, enabled }]
+    showBankOnReceipt: false, // print the account details at the bottom of receipts
   },
   backup: {
     autoBackup: true,
@@ -216,6 +218,15 @@ function validate(section, v) {
   }
   if (section === 'payment') {
     if (!Array.isArray(v.methods) || !v.methods.some((m) => m.enabled)) throw new AppError('Enable at least one payment method.');
+    if (!Array.isArray(v.bankAccounts)) throw new AppError('Bank accounts are invalid.');
+    v.bankAccounts = v.bankAccounts.map((a, i) => {
+      const bankName = String(a.bankName || '').trim().slice(0, 60);
+      const accountNo = String(a.accountNo || '').trim().slice(0, 40);
+      const iban = String(a.iban || '').trim().slice(0, 40);
+      if (!bankName) throw new AppError(`Bank account ${i + 1}: enter the bank name.`);
+      if (!accountNo && !iban) throw new AppError(`${bankName}: enter an account number or IBAN.`);
+      return { id: String(a.id || `acc${Date.now()}${i}`), bankName, title: String(a.title || '').trim().slice(0, 80), accountNo, iban, branch: String(a.branch || '').trim().slice(0, 60), enabled: a.enabled !== false };
+    });
   }
 }
 

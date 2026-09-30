@@ -83,8 +83,23 @@ export async function getSigningConfig() {
   return snap.exists() ? snap.data() : null;
 }
 
+/** Publish the public key so installed POS builds can fetch it (no copy/paste into the app). Head admin only. */
+export async function publishPublicKey(publicPem) {
+  const pem = publicPem || (await getSigningConfig())?.publicPem;
+  if (!pem) return false;
+  try {
+    const cur = await getDoc(doc(db, 'publicConfig', 'signing'));
+    if (cur.exists() && cur.data().publicPem === pem) return true;
+    await setDoc(doc(db, 'publicConfig', 'signing'), { publicPem: pem, updatedAt: serverTimestamp() });
+    return true;
+  } catch {
+    return false; // not the head admin, or rules not deployed yet
+  }
+}
+
 export async function saveSigningConfig({ privateJwk, publicPem }) {
   await setDoc(doc(db, 'config', 'signing'), { privateJwk, publicPem, createdAt: serverTimestamp(), createdBy: me() });
+  await publishPublicKey(publicPem);
   await logActivity('config.signing', 'Created license signing key');
 }
 

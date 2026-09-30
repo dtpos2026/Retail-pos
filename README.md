@@ -70,7 +70,7 @@ npx firebase-tools deploy
 | **Printers** | Any Windows printer (USB, Bluetooth, network) for receipts and a separate token/kitchen printer. Direct thermal ESC/POS printing (no blank paper, exact cut) or Windows driver mode; silent printing; clear error when printing fails. |
 | **Backup & Restore** | Backup now, backup to USB / folder, automatic daily backup (keeps the last N), restore with a safety copy, last-backup indicator. |
 | **Data safety** | SQLite WAL + `synchronous=FULL`, every sale in one transaction, integrity check at start-up, crash handlers, friendly error messages (technical details only in logs). |
-| **License** | 7-day trial, then activation with a signed key. The computer registers once (online) and is remembered; the Super Admin can block / suspend / remove devices live and set the device limit. Renewals and revocations are picked up automatically when online. |
+| **License** | A license key is required from the first launch (no trial by default). The public key is downloaded automatically from your Super Admin, nothing to paste. The computer registers once (online) and is remembered; the Super Admin can block / suspend / remove devices live and set the device limit. Renewals and revocations are picked up automatically when online. |
 
 ### Super Admin panel (web, Firebase)
 - Sign-in with email/password or Google. Head admin: **digitaltarget.digital@gmail.com** (verified email required).
@@ -118,7 +118,7 @@ npm run dist:portable  # → release/RetailPOS-Portable-1.0.0.exe (no install ne
 
 Data location on the shop PC: `%APPDATA%\Retail POS\` (`data\retailpos.db`, `backups\`, `logs\`, `license.json`).
 
-> **Before giving the installer to customers:** paste your license public key into `electron/license/config.js` (see [docs/LICENSING.md](docs/LICENSING.md)). Without it the build runs as an unlicensed "developer build" and shows a banner.
+> **Before giving the installer to customers:** open the Super Admin panel once as the head admin (it publishes the public key) and deploy the latest `firestore.rules`. Installed builds then download the key on their first launch and ask for a license. See [docs/LICENSING.md](docs/LICENSING.md).
 
 ---
 
@@ -140,7 +140,7 @@ Then in Firebase Console: enable **Authentication → Email/Password and Google*
 
 ## 5. Licensing flow
 
-1. The customer installs Retail POS, which runs a **7-day trial**.
+1. The customer installs DT Retail POS. On the first launch (internet once) it sets up licensing and asks for a license key.
 2. In the Super Admin panel: **Clients → add client → Generate license** (online device registration, max devices 1), **Copy WhatsApp message** and send it.
 3. The customer pastes the key in Retail POS → **Activate** (internet needed **once**). The computer is registered and remembered — it never asks again and works fully **offline**.
 4. You control the device live from **Devices** (block / suspend / remove) and the limit per license. Renewals and revocations reach the POS automatically whenever it is online.

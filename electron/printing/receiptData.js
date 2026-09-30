@@ -72,12 +72,20 @@ function build(order, overrides = {}) {
       change: order.change_amount,
       due: order.due,
       method: methodLabel(order.payment_method),
+      bank: order.payment_bank || '',
       payments: (order.payments || []).map((p) => ({ method: methodLabel(p.method), amount: p.amount })),
     },
     footer: cfg.footerText,
+    bankAccounts: bankAccounts(),
     words: cfg.amountInWords ? amountInWords(order.total) : '',
     qr: buildQr(cfg, order),
   };
+}
+
+function bankAccounts() {
+  const pay = settings.get('payment');
+  if (!pay.showBankOnReceipt) return [];
+  return (pay.bankAccounts || []).filter((a) => a.enabled);
 }
 
 function buildQr(cfg, order) {

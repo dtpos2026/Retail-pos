@@ -3,17 +3,16 @@
 /**
  * Licensing configuration.
  *
- * PUBLIC_KEY_PEM must be the public key shown in the Super Admin panel under
- * Settings → License Signing Key. Paste it here before building installers for
- * customers. While it is empty the app runs as an unlicensed "developer build"
- * (no activation required) so you can develop and test.
+ * PUBLIC_KEY_PEM is optional. Leave it empty: installed builds download the public key once from your
+ * Super Admin (it is published automatically when you open the panel) and then require a license key
+ * from the first launch. Only unpackaged development runs work without a license.
  *
  * The private key never leaves the Super Admin panel / Firestore.
  */
 const PUBLIC_KEY_PEM = ``;
 
 /** Days a new installation can be used before activation is required. */
-const TRIAL_DAYS = 7;
+const TRIAL_DAYS = 0; // 0 = a license key is required from the very first launch
 
 /**
  * Optional online check. When internet is available the POS reads

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Building2, KeyRound, AlarmClock, Ban, Wallet, Plus, AlertTriangle, Monitor, Wifi, TrendingUp, Layers } from 'lucide-react';
-import { watch, getSigningConfig } from '../lib/data';
+import { watch, getSigningConfig, publishPublicKey } from '../lib/data';
 import { useAdmin } from '../context';
 import { money, fmtDate, licenseState, tsToDate, daysLeft, initials } from '../lib/format';
 import { isOnline, ago } from '../lib/devices';
@@ -30,7 +30,7 @@ export default function Dashboard() {
   useEffect(() => {
     const a = watch('clients', setClients, toastError);
     const b = watch('licenses', setLicenses, toastError);
-    getSigningConfig().then(setSigning).catch(() => setSigning(null));
+    getSigningConfig().then((c) => { setSigning(c); if (c?.publicPem) publishPublicKey(c.publicPem); }).catch(() => setSigning(null));
     return () => {
       a();
       b();

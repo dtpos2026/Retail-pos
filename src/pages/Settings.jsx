@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Store, ReceiptText, Printer, Ticket, Percent, Wallet, Boxes, DatabaseBackup, KeyRound, SlidersHorizontal, Save, Upload, X, RefreshCw,
-  FolderOpen, HardDriveDownload, RotateCcw, CheckCircle2, AlertTriangle, Usb, Bluetooth, Database, Trash2, FlaskConical, FileText, Lock, Palette, ChefHat, Zap, MoveHorizontal,
+  FolderOpen, HardDriveDownload, RotateCcw, CheckCircle2, AlertTriangle, Usb, Bluetooth, Database, Trash2, FlaskConical, FileText, Lock, Palette, ChefHat, Zap, MoveHorizontal, Landmark,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { useApp } from '../context/AppContext';
@@ -527,6 +527,29 @@ function PaymentTab() {
       <Field label="Quick cash buttons (comma separated)" hint="Shown on the payment screen." className="mt">
         <Input value={v.quickCash.join(', ')} onChange={(e) => s.set('quickCash')(e.target.value.split(',').map((x) => Number(x.trim())).filter((x) => x > 0))} />
       </Field>
+      <div className="b" style={{ margin: '22px 0 4px' }}>Bank accounts</div>
+      <div className="small muted" style={{ marginBottom: 10 }}>Add your business bank accounts. When a customer pays by <b>Bank Transfer</b>, the cashier picks the account and it is saved with the sale.</div>
+      {(v.bankAccounts || []).map((a, i) => {
+        const setAcc = (patch) => s.set('bankAccounts')(v.bankAccounts.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+        return (
+          <div key={a.id || i} className="card card-pad col" style={{ gap: 10, marginBottom: 10, background: 'var(--surface-2)' }}>
+            <div className="form-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
+              <Field label="Bank name"><Input value={a.bankName} onChange={(e) => setAcc({ bankName: e.target.value })} placeholder="e.g. HBL, Meezan, JazzCash" /></Field>
+              <Field label="Account title"><Input value={a.title} onChange={(e) => setAcc({ title: e.target.value })} placeholder="Account holder name" /></Field>
+              <Field label="Account number"><Input value={a.accountNo} onChange={(e) => setAcc({ accountNo: e.target.value })} /></Field>
+              <Field label="IBAN"><Input value={a.iban} onChange={(e) => setAcc({ iban: e.target.value })} placeholder="PK00 XXXX 0000 0000 0000 0000" /></Field>
+              <Field label="Branch (optional)"><Input value={a.branch} onChange={(e) => setAcc({ branch: e.target.value })} /></Field>
+              <div className="row" style={{ alignItems: 'flex-end', gap: 10 }}>
+                <Check label="Active" checked={a.enabled !== false} onChange={(on) => setAcc({ enabled: on })} />
+                <div className="grow" />
+                <Button size="sm" variant="danger-ghost" icon={Trash2} onClick={() => s.set('bankAccounts')(v.bankAccounts.filter((_, j) => j !== i))}>Remove</Button>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+      <Button icon={Landmark} onClick={() => s.set('bankAccounts')([...(v.bankAccounts || []), { id: `acc${Date.now()}`, bankName: '', title: '', accountNo: '', iban: '', branch: '', enabled: true }])}>Add bank account</Button>
+      <ToggleRow title="Print bank account details on receipts" desc="Shows the active accounts at the bottom of every receipt so customers can pay by transfer." checked={!!v.showBankOnReceipt} onChange={s.set('showBankOnReceipt')} />
       <SaveBar s={s} />
     </div>
   );

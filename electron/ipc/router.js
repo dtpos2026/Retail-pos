@@ -15,6 +15,7 @@ const categories = require('../services/categories');
 const products = require('../services/products');
 const customers = require('../services/customers');
 const tables = require('../services/tables');
+const tableOps = require('../services/tableOps');
 const orders = require('../services/orders');
 const tokens = require('../services/tokens');
 const inventory = require('../services/inventory');
@@ -129,6 +130,15 @@ const routes = {
   'tables.bulkAdd': { perm: 'settings', fn: (a) => tables.bulkAdd(a) },
   'tables.setStatus': { any: ['tables', 'pos'], fn: (a) => tables.setStatus(a) },
   'tables.remove': { perm: 'settings', fn: (a) => tables.remove(a) },
+  'tables.floors': { any: ['tables', 'pos'], fn: () => tables.floors() },
+  'tables.floorSave': { perm: 'settings', fn: (a) => tables.floorSave(a) },
+  'tables.floorRemove': { perm: 'settings', fn: (a) => tables.floorRemove(a) },
+  'tables.assignFloor': { perm: 'settings', fn: (a) => tables.assignFloor(a) },
+  'tables.transfer': { any: ['tables', 'pos'], fn: (a) => tableOps.transfer(a) },
+  'tables.merge': { any: ['tables', 'pos'], fn: (a) => tableOps.merge(a) },
+  'tables.split': { any: ['tables', 'pos'], fn: (a) => tableOps.split(a) },
+  'tables.free': { any: ['tables', 'pos'], fn: (a) => tableOps.free(a) },
+  'tables.history': { any: ['tables', 'orders', 'reports'], fn: (a) => tableOps.history(a) },
 
   // ---- orders / tokens -----------------------------------------------------
   'orders.save': { perm: 'pos', fn: (a) => orders.save(a) },

@@ -184,6 +184,22 @@ CREATE INDEX ix_stock_product ON stock_movements(product_id);
 CREATE INDEX ix_stock_date ON stock_movements(created_at);
 `,
   },
+  {
+    version: 2,
+    sql: `
+CREATE TABLE floors (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  name       TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  active     INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL
+);
+ALTER TABLE dining_tables ADD COLUMN floor_id INTEGER;
+ALTER TABLE orders ADD COLUMN payment_bank TEXT;
+ALTER TABLE orders ADD COLUMN merged_note TEXT;
+ALTER TABLE payments ADD COLUMN bank_account TEXT;
+`,
+  },
 ];
 
 module.exports = { migrations };

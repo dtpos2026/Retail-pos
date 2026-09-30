@@ -14,6 +14,8 @@ export default function PaymentModal({ total, orderType, customerName, onClose, 
   const tokenDefault = tokenCfg.enabled && tokenCfg.orderTypes.includes(orderType) ? tokenCfg.mode : 'none';
 
   const [method, setMethod] = useState(methods[0]?.key || 'cash');
+  const accounts = (settings.payment.bankAccounts || []).filter((a) => a.enabled);
+  const [bankId, setBankId] = useState(accounts[0]?.id || '');
   const [tendered, setTendered] = useState('');
   const [tokenMode, setTokenMode] = useState(tokenDefault);
   const [printReceipt, setPrintReceipt] = useState(settings.printer.autoPrintReceipt);
@@ -39,7 +41,7 @@ export default function PaymentModal({ total, orderType, customerName, onClose, 
   const creditBlocked = pay.due > 0 && (!settings.sales.allowCredit || !customerName);
   const submit = () => {
     if (busy || creditBlocked) return;
-    onComplete({ method, tendered: amount, tokenMode, printReceipt });
+    onComplete({ method, tendered: amount, tokenMode, printReceipt, bankAccountId: method === 'bank' ? bankId : undefined });
   };
 
   const onKey = (e) => {
@@ -81,6 +83,20 @@ export default function PaymentModal({ total, orderType, customerName, onClose, 
               );
             })}
           </div>
+          {method === 'bank' && accounts.length > 0 && (
+            <div className="col" style={{ gap: 6 }}>
+              <div className="label"><Landmark size={14} style={{ verticalAlign: -2 }} /> Paid into account</div>
+              {accounts.map((a) => (
+                <label key={a.id} className="row" style={{ gap: 10, padding: '9px 12px', border: `2px solid ${bankId === a.id ? 'var(--primary)' : 'var(--border)'}`, borderRadius: 12, cursor: 'pointer', background: bankId === a.id ? 'var(--primary-50)' : 'transparent' }}>
+                  <input type="radio" name="bank" checked={bankId === a.id} onChange={() => setBankId(a.id)} />
+                  <div className="col" style={{ gap: 0 }}>
+                    <b><bdi>{a.bankName}</bdi>{a.title ? <span className="muted"> — <bdi>{a.title}</bdi></span> : ''}</b>
+                    <span className="small muted mono">{a.accountNo || a.iban}</span>
+                  </div>
+                </label>
+              ))}
+            </div>
+          )}
           {tokenCfg.enabled && (
             <div className="col" style={{ gap: 6 }}>
               <div className="label"><Ticket size={14} style={{ verticalAlign: -2 }} /> Token</div>

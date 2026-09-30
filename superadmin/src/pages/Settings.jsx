@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { KeyRound, Copy, Download, Upload, ShieldCheck, FlaskConical, AlertTriangle, FileCode2 } from 'lucide-react';
-import { getSigningConfig, saveSigningConfig } from '../lib/data';
+import { getSigningConfig, saveSigningConfig, publishPublicKey } from '../lib/data';
 import { generateKeyPair, signLicense, verifyLicense } from '../lib/license';
 import { useAdmin } from '../context';
 import { fmtDateTime } from '../lib/format';
@@ -110,12 +110,10 @@ export default function Settings() {
                 {isHead && <Button variant="ghost" icon={Upload} onClick={() => fileRef.current?.click()}>Import / replace</Button>}
               </div>
               <div className="card card-pad small" style={{ background: 'var(--info-50)', borderColor: 'transparent' }}>
-                <b>Put this key into the POS before building installers for customers:</b>
-                <ol style={{ margin: '8px 0 0', paddingLeft: 18, lineHeight: 1.7 }}>
-                  <li>Open <code>electron/license/config.js</code></li>
-                  <li>Replace the line <code>const PUBLIC_KEY_PEM = ``;</code> with the copied config.js line.</li>
-                  <li>Build the installer (<code>npm run dist</code> or the GitHub Actions workflow).</li>
-                </ol>
+                <b>Nothing to paste.</b> This public key is published automatically. Every installed DT Retail POS downloads it once (internet needed on first launch) and then asks for a license key. You control every install from here: suspend, block, or limit devices at any time.
+                <div className="row" style={{ marginTop: 10 }}>
+                  <Button icon={ShieldCheck} onClick={async () => { const ok = await publishPublicKey(cfg.publicPem); toast(ok ? 'Public key is published — POS installs can now set up licensing.' : 'Could not publish. Deploy the latest Firestore rules and sign in as the head admin.', ok ? 'success' : 'error'); }}>Publish public key now</Button>
+                </div>
               </div>
               <div className="card card-pad small row" style={{ background: 'var(--warning-50)', borderColor: 'transparent', alignItems: 'flex-start' }}>
                 <AlertTriangle size={18} color="var(--warning)" style={{ flexShrink: 0 }} />

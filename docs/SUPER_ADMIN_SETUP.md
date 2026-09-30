@@ -35,7 +35,7 @@ The database structure is created automatically by the panel on first use. There
 2. Password accounts must verify the email once: click **Send verification email**, open the link, then **I have verified — continue**.
 3. **Settings → Create signing key**. Then:
    - **Download private backup** and keep the JSON file safe and offline (USB).
-   - **Copy config.js line** and paste it into `electron/license/config.js` (replace `const PUBLIC_KEY_PEM = ``;`).
+   - The public key is **published automatically** (or press **Publish public key now**). Nothing needs to be pasted into the POS.
    - Build the POS installer. From now on every build accepts licenses from this panel.
 4. (Optional) **Admins → Add admin** to let staff generate licenses. They sign in with their own verified email.
 

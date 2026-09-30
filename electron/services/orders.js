@@ -245,6 +245,15 @@ function save(input) {
       const pay = input.payment || {};
       const method = methodKeys().includes(pay.method) ? pay.method : null;
       assert(method, 'Select a payment method.');
+      let bankLabel = null;
+      if (method === 'bank') {
+        const accounts = (settings.get('payment').bankAccounts || []).filter((a) => a.enabled);
+        if (accounts.length) {
+          const acc = accounts.find((a) => a.id === pay.bankAccountId) || (accounts.length === 1 ? accounts[0] : null);
+          assert(acc, 'Select the bank account the customer paid into.');
+          bankLabel = `${acc.bankName} · ${acc.accountNo || acc.iban}`;
+        }
+      }
       const tendered = pay.tendered === undefined || pay.tendered === null || pay.tendered === '' ? totals.total : toNumber(pay.tendered);
       const p = calcPayment(totals.total, tendered);
       if (p.due > 0) {
@@ -254,11 +263,11 @@ function save(input) {
       const paymentStatus = p.due <= 0 ? 'paid' : p.paid > 0 ? 'partial' : 'unpaid';
       ctx.db.run(
         `UPDATE orders SET status = 'completed', payment_status = ?, paid = ?, change_amount = ?, due = ?, payment_method = ?,
-           completed_at = ?, updated_at = ? WHERE id = ?`,
-        [paymentStatus, p.paid, p.change, p.due, method, now, now, orderId]
+           completed_at = ?, updated_at = ?, payment_bank = ? WHERE id = ?`,
+        [paymentStatus, p.paid, p.change, p.due, method, now, now, bankLabel, orderId]
       );
       if (p.paid > 0) {
-        ctx.db.run('INSERT INTO payments (order_id, method, amount, user_id, created_at) VALUES (?, ?, ?, ?, ?)', [orderId, method, p.paid, user.id, now]);
+        ctx.db.run('INSERT INTO payments (order_id, method, amount, user_id, created_at, bank_account) VALUES (?, ?, ?, ?, ?, ?)', [orderId, method, p.paid, user.id, now, bankLabel]);
       }
       inventory.applySale(orderId);
       if (table) ctx.db.run("UPDATE dining_tables SET status = 'available', current_order_id = NULL WHERE id = ?", [table.id]);

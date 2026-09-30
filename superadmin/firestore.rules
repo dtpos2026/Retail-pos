@@ -83,6 +83,14 @@ service cloud.firestore {
       allow write: if isHead();
     }
 
+    // Public half of the signing key. Installed POS builds download it once, so nothing has to be pasted
+    // into the app. Only the head admin can publish it; it contains no secret.
+    match /publicConfig/{docId} {
+      allow get: if true;
+      allow list: if isAdmin();
+      allow write: if isHead();
+    }
+
     match /admins/{email} {
       allow read: if isAdmin();
       allow write: if isHead();

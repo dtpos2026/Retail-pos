@@ -158,6 +158,82 @@ let failed = false;
     if (firstInk > 24) throw new Error(`blank space at top: ${firstInk} rows`);
     await page.keyboard.press('Escape');
   });
+  await step('table management: floors, transfer, merge, split, free, history', async () => {
+    const inv = async (m, a) => { const r = await page.evaluate(([mm, aa]) => window.pos.invoke(mm, aa), [m, a]); if (!r.ok) throw new Error(`${m}: ${r.error && r.error.message}`); return r.data; };
+    const f = await inv('tables.floorSave', { name: 'Ground Floor' });
+    await inv('tables.floorSave', { name: 'Garden' });
+    const tl = await inv('tables.list');
+    await inv('tables.assignFloor', { ids: tl.slice(0, 4).map((t) => t.id), floorId: f });
+    const prod = (await inv('products.list', {}))[0];
+    const hold = (t) => inv('orders.save', { orderType: 'dine_in', action: 'hold', tableId: t.id, items: [{ productId: prod.id, qty: 2, unitPrice: prod.sale_price }] });
+    await hold(tl[0]); await hold(tl[1]);
+    await page.click('a[href="#/tables"]');
+    await page.waitForSelector('.tcard.occupied');
+    await page.click('.chip:has-text("Ground Floor")');
+    await shot('40-tables-floors');
+    // transfer
+    await page.click(`.tcard.occupied:has-text("${tl[0].name}") button:has-text("Move")`);
+    await page.click(`.modal .tcard.available:has-text("${tl[5].name}")`);
+    await shot('41-transfer');
+    await page.click('.modal button:has-text("Move bill here")');
+    await page.waitForSelector(`text=Bill moved to ${tl[5].name}`);
+    // merge
+    await page.click('.chip:has-text("All floors")');
+    await page.click(`.tcard.occupied:has-text("${tl[1].name}") button:has-text("Merge")`);
+    await page.click(`.modal .tcard.occupied:has-text("${tl[5].name}")`);
+    await shot('42-merge');
+    await page.click('.modal button:has-text("Merge 1 bill")');
+    await page.waitForSelector('text=Merged');
+    // split
+    await page.click(`.tcard.occupied:has-text("${tl[1].name}") button:has-text("Split")`);
+    await page.waitForSelector('.modal:has-text("Choose items to move")');
+    await page.click('.modal .row:has-text("×") button >> nth=1');
+    await page.click(`.modal .tcard.available >> nth=0`);
+    await shot('43-split');
+    await page.click('.modal button:has-text("Create new bill")');
+    await page.waitForSelector('text=New bill created');
+    await shot('44-tables-after-split');
+    // free
+    const occ = await page.locator('.tcard.occupied').count();
+    await page.locator('.tcard.occupied').first().locator('button[title^="Free this table"]').click();
+    await page.click('.modal button:has-text("Free table")');
+    await page.waitForFunction((n) => document.querySelectorAll('.tcard.occupied').length === n - 1, occ);
+    // history
+    await page.click('.tabs button:has-text("Dine-in history")');
+    await page.waitForSelector('table.table');
+    await shot('45-dine-history');
+  });
+  await step('payments: bank account setup + bank sale stores the account', async () => {
+    await page.click('a[href="#/settings"]');
+    await page.click('.tabs button:has-text("Payments")');
+    await page.click('button:has-text("Add bank account")');
+    const inputs = page.locator('.card .form-grid input.input');
+    await inputs.nth(0).fill('Meezan Bank');
+    await inputs.nth(1).fill('Sample Restaurant');
+    await inputs.nth(2).fill('0123456789');
+    await page.click('text=Print bank account details on receipts');
+    await page.click('button:has-text("Save changes")');
+    await page.waitForSelector('text=Settings saved');
+    await shot('46-bank-settings');
+    await page.click('a[href="#/pos"]');
+    await page.waitForSelector('.pcard');
+    await page.click('.cart-head .seg button:has-text("Takeaway")');
+    await page.click('.pcard >> nth=0');
+    await page.keyboard.press('F9');
+    await page.waitForSelector('text=Total Payable');
+    await page.click('.method:has-text("Bank")');
+    await page.waitForSelector('text=Paid into account');
+    await shot('47-pay-bank');
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(1500);
+    const list = await page.evaluate(() => window.pos.invoke('orders.list', { status: 'completed', limit: 10 }));
+    let found = false;
+    for (const row of list.data) {
+      const full = await page.evaluate((id) => window.pos.invoke('orders.get', { id }), row.id);
+      if (/Meezan Bank/.test(full.data.payment_bank || '')) found = true;
+    }
+    if (!found) throw new Error('bank account not saved on the sale');
+  });
   await step('every receipt design has balanced left/right margins (58 + 80mm)', async () => {
     const dump = path.join(ud, 'prints');
     const escpos = require('../electron/printing/escpos');

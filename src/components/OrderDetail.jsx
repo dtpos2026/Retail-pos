@@ -107,7 +107,7 @@ export default function OrderDetail({ id, onClose, onChanged }) {
             {o.customer_name && (<><div>Customer</div><div><bdi>{o.customer_name}</bdi></div></>)}
             {o.customer_mobile && (<><div>Mobile</div><div>{o.customer_mobile}</div></>)}
             {o.customer_address && (<><div>Address</div><div><bdi>{o.customer_address}</bdi></div></>)}
-            <div>Payment</div><div>{methodLabel(o.payment_method)}</div>
+            <div>Payment</div><div>{methodLabel(o.payment_method)}{o.payment_bank ? <div className="small muted">{o.payment_bank}</div> : null}</div>
           </div>
           <div className="card card-pad" style={{ background: 'var(--surface-2)' }}>
             <div className="tline"><span>Subtotal</span><span>{m(o.subtotal)}</span></div>

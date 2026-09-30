@@ -4,6 +4,44 @@ const ctx = require('../core/context');
 const { AppError, assert } = require('../core/errors');
 const { nowLocal, cleanStr } = require('../core/util');
 
+// ---------------------------------------------------------------- floors (areas)
+function floors() {
+  return ctx.db.all('SELECT id, name, sort_order FROM floors WHERE active = 1 ORDER BY sort_order, id');
+}
+
+function floorSave({ id, name }) {
+  const n = cleanStr(name, 40);
+  assert(n, 'Floor name is required.');
+  const dupe = ctx.db.get('SELECT id FROM floors WHERE name = ? COLLATE NOCASE AND active = 1 AND id <> ?', [n, Number(id) || 0]);
+  if (dupe) throw new AppError('A floor with this name already exists.');
+  if (id) {
+    ctx.db.run('UPDATE floors SET name = ? WHERE id = ?', [n, Number(id)]);
+    return Number(id);
+  }
+  const max = ctx.db.get('SELECT COALESCE(MAX(sort_order), 0) m FROM floors').m;
+  return ctx.db.run('INSERT INTO floors (name, sort_order, created_at) VALUES (?, ?, ?)', [n, max + 1, nowLocal()]).lastInsertRowid;
+}
+
+/** Deleting a floor keeps its tables (they move to "No floor"). */
+function floorRemove({ id }) {
+  ctx.db.transaction(() => {
+    ctx.db.run('UPDATE dining_tables SET floor_id = NULL WHERE floor_id = ?', [Number(id)]);
+    ctx.db.run('UPDATE floors SET active = 0 WHERE id = ?', [Number(id)]);
+  });
+  return true;
+}
+
+/** Move several tables to a floor in one go. */
+function assignFloor({ ids, floorId }) {
+  const list = (Array.isArray(ids) ? ids : []).map(Number).filter(Boolean);
+  assert(list.length, 'Select at least one table.');
+  if (floorId) assert(ctx.db.get('SELECT id FROM floors WHERE id = ? AND active = 1', [Number(floorId)]), 'Floor not found.');
+  ctx.db.transaction(() => {
+    for (const id of list) ctx.db.run('UPDATE dining_tables SET floor_id = ? WHERE id = ?', [floorId ? Number(floorId) : null, id]);
+  });
+  return true;
+}
+
 function list() {
   return ctx.db
     .all(
@@ -21,14 +59,15 @@ function save(input) {
   const name = cleanStr(input.name, 40);
   assert(name, 'Table name is required.');
   const capacity = Math.max(1, Math.min(50, Number(input.capacity) || 4));
+  const floorId = input.floorId ? Number(input.floorId) : null;
   const dupe = ctx.db.get('SELECT id FROM dining_tables WHERE name = ? COLLATE NOCASE AND active = 1 AND id <> ?', [name, id || 0]);
   if (dupe) throw new AppError('A table with this name already exists.');
   if (id) {
-    ctx.db.run('UPDATE dining_tables SET name = ?, capacity = ? WHERE id = ?', [name, capacity, id]);
+    ctx.db.run('UPDATE dining_tables SET name = ?, capacity = ?, floor_id = ? WHERE id = ?', [name, capacity, floorId, id]);
     return id;
   }
   const max = ctx.db.get('SELECT COALESCE(MAX(sort_order), 0) m FROM dining_tables').m;
-  return ctx.db.run('INSERT INTO dining_tables (name, capacity, sort_order, created_at) VALUES (?, ?, ?, ?)', [name, capacity, max + 1, nowLocal()])
+  return ctx.db.run('INSERT INTO dining_tables (name, capacity, sort_order, floor_id, created_at) VALUES (?, ?, ?, ?, ?)', [name, capacity, max + 1, floorId, nowLocal()])
     .lastInsertRowid;
 }
 
@@ -66,4 +105,4 @@ function remove({ id }) {
   return true;
 }
 
-module.exports = { list, save, bulkAdd, setStatus, remove };
+module.exports = { list, save, bulkAdd, setStatus, remove, floors, floorSave, floorRemove, assignFloor };

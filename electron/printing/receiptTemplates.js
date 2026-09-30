@@ -86,6 +86,7 @@ function paymentRows(d) {
   if (!d.cfg.showPayment || !o.completed) return [];
   const rows = [];
   if (tt.method) rows.push(['Payment', tt.method, true]);
+  if (tt.bank) rows.push(['Account', tt.bank, true]);
   rows.push(['Paid', tt.tendered]);
   if (tt.change > 0) rows.push(['Change', tt.change]);
   if (tt.due > 0) rows.push(['Balance Due', tt.due]);
@@ -109,6 +110,11 @@ function footer(d, extra = '') {
   const parts = [];
   if (d.words) parts.push(`<div style="font-style:italic;font-size:.9em;margin-bottom:1mm">${esc(d.words)}</div>`);
   if (d.order.notes) parts.push(`<div style="margin-bottom:1mm">Note: ${t(d.order.notes)}</div>`);
+  if (d.bankAccounts && d.bankAccounts.length) {
+    parts.push(`<div style="border-top:1px dashed #000;margin:1.5mm 0 1mm;padding-top:1mm;font-size:.88em;text-align:left"><div class="b c">Bank Accounts</div>${d.bankAccounts
+      .map((a) => `<div style="margin-top:.8mm"><b>${t(a.bankName)}</b>${a.title ? ` — ${t(a.title)}` : ''}<br>${a.accountNo ? `A/C: ${esc(a.accountNo)}` : ''}${a.iban ? `${a.accountNo ? '<br>' : ''}IBAN: ${esc(a.iban)}` : ''}${a.branch ? `<br>${t(a.branch)}` : ''}</div>`)
+      .join('')}</div>`);
+  }
   if (d.footer) parts.push(`<div>${t(d.footer).replace(/\n/g, '<br>')}</div>`);
   if (d.order.reprint) parts.push('<div class="b" style="margin-top:1mm">** DUPLICATE COPY **</div>');
   parts.push(qrBlock(d));

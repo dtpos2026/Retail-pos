@@ -210,10 +210,10 @@ export default function Pos() {
     if (validate()) setModal('pay');
   };
 
-  const complete = async ({ method, tendered, tokenMode, printReceipt }) => {
+  const complete = async ({ method, tendered, tokenMode, printReceipt, bankAccountId }) => {
     setBusy(true);
     try {
-      const o = await api('orders.save', payload('pay', { payment: { method, tendered }, tokenMode }));
+      const o = await api('orders.save', payload('pay', { payment: { method, tendered, bankAccountId }, tokenMode }));
       setModal(null);
       setLastSale(o);
       newOrder(cart.orderType);
