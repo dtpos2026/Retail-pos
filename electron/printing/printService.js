@@ -49,6 +49,7 @@ async function printReceipt({ orderId, reprint }) {
     printerName: receiptPrinter(),
     widthMm: cfg.paperWidth,
     copies: cfg.copies,
+    drawer: !reprint,
     jobKey: `receipt:${orderId}`,
   });
 }

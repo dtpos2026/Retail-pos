@@ -175,3 +175,12 @@ test.after(() => {
   ctx.db.close();
   fs.rmSync(tmp, { recursive: true, force: true });
 });
+
+test('cash drawer pulse is added once before the receipt when requested', () => {
+  const bmp = escpos.packBitmap(new Uint8Array(64 * 8).fill(0), 64, 8);
+  const job = escpos.buildJob(bmp, { drawer: true, copies: 2 });
+  const pulses = job.toString('hex').split('1b700019fa').length - 1;
+  assert.equal(pulses, 1);
+  assert.equal(escpos.decodeJob(job).cuts, 2);
+  assert.equal(escpos.buildJob(bmp, {}).toString('hex').includes('1b700019fa'), false);
+});

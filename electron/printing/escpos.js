@@ -130,10 +130,11 @@ function trimBlankTail(bitmap, keepRows = 0) {
  * @param {{width:number,height:number,rowBytes:number,data:Buffer}} bitmap
  * @param {{cut?:'partial'|'full'|'none', feedMm?:number, compatCut?:boolean, copies?:number, band?:number}} opts
  */
-function buildJob(bitmap, { cut = 'partial', feedMm = 3, compatCut = false, copies = 1, band = 240 } = {}) {
+function buildJob(bitmap, { cut = 'partial', feedMm = 3, compatCut = false, copies = 1, band = 240, drawer = false } = {}) {
   const parts = [];
   for (let c = 0; c < Math.max(1, copies); c++) {
     parts.push(Buffer.from([ESC, 0x40])); // initialise
+    if (drawer && c === 0) parts.push(Buffer.from([ESC, 0x70, 0x00, 0x19, 0xfa])); // kick the cash drawer (pin 2)
     for (let y = 0; y < bitmap.height; y += band) {
       const rows = Math.min(band, bitmap.height - y);
       const head = Buffer.from([GS, 0x76, 0x30, 0x00, bitmap.rowBytes & 0xff, (bitmap.rowBytes >> 8) & 0xff, rows & 0xff, (rows >> 8) & 0xff]);
@@ -169,6 +170,8 @@ function decodeJob(buf) {
     else if (buf[i] === ESC && buf[i + 1] === 0x4a) {
       feeds += buf[i + 2];
       i += 3;
+    } else if (buf[i] === ESC && buf[i + 1] === 0x70) {
+      i += 5;
     } else if (buf[i] === GS && buf[i + 1] === 0x76 && buf[i + 2] === 0x30) {
       rowBytes = buf[i + 4] | (buf[i + 5] << 8);
       const h = buf[i + 6] | (buf[i + 7] << 8);

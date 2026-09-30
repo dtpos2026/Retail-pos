@@ -133,7 +133,7 @@ function thermalGeometry(widthMm) {
   return { dots: total, content, shift, cssWidthMm: escpos.mmForDots(content), pr };
 }
 
-async function buildThermalJob(html, { widthMm, copies = 1 }) {
+async function buildThermalJob(html, { widthMm, copies = 1, drawer = false }) {
   const { dots, content, shift, cssWidthMm, pr } = thermalGeometry(widthMm);
   const img = await rasterize.renderBgra(html, { cssWidthMm, pixelWidth: content });
   const left = Math.max(0, shift); // + shift: unused dots on the left, content moves right
@@ -146,7 +146,7 @@ async function buildThermalJob(html, { widthMm, copies = 1 }) {
     escpos.packBitmap(gray, img.width, img.height, { threshold: escpos.DARKNESS[pr.darkness] || 150, ditherRects: img.imgRects }),
     6
   );
-  const job = escpos.buildJob(bitmap, { cut: pr.cut, feedMm: pr.feedMm, compatCut: pr.compatCut, copies });
+  const job = escpos.buildJob(bitmap, { cut: pr.cut, feedMm: pr.feedMm, compatCut: pr.compatCut, copies, drawer: drawer && !!pr.openDrawer });
   return { job, bitmap };
 }
 
@@ -177,10 +177,10 @@ async function sendWithRetry(requested, deviceName, job, doc) {
   throw lastErr;
 }
 
-async function printThermal(html, { printerName, widthMm, copies = 1, jobKey }) {
+async function printThermal(html, { printerName, widthMm, copies = 1, jobKey, drawer = false }) {
   const dump = dumpDir();
   const deviceName = dump ? '(dump)' : await resolvePrinter(printerName);
-  const { job } = await buildThermalJob(html, { widthMm, copies });
+  const { job } = await buildThermalJob(html, { widthMm, copies, drawer });
   if (dump) {
     fs.mkdirSync(dump, { recursive: true });
     fs.writeFileSync(path.join(dump, `${String(jobKey || 'job').replace(/[^\w.-]+/g, '_')}-${Date.now()}.escpos`), job);

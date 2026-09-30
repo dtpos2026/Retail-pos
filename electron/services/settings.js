@@ -60,6 +60,7 @@ const DEFAULTS = {
     shift: 0, // horizontal balance in dots (+ moves the print to the right, - to the left)
     autoDetect: true, // pick the thermal printer automatically when none is chosen
     compatCut: false, // older printers without "feed and cut"
+    openDrawer: false, // kick the cash drawer (connected to the receipt printer) when a receipt prints
   },
   token: {
     enabled: true,
