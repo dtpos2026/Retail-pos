@@ -23,10 +23,16 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on('second-instance', () => {
-    const w = BrowserWindow.getAllWindows()[0];
+    // Hidden print-worker windows must not be mistaken for the app window.
+    const w = mainWin && !mainWin.isDestroyed() ? mainWin : null;
     if (w) {
       if (w.isMinimized()) w.restore();
+      if (!w.isVisible()) w.show();
       w.focus();
+    } else if (app.isReady()) {
+      splashAt = Date.now();
+      splash = createSplash();
+      createWindow();
     }
   });
   app.whenReady().then(start).catch(fatal);
@@ -98,6 +104,8 @@ function closeSplash() {
   splash = null;
 }
 
+let mainWin = null;
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1366,
@@ -115,6 +123,12 @@ function createWindow() {
       sandbox: true,
       spellcheck: false,
     },
+  });
+  mainWin = win;
+  // Closing the main window always quits — hidden print-worker windows must not keep the process alive.
+  win.on('closed', () => {
+    mainWin = null;
+    app.quit();
   });
   win.once('ready-to-show', () => {
     // Keep the splash up long enough to be seen, then reveal the app.
