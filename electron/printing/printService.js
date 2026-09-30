@@ -171,6 +171,7 @@ module.exports = {
   testPrint,
   marginTestHtml,
   printerStatus: (a) => printer().printerStatus(a),
+  verifyPrinters: () => printer().verifyPrinters(),
   listPrinters: (a) => printer().listPrinters(a || {}),
   renderPng: (html, widthMm) => printer().renderPng(html, { widthMm }),
 };

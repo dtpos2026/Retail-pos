@@ -59,6 +59,8 @@ function metaPairs(d) {
   if (c.showTable && o.table) pairs.push(['Table', o.table]);
   if (o.token) pairs.push(['Token', o.token]);
   if (c.showCashier && o.cashier) pairs.push(['Cashier', o.cashier]);
+  if (o.waiter) pairs.push(['Waiter', o.waiter]);
+  if (o.rider) pairs.push(['Rider', o.rider]);
   if (c.showCustomer && o.customer) {
     if (o.customer.name) pairs.push(['Customer', o.customer.name]);
     if (o.customer.mobile) pairs.push(['Mobile', o.customer.mobile]);
@@ -315,7 +317,7 @@ function compact(d) {
   const c = d.cfg;
   const hr = '<div style="border-top:1px dashed #000;margin:.8mm 0"></div>';
   const line2 = [c.showOrderNo ? o.no : null, `${o.date} ${o.time}`].filter(Boolean).join(' | ');
-  const line3 = [o.type, c.showTable && o.table ? o.table : null, o.token ? `Tkn ${o.token}` : null, c.showCashier ? o.cashier : null]
+  const line3 = [o.type, c.showTable && o.table ? o.table : null, o.token ? `Tkn ${o.token}` : null, c.showCashier ? o.cashier : null, o.waiter ? `W: ${o.waiter}` : null, o.rider ? `R: ${o.rider}` : null]
     .filter(Boolean)
     .map(esc)
     .join(' | ');

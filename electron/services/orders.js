@@ -9,6 +9,7 @@ const { can } = require('../core/permissions');
 const { AppError, assert } = require('../core/errors');
 const { nowLocal, localDate, round2, toNumber, cleanStr, isDateStr } = require('../core/util');
 const { calcOrder, calcPayment } = require('../../shared/calc.mjs');
+const staff = require('./staff');
 
 const ORDER_TYPES = ['dine_in', 'takeaway', 'delivery'];
 
@@ -61,7 +62,7 @@ function list({ search, from, to, status, orderType, paymentStatus, cashierId, l
   p.lim = Math.min(5000, Number(limit) || 500);
   return ctx.db.all(
     `SELECT o.id, o.order_no, o.order_type, o.status, o.payment_status, o.table_name, o.customer_name, o.customer_mobile,
-       o.total, o.paid, o.due, o.payment_method, o.token_no, o.cashier_name, o.created_at, o.completed_at,
+       o.total, o.paid, o.due, o.payment_method, o.token_no, o.cashier_name, o.waiter_name, o.rider_name, o.created_at, o.completed_at,
        (SELECT COUNT(*) FROM order_items i WHERE i.order_id = o.id) AS item_count
      FROM orders o ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
      ORDER BY o.id DESC LIMIT $lim`,
@@ -162,6 +163,9 @@ function save(input) {
     const customerId = customerName || customerMobile ? customers.upsertFromOrder({ id: cust.id, name: customerName, mobile: customerMobile, address: customerAddress }) : null;
     if (customerId && !customerName) customerName = ctx.db.get('SELECT name FROM customers WHERE id = ?', [customerId])?.name || null;
 
+    const waiter = orderType === 'dine_in' ? staff.pick(input.waiterId, 'waiter') : null;
+    const rider = orderType === 'delivery' ? staff.pick(input.riderId, 'rider') : null;
+
     // ---- table ---------------------------------------------------------
     let table = null;
     if (orderType === 'dine_in') {
@@ -187,6 +191,10 @@ function save(input) {
       order_type: orderType,
       table_id: table ? table.id : null,
       table_name: table ? table.name : null,
+      waiter_id: orderType === 'dine_in' ? waiter?.id || null : null,
+      waiter_name: orderType === 'dine_in' ? waiter?.name || null : null,
+      rider_id: orderType === 'delivery' ? rider?.id || null : null,
+      rider_name: orderType === 'delivery' ? rider?.name || null : null,
       customer_id: customerId,
       customer_name: customerName,
       customer_mobile: customerMobile,

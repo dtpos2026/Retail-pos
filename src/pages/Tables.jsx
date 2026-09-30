@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Armchair, Plus, Pencil, Trash2, CalendarClock, CheckCircle2, Users, Clock3, ArrowRightLeft, Merge, Split, Eraser, Layers, History, LayoutGrid } from 'lucide-react';
+import { Armchair, Plus, Pencil, Trash2, CalendarClock, CheckCircle2, Users, Clock3, ArrowRightLeft, Merge, Split, Eraser, Layers, History, LayoutGrid, UserRound } from 'lucide-react';
 import { api } from '../lib/api';
 import { useApp } from '../context/AppContext';
 import { formatTime, formatDateTime } from '../lib/format';
@@ -245,6 +245,7 @@ export default function Tables() {
                   {t.status === 'occupied' && t.order_no ? (
                     <div className="col" style={{ gap: 6, marginTop: 'auto' }}>
                       <div className="small muted row" style={{ gap: 6 }}><Clock3 size={14} /> {t.order_no} · since {formatTime(t.order_created)}</div>
+                      {t.waiter_name && <div className="small"><UserRound size={13} style={{ verticalAlign: -2 }} /> <bdi>{t.waiter_name}</bdi></div>}
                       <div className="row"><span className="small muted">{t.item_count} items</span><span className="grow" /><b style={{ fontSize: 17 }}><Money value={t.order_total} /></b></div>
                       {!manage && (
                         <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>

@@ -12,6 +12,8 @@ export function emptyCart(orderType = 'takeaway', deliveryCharges = 0) {
     orderNo: null,
     orderType,
     table: null,
+    waiterId: '',
+    riderId: '',
     customer: { id: null, name: '', mobile: '', address: '' },
     items: [],
     orderDiscount: 0,
@@ -99,6 +101,8 @@ export function cartFromOrder(o) {
     orderId: o.id,
     orderNo: o.order_no,
     table: o.table_id ? { id: o.table_id, name: o.table_name } : null,
+    waiterId: o.waiter_id || '',
+    riderId: o.rider_id || '',
     customer: { id: o.customer_id, name: o.customer_name || '', mobile: o.customer_mobile || '', address: o.customer_address || '' },
     items: o.items.map((i) => ({
       key: newKey(),

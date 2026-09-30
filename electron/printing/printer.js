@@ -82,24 +82,35 @@ async function resolvePrinter(name) {
   return name;
 }
 
-/** What the UI shows: which printer is in use and whether it looks ready. */
+function describe(list, chosen, helper) {
+  const name = chosen || autoName(list);
+  const p = list.find((x) => x.name === name);
+  const offline = p ? detect.isOffline(p) : false;
+  const ready = !!p && !offline && helper !== false;
+  let message;
+  if (!name) message = 'No printer found. Install the printer driver in Windows and press Detect again.';
+  else if (!p) message = `"${name}" was not found. Connect it, switch it on, then press Detect again.`;
+  else if (offline) message = `"${name}" is offline. Switch it on and check the USB / network cable.`;
+  else if (helper === false) message = `"${name}" is connected, but the print helper is not answering (it restarts automatically).`;
+  else message = `"${name}" is connected and ready.`;
+  return { name: name || '', auto: !chosen, found: !!p, offline, ready, virtual: p ? detect.isVirtual(p) : false, message };
+}
+
+/** What the UI shows: receipt printer + kitchen/token printer and whether they look ready. */
 async function printerStatus({ fresh = false } = {}) {
   const list = await listPrinters({ fresh });
   const pr = settings.get('printer');
-  const chosen = pr.receiptPrinter;
-  const name = chosen || autoName(list);
-  const p = list.find((x) => x.name === name);
   const helper = pr.method === 'thermal' && process.platform === 'win32' ? await rawPrint.ping() : null;
-  return {
-    name: name || '',
-    auto: !chosen,
-    found: !!p,
-    offline: p ? detect.isOffline(p) : false,
-    ready: !!p && !detect.isOffline(p) && helper !== false,
-    helper,
-    count: list.length,
-    virtual: p ? detect.isVirtual(p) : false,
-  };
+  const receipt = describe(list, pr.receiptPrinter, helper);
+  const kitchen = describe(list, pr.tokenPrinter || pr.receiptPrinter, helper);
+  return { ...receipt, helper, count: list.length, kitchen, kitchenSame: !pr.tokenPrinter || pr.tokenPrinter === pr.receiptPrinter };
+}
+
+/** "Verify printers": fresh detection + helper check for both the receipt and the kitchen printer. */
+async function verifyPrinters() {
+  await refreshPrinters();
+  const st = await printerStatus({ fresh: true });
+  return { receipt: { role: 'Receipt printer', ...st }, kitchen: { role: 'Kitchen / token printer (KOT)', ...st.kitchen }, ok: st.ready && st.kitchen.ready };
 }
 
 let monitor = null;
@@ -313,7 +324,7 @@ function warmUp() {
   startMonitor();
 }
 
-module.exports = { listPrinters, printerStatus, refreshPrinters, printHtml, renderPng, printWithDialog, htmlToPdf, warmUp, buildThermalJob, shutdown: () => {
+module.exports = { listPrinters, printerStatus, verifyPrinters, refreshPrinters, printHtml, renderPng, printWithDialog, htmlToPdf, warmUp, buildThermalJob, shutdown: () => {
     if (monitor) clearInterval(monitor);
     monitor = null;
     rawPrint.shutdown();

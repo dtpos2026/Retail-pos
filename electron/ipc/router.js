@@ -17,6 +17,7 @@ const customers = require('../services/customers');
 const tables = require('../services/tables');
 const tableOps = require('../services/tableOps');
 const bulk = require('../services/bulk');
+const staff = require('../services/staff');
 const orders = require('../services/orders');
 const tokens = require('../services/tokens');
 const inventory = require('../services/inventory');
@@ -137,6 +138,9 @@ const routes = {
   'tables.bulkAdd': { perm: 'settings', fn: (a) => tables.bulkAdd(a) },
   'tables.setStatus': { any: ['tables', 'pos'], fn: (a) => tables.setStatus(a) },
   'tables.remove': { perm: 'settings', fn: (a) => tables.remove(a) },
+  'staff.list': { fn: (a) => staff.list(a) },
+  'staff.save': { perm: 'settings', fn: (a) => staff.save(a) },
+  'staff.remove': { perm: 'settings', fn: (a) => staff.remove(a) },
   'tables.floors': { any: ['tables', 'pos'], fn: () => tables.floors() },
   'tables.floorSave': { perm: 'settings', fn: (a) => tables.floorSave(a) },
   'tables.floorRemove': { perm: 'settings', fn: (a) => tables.floorRemove(a) },
@@ -206,6 +210,7 @@ const routes = {
 
   // ---- printing ------------------------------------------------------------
   'print.printers': { fn: (a) => printService.listPrinters(a) },
+  'print.verify': { fn: () => printService.verifyPrinters() },
   'print.status': { fn: (a) => printService.printerStatus(a) },
   'print.templates': { fn: () => printService.TEMPLATES },
   'print.receiptHtml': { fn: (a) => printService.receiptHtml(a) },

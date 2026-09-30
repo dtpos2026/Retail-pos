@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Store, ReceiptText, Printer, Ticket, Percent, Wallet, Boxes, DatabaseBackup, KeyRound, SlidersHorizontal, Save, Upload, X, RefreshCw,
-  FolderOpen, HardDriveDownload, RotateCcw, CheckCircle2, AlertTriangle, Usb, Bluetooth, Database, Trash2, FlaskConical, FileText, Lock, Palette, ChefHat, Zap, MoveHorizontal, Landmark, LifeBuoy,
+  FolderOpen, HardDriveDownload, RotateCcw, CheckCircle2, AlertTriangle, Usb, Bluetooth, Database, Trash2, FlaskConical, FileText, Lock, Palette, ChefHat, Zap, MoveHorizontal, Landmark, LifeBuoy, UserRound, Plus, Bike, ShieldCheck,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { useApp } from '../context/AppContext';
@@ -20,6 +20,7 @@ const TABS = [
   { key: 'appearance', label: 'Appearance', icon: Palette },
   { key: 'receipt', label: 'Receipt', icon: ReceiptText },
   { key: 'printer', label: 'Printers', icon: Printer },
+  { key: 'staff', label: 'Waiters & Riders', icon: UserRound },
   { key: 'token', label: 'Tokens', icon: Ticket },
   { key: 'sales', label: 'Sales & Tax', icon: Percent },
   { key: 'payment', label: 'Payments', icon: Wallet },
@@ -306,6 +307,18 @@ function PrinterTab() {
   const [printers, setPrinters] = useState(null);
   const [testing, setTesting] = useState('');
   const [status, setStatus] = useState(null);
+  const [verify, setVerify] = useState(null);
+  const [verifying, setVerifying] = useState(false);
+  const runVerify = async () => {
+    setVerifying(true);
+    try {
+      setVerify(await api('print.verify'));
+    } catch (e) {
+      toastError(e);
+    } finally {
+      setVerifying(false);
+    }
+  };
   const load = (fresh = false) => {
     api('print.printers', { fresh }).then(setPrinters).catch((e) => { toastError(e); setPrinters([]); });
     api('print.status', { fresh }).then(setStatus).catch(() => {});
@@ -334,6 +347,15 @@ function PrinterTab() {
         <div className="row">
           <div className="b grow">Installed printers ({printers ? printers.length : '…'})</div>
           <Button size="sm" icon={RefreshCw} onClick={() => load(true)}>Detect again</Button>
+        </div>
+        <div className="card card-pad col" style={{ gap: 10, background: 'var(--surface-2)' }}>
+          <div className="row"><ShieldCheck size={18} color="var(--primary)" /><b className="grow">Print verification</b><Button size="sm" variant="primary" icon={ShieldCheck} onClick={runVerify} loading={verifying}>Verify printers</Button></div>
+          {!verify ? <div className="small muted">Checks that the receipt printer and the kitchen (KOT) printer are connected and ready — before the first bill. This also runs automatically in the background.</div> : [verify.receipt, verify.kitchen].map((p) => (
+            <div key={p.role} className="row" style={{ gap: 8, alignItems: 'flex-start' }}>
+              {p.ready ? <CheckCircle2 size={18} color="var(--success)" /> : <AlertTriangle size={18} color="var(--warning)" />}
+              <div className="small"><b>{p.role}</b><div>{p.message}</div></div>
+            </div>
+          ))}
         </div>
         {status && (
           <div className="row" style={{ gap: 10, padding: '10px 12px', borderRadius: 10, background: status.ready ? 'var(--success-50, #e8f7ee)' : 'var(--warning-50, #fff4e0)' }}>
@@ -382,7 +404,7 @@ function PrinterTab() {
         <div className="row">
           <Button icon={Printer} loading={testing === 'receipt'} onClick={() => test('receipt')}>Test receipt</Button>
           <Button icon={Ticket} loading={testing === 'token'} onClick={() => test('token')}>Test token</Button>
-          <Button icon={ChefHat} loading={testing === 'kot'} onClick={() => test('kot')}>Test kitchen slip</Button>
+          <Button icon={ChefHat} loading={testing === 'kot'} onClick={() => test('kot')}>Verify kitchen KOT (test print)</Button>
           <Button icon={MoveHorizontal} loading={testing === 'margins'} onClick={() => test('margins')}>Margin test</Button>
           <div className="grow" />
           <Button variant="primary" icon={Save} onClick={() => s.save()} loading={s.saving} disabled={!s.dirty}>Save</Button>
@@ -687,6 +709,55 @@ function BackupTab() {
 }
 
 // ------------------------------------------------------------------ License
+function StaffTab() {
+  const { toast, toastError, confirm } = useApp();
+  const [rows, setRows] = useState(null);
+  const [f, setF] = useState({ name: '', phone: '', role: 'waiter' });
+  const load = () => api('staff.list', { all: false }).then(setRows).catch(toastError);
+  useEffect(() => {
+    load();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const add = async () => {
+    try {
+      await api('staff.save', f);
+      setF({ ...f, name: '', phone: '' });
+      toast(`${f.role === 'waiter' ? 'Waiter' : 'Rider'} added`);
+      load();
+    } catch (e) {
+      toastError(e);
+    }
+  };
+  const remove = async (s) => {
+    if (!(await confirm({ title: `Remove ${s.name}?`, message: 'Old bills keep the name. The person will no longer appear in the POS list.', danger: true, confirmText: 'Remove' }))) return;
+    try {
+      await api('staff.remove', { id: s.id });
+      load();
+    } catch (e) {
+      toastError(e);
+    }
+  };
+  return (
+    <div className="card card-pad col" style={{ maxWidth: 720, gap: 14 }}>
+      <div className="small muted">Add your <b>waiters</b> (they serve dine-in tables) and <b>riders</b> (they deliver). The cashier picks them on the POS screen and their name prints on the bill and kitchen slip. Reports: <b>Waiter Report</b> and <b>Rider Report</b>.</div>
+      <div className="row wrap" style={{ gap: 8 }}>
+        <Seg value={f.role} onChange={(v) => setF({ ...f, role: v })} options={[{ value: 'waiter', label: 'Waiter' }, { value: 'rider', label: 'Rider' }]} />
+        <Input style={{ flex: 1, minWidth: 160 }} placeholder="Name" dir="auto" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && add()} />
+        <Input style={{ width: 160 }} placeholder="Phone (optional)" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} />
+        <Button variant="primary" icon={Plus} onClick={add} disabled={!f.name.trim()}>Add</Button>
+      </div>
+      {!rows ? <Loading /> : rows.length === 0 ? <div className="muted small">No waiters or riders yet.</div> : rows.map((s) => (
+        <div key={s.id} className="row" style={{ gap: 10, padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 12 }}>
+          {s.role === 'rider' ? <Bike size={18} color="var(--primary)" /> : <UserRound size={18} color="var(--primary)" />}
+          <b className="grow"><bdi>{s.name}</bdi></b>
+          <Badge color={s.role === 'rider' ? 'blue' : 'indigo'}>{s.role}</Badge>
+          <span className="muted small">{s.phone}</span>
+          <Button size="sm" variant="danger-ghost" icon={Trash2} onClick={() => remove(s)} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function SupportTab() {
   return (
     <div className="card card-pad" style={{ maxWidth: 720 }}>
@@ -813,7 +884,7 @@ export default function Settings() {
   const [tab, setTab] = useState('business');
   const { settings } = useApp();
   if (!settings) return <Loading />;
-  const C = { business: BusinessTab, appearance: AppearanceTab, receipt: ReceiptTab, printer: PrinterTab, token: TokenTab, sales: SalesTab, payment: PaymentTab, inventory: InventoryTab, backup: BackupTab, license: LicenseTab, support: SupportTab, general: GeneralTab }[tab];
+  const C = { business: BusinessTab, appearance: AppearanceTab, receipt: ReceiptTab, printer: PrinterTab, token: TokenTab, sales: SalesTab, payment: PaymentTab, inventory: InventoryTab, backup: BackupTab, license: LicenseTab, support: SupportTab, staff: StaffTab, general: GeneralTab }[tab];
   return (
     <div>
       <Tabs tabs={TABS} value={tab} onChange={setTab} />

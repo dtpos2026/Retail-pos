@@ -140,6 +140,7 @@ function renderKot(order, { kotNo } = {}) {
       </div>
       <div class="row"><span class="b">${esc(order.order_no)}</span><span>${formatDate(new Date())} ${formatTime(new Date())}</span></div>
       ${order.customer_name ? `<div class="row"><span>Customer</span><span>${t(order.customer_name)}</span></div>` : ''}
+      ${order.waiter_name ? `<div class="row"><span>Waiter</span><b>${t(order.waiter_name)}</b></div>` : ''}${order.rider_name ? `<div class="row"><span>Rider</span><b>${t(order.rider_name)}</b></div>` : ''}
       <div style="text-align:left;margin-top:1.5mm;border-top:2px solid #000">${list}</div>
       <div class="row b" style="margin-top:1.5mm"><span>Items: ${items.length}</span><span>Qty: ${formatQty(items.reduce((s, i) => s + i.qty, 0))}</span></div>
       ${order.notes ? `<div style="border:2px solid #000;padding:1mm;margin-top:1.5mm;text-align:left"><b>NOTE:</b> ${t(order.notes)}</div>` : ''}

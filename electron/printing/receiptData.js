@@ -47,6 +47,8 @@ function build(order, overrides = {}) {
       table: order.table_name,
       token: order.token_no,
       cashier: order.cashier_name,
+      waiter: order.waiter_name || '',
+      rider: order.rider_name || '',
       customer: order.customer_name || order.customer_mobile ? { name: order.customer_name, mobile: order.customer_mobile, address: order.customer_address } : null,
       notes: order.notes,
       status: order.status,

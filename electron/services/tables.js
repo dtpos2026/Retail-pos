@@ -45,7 +45,7 @@ function assignFloor({ ids, floorId }) {
 function list() {
   return ctx.db
     .all(
-      `SELECT t.*, o.order_no, o.total AS order_total, o.created_at AS order_created,
+      `SELECT t.*, o.order_no, o.waiter_name, o.total AS order_total, o.created_at AS order_created,
          (SELECT COUNT(*) FROM order_items i WHERE i.order_id = o.id) AS item_count
        FROM dining_tables t
        LEFT JOIN orders o ON o.id = t.current_order_id AND o.status = 'pending'

@@ -33,6 +33,12 @@ export default function Pos() {
   const [products, setProducts] = useState(null);
   const [cat, setCat] = useState(null);
   const [q, setQ] = useState('');
+  const [staffList, setStaffList] = useState([]);
+  useEffect(() => {
+    api('staff.list').then(setStaffList).catch(() => {});
+  }, []);
+  const waiters = staffList.filter((s) => s.role === 'waiter');
+  const riders = staffList.filter((s) => s.role === 'rider');
   const [modal, setModal] = useState(null);
   const [busy, setBusy] = useState(false);
   const [lastSale, setLastSale] = useState(null);
@@ -170,6 +176,8 @@ export default function Pos() {
     id: cart.orderId,
     orderType: cart.orderType,
     tableId: cart.table?.id,
+    waiterId: cart.orderType === 'dine_in' ? cart.waiterId || undefined : undefined,
+    riderId: cart.orderType === 'delivery' ? cart.riderId || undefined : undefined,
     customer: cart.customer,
     items: cart.items.map((i) => ({ productId: i.productId, name: i.name, qty: i.qty, unitPrice: i.unitPrice, unitDiscount: i.unitDiscount, notes: i.notes })),
     orderDiscount,
@@ -380,6 +388,15 @@ export default function Pos() {
             <div className="grow" />
             <Button variant="ghost" size="sm" icon={FilePlus2} onClick={() => newOrder()} title="New order (F3)" />
           </div>
+          {(cart.orderType === 'dine_in' && waiters.length > 0) || (cart.orderType === 'delivery' && riders.length > 0) ? (
+            <div className="row" style={{ gap: 8 }}>
+              <span className="small muted" style={{ minWidth: 52 }}>{cart.orderType === 'dine_in' ? 'Waiter' : 'Rider'}</span>
+              <select className="select" style={{ height: 34, flex: 1 }} value={cart.orderType === 'dine_in' ? cart.waiterId : cart.riderId} onChange={(e) => dispatch({ type: 'set', patch: cart.orderType === 'dine_in' ? { waiterId: e.target.value ? Number(e.target.value) : '' } : { riderId: e.target.value ? Number(e.target.value) : '' } })}>
+                <option value="">— {cart.orderType === 'dine_in' ? 'select waiter' : 'select rider'} —</option>
+                {(cart.orderType === 'dine_in' ? waiters : riders).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+          ) : null}
           <div className="row">
             {cart.orderType === 'dine_in' && (
               <Button size="sm" variant={cart.table ? 'soft' : undefined} icon={Armchair} onClick={() => setModal('table')}>

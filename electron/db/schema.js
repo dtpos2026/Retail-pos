@@ -214,6 +214,23 @@ CREATE INDEX ix_deal_items_deal ON deal_items(deal_id);
 CREATE INDEX ix_deal_items_product ON deal_items(product_id);
 `,
   },
+  {
+    version: 4,
+    sql: `
+CREATE TABLE staff (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  name       TEXT NOT NULL,
+  phone      TEXT,
+  role       TEXT NOT NULL,
+  active     INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL
+);
+ALTER TABLE orders ADD COLUMN waiter_id INTEGER;
+ALTER TABLE orders ADD COLUMN waiter_name TEXT;
+ALTER TABLE orders ADD COLUMN rider_id INTEGER;
+ALTER TABLE orders ADD COLUMN rider_name TEXT;
+`,
+  },
 ];
 
 module.exports = { migrations };

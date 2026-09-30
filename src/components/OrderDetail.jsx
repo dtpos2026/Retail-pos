@@ -104,6 +104,8 @@ export default function OrderDetail({ id, onClose, onChanged }) {
             <div>Date</div><div>{formatDateTime(o.created_at)}</div>
             <div>Cashier</div><div>{o.cashier_name}</div>
             {o.table_name && (<><div>Table</div><div><bdi>{o.table_name}</bdi></div></>)}
+            {o.waiter_name && (<><div>Waiter</div><div><bdi>{o.waiter_name}</bdi></div></>)}
+            {o.rider_name && (<><div>Rider</div><div><bdi>{o.rider_name}</bdi></div></>)}
             {o.customer_name && (<><div>Customer</div><div><bdi>{o.customer_name}</bdi></div></>)}
             {o.customer_mobile && (<><div>Mobile</div><div>{o.customer_mobile}</div></>)}
             {o.customer_address && (<><div>Address</div><div><bdi>{o.customer_address}</bdi></div></>)}

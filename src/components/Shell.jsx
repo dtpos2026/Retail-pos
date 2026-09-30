@@ -26,9 +26,11 @@ export const NAV = [
   { to: '/settings', label: 'Settings', icon: SettingsIcon, perm: 'settings' },
 ];
 
-/** Small live indicator of the receipt printer (auto-detected, refreshed every 20 s). */
+/** Live indicator of the receipt and kitchen printers (auto-detected, refreshed every 20 s). Click = verify now. */
 function PrinterPill() {
+  const { toast } = useApp();
   const [st, setSt] = useState(null);
+  const [busy, setBusy] = useState(false);
   useEffect(() => {
     let alive = true;
     const load = () => api('print.status').then((s) => alive && setSt(s)).catch(() => {});
@@ -39,13 +41,32 @@ function PrinterPill() {
       clearInterval(t);
     };
   }, []);
+  const verify = async () => {
+    setBusy(true);
+    try {
+      const r = await api('print.verify');
+      setSt({ ...r.receipt, kitchen: r.kitchen, kitchenSame: r.receipt.kitchenSame });
+      toast(`${r.receipt.ready ? '✓' : '✗'} ${r.receipt.message}`, r.receipt.ready ? 'success' : 'error');
+      if (!r.receipt.kitchenSame) toast(`${r.kitchen.ready ? '✓' : '✗'} Kitchen: ${r.kitchen.message}`, r.kitchen.ready ? 'success' : 'error');
+    } catch {
+      /* ignore */
+    } finally {
+      setBusy(false);
+    }
+  };
   if (!st) return null;
-  const color = st.ready ? 'var(--success)' : st.name ? 'var(--warning)' : 'var(--danger)';
+  const dot = (p) => (p.ready ? 'var(--success)' : p.name ? 'var(--warning)' : 'var(--danger)');
   return (
-    <div className="chip" style={{ cursor: 'default', padding: '6px 12px', fontSize: 12.5 }} title={st.name ? `${st.name}${st.ready ? ' — ready' : st.offline ? ' — offline' : ' — not found'}` : 'No printer found'}>
-      <i style={{ width: 8, height: 8, borderRadius: 8, background: color, display: 'inline-block' }} />
-      <span style={{ maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{st.name || 'No printer'}</span>
-    </div>
+    <button className="chip" style={{ padding: '6px 12px', fontSize: 12.5, opacity: busy ? 0.6 : 1 }} onClick={verify} title={`${st.message}\nClick to verify the printers now`}>
+      <i style={{ width: 8, height: 8, borderRadius: 8, background: dot(st), display: 'inline-block' }} />
+      <span style={{ maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{st.name || 'No printer'}</span>
+      {!st.kitchenSame && st.kitchen && (
+        <>
+          <i style={{ width: 8, height: 8, borderRadius: 8, background: dot(st.kitchen), display: 'inline-block' }} />
+          <span style={{ maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>KOT: {st.kitchen.name || '—'}</span>
+        </>
+      )}
+    </button>
   );
 }
 

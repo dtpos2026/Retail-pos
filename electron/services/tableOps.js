@@ -124,10 +124,10 @@ function split({ orderId, lines, toTableId }) {
 
     const now = nowLocal();
     const newId = ctx.db.run(
-      `INSERT INTO orders (order_no, order_type, status, payment_status, table_id, table_name, customer_id, customer_name, customer_mobile, customer_address,
+      `INSERT INTO orders (order_no, order_type, status, payment_status, table_id, table_name, customer_id, customer_name, customer_mobile, customer_address, waiter_id, waiter_name,
          cashier_id, cashier_name, business_date, notes, merged_note, created_at, updated_at)
-       VALUES (?, 'dine_in', 'pending', 'unpaid', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [counters.nextOrderNo(), t.id, t.name, o.customer_id, o.customer_name, o.customer_mobile, o.customer_address, ctx.user?.id || o.cashier_id, ctx.user?.name || o.cashier_name, localDate(), null, `Split from ${o.order_no} (${o.table_name})`, now, now]
+       VALUES (?, 'dine_in', 'pending', 'unpaid', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [counters.nextOrderNo(), t.id, t.name, o.customer_id, o.customer_name, o.customer_mobile, o.customer_address, o.waiter_id, o.waiter_name, ctx.user?.id || o.cashier_id, ctx.user?.name || o.cashier_name, localDate(), null, `Split from ${o.order_no} (${o.table_name})`, now, now]
     ).lastInsertRowid;
     for (const { it, qty } of moves) {
       const unitDiscount = it.qty ? it.discount / it.qty : 0;

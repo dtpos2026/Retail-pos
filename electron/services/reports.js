@@ -21,6 +21,8 @@ const REPORTS = [
   { key: 'discounts', label: 'Discount Report', group: 'Money' },
   { key: 'profit', label: 'Profit Report', group: 'Money' },
   { key: 'cashiers', label: 'Cashier Report', group: 'Staff' },
+  { key: 'waiters', label: 'Waiter Report (dine-in)', group: 'Staff' },
+  { key: 'riders', label: 'Rider Report (delivery)', group: 'Staff' },
   { key: 'inventory', label: 'Inventory Report', group: 'Stock' },
   { key: 'stock_movements', label: 'Stock Movements', group: 'Stock' },
 ];
@@ -312,6 +314,21 @@ function profit({ from, to }) {
   };
 }
 
+function staffSales(col, label, { from, to }) {
+  const rows = ctx.db
+    .all(
+      `SELECT COALESCE(${col}_name, '(not assigned)') AS person, COUNT(*) AS orders, SUM(total) AS sales, SUM(delivery_charges) AS delivery, SUM(due) AS due
+       FROM orders WHERE status = 'completed' AND order_type = ? AND business_date BETWEEN ? AND ? GROUP BY ${col}_name ORDER BY sales DESC`,
+      [col === 'waiter' ? 'dine_in' : 'delivery', from, to]
+    )
+    .map((r) => ({ ...r, sales: round2(r.sales), delivery: round2(r.delivery), due: round2(r.due) }));
+  const totals = sumCols(rows, ['orders', 'sales', 'delivery', 'due']);
+  const columns = [text('person', label), num('orders', 'Orders'), money('sales', 'Sales')];
+  if (col === 'rider') columns.push(money('delivery', 'Delivery charges'));
+  columns.push(money('due', 'Due'));
+  return { columns, rows, totals: { person: 'Total', ...totals }, cards: [{ label: 'Orders', value: totals.orders, type: 'number' }, { label: 'Sales', value: totals.sales, type: 'money' }] };
+}
+
 function cashiers({ from, to }) {
   const rows = ctx.db
     .all(
@@ -397,6 +414,8 @@ function run({ key, from, to }) {
     case 'discounts': out = discounts(r); break;
     case 'profit': out = profit(r); break;
     case 'cashiers': out = cashiers(r); break;
+    case 'waiters': out = staffSales('waiter', 'Waiter', r); break;
+    case 'riders': out = staffSales('rider', 'Rider', r); break;
     case 'inventory': out = inventoryReport(); break;
     case 'stock_movements': out = stockMovements(r); break;
   }
