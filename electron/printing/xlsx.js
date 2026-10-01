@@ -22,7 +22,7 @@ function colName(i) {
   return s;
 }
 
-/** rows: array of arrays of { v, t: 's'|'n'|'money', bold } */
+/** rows: array of arrays of { v, t: 's'|'n'|'money'|'g' (plain number), bold } */
 function sheetXml(rows, widths) {
   const cols = widths.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join('');
   const body = rows
@@ -32,7 +32,7 @@ function sheetXml(rows, widths) {
           if (c === null || c === undefined || c.v === null || c.v === undefined || c.v === '') return '';
           const ref = `${colName(ci)}${r + 1}`;
           const style = c.bold ? (c.t === 'money' ? 4 : c.t === 'n' ? 5 : 1) : c.t === 'money' ? 2 : c.t === 'n' ? 3 : 0;
-          if ((c.t === 'n' || c.t === 'money') && Number.isFinite(Number(c.v))) return `<c r="${ref}" s="${style}"><v>${Number(c.v)}</v></c>`;
+          if ((c.t === 'n' || c.t === 'money' || c.t === 'g') && Number.isFinite(Number(c.v))) return `<c r="${ref}" s="${style}"><v>${Number(c.v)}</v></c>`;
           return `<c r="${ref}" s="${style}" t="inlineStr"><is><t xml:space="preserve">${xmlEsc(c.v)}</t></is></c>`;
         })
         .join('');
@@ -105,6 +105,36 @@ function zip(files) {
   return Buffer.concat([...locals, cd, end]);
 }
 
+const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
+const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
+const OD = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+
+/**
+ * Build an .xlsx Buffer with several worksheets.
+ * sheets: [{ name, rows: [[{ v, t: 's'|'n'|'money', bold }]], widths: [number] }]
+ */
+function workbookToXlsx(sheets) {
+  const used = new Set();
+  const names = sheets.map((sh, i) => {
+    let base = String(sh.name || `Sheet${i + 1}`).replace(/[\\/?*[\]:]/g, ' ').slice(0, 31).trim() || `Sheet${i + 1}`;
+    let n = base;
+    for (let k = 2; used.has(n.toLowerCase()); k++) n = `${base.slice(0, 28)}_${k}`;
+    used.add(n.toLowerCase());
+    return n;
+  });
+  const sheetOverrides = sheets.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('');
+  const sheetRefs = sheets.map((_, i) => `<sheet name="${xmlEsc(names[i])}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('');
+  const sheetRels = sheets.map((_, i) => `<Relationship Id="rId${i + 1}" Type="${OD}/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('');
+  return zip([
+    ['[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>${sheetOverrides}<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`],
+    ['_rels/.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}/officeDocument" Target="xl/workbook.xml"/></Relationships>`],
+    ['xl/workbook.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="${OD}"><sheets>${sheetRefs}</sheets></workbook>`],
+    ['xl/_rels/workbook.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="${REL}">${sheetRels}<Relationship Id="rId${sheets.length + 1}" Type="${OD}/styles" Target="styles.xml"/></Relationships>`],
+    ...sheets.map((sh, i) => [`xl/worksheets/sheet${i + 1}.xml`, sheetXml(sh.rows, sh.widths || [])]),
+    ['xl/styles.xml', STYLES],
+  ]);
+}
+
 /** Build an .xlsx Buffer from a report object ({title, columns, rows, totals}). */
 function reportToXlsx(report) {
   const typeOf = (c) => (c.type === 'money' ? 'money' : c.type === 'number' ? 'n' : 's');
@@ -112,15 +142,7 @@ function reportToXlsx(report) {
   for (const r of report.rows) rows.push(report.columns.map((c) => ({ v: r[c.key], t: typeOf(c) })));
   if (report.totals) rows.push(report.columns.map((c) => ({ v: report.totals[c.key], t: typeOf(c), bold: true })));
   const widths = report.columns.map((c) => Math.min(50, Math.max(10, c.label.length + 2, ...report.rows.slice(0, 200).map((r) => String(r[c.key] ?? '').length + 2))));
-  const sheetName = xmlEsc(report.title.replace(/[\\/?*[\]:]/g, ' ').slice(0, 31));
-  return zip([
-    ['[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`],
-    ['_rels/.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`],
-    ['xl/workbook.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${sheetName}" sheetId="1" r:id="rId1"/></sheets></workbook>`],
-    ['xl/_rels/workbook.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`],
-    ['xl/worksheets/sheet1.xml', sheetXml(rows, widths)],
-    ['xl/styles.xml', STYLES],
-  ]);
+  return workbookToXlsx([{ name: report.title, rows, widths }]);
 }
 
-module.exports = { reportToXlsx };
+module.exports = { reportToXlsx, workbookToXlsx };

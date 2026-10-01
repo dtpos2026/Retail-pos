@@ -231,6 +231,34 @@ ALTER TABLE orders ADD COLUMN rider_id INTEGER;
 ALTER TABLE orders ADD COLUMN rider_name TEXT;
 `,
   },
+  {
+    version: 5,
+    sql: `
+CREATE TABLE product_variants (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  product_id    INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  name          TEXT NOT NULL,
+  price         REAL NOT NULL DEFAULT 0,
+  cost_price    REAL NOT NULL DEFAULT 0,
+  recipe_factor REAL NOT NULL DEFAULT 1,
+  sort_order    INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX ix_variants_product ON product_variants(product_id);
+CREATE TABLE recipe_items (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  product_id    INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  ingredient_id INTEGER NOT NULL REFERENCES products(id),
+  qty           REAL NOT NULL DEFAULT 1
+);
+CREATE INDEX ix_recipe_product ON recipe_items(product_id);
+CREATE INDEX ix_recipe_ingredient ON recipe_items(ingredient_id);
+ALTER TABLE products ADD COLUMN weighed INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE products ADD COLUMN is_ingredient INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE order_items ADD COLUMN variant_id INTEGER;
+ALTER TABLE order_items ADD COLUMN variant_name TEXT;
+ALTER TABLE order_items ADD COLUMN recipe_factor REAL NOT NULL DEFAULT 1;
+`,
+  },
 ];
 
 module.exports = { migrations };

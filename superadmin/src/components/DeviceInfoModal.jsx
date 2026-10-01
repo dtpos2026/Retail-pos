@@ -22,9 +22,19 @@ const rows = (d) => [
   ['Internet provider', d.isp],
   ['Approx. location (from IP)', [d.city, d.region, d.country].filter(Boolean).join(', ')],
   ['Coordinates', Number.isFinite(d.gpsLat) && !Number.isFinite(d.lat) ? `${d.gpsLat.toFixed(5)}, ${d.gpsLng.toFixed(5)} (exact, from the computer${d.gpsAcc ? `, ±${d.gpsAcc} m` : ''})` : Number.isFinite(d.lat) ? `${d.lat.toFixed(5)}, ${d.lng.toFixed(5)} (set by you)` : Number.isFinite(d.ipLat) ? `${d.ipLat.toFixed(4)}, ${d.ipLng.toFixed(4)} (from IP)` : ''],
+  ['Exact location', Number.isFinite(d.gpsLat) ? '' : GPS_NOTE[d.gpsStatus] || ''],
   ['Registered', fmtDateTime(d.firstSeen)],
   ['Last seen', fmtDateTime(d.lastSeen)],
 ];
+
+const GPS_NOTE = {
+  off: 'Not shared — Windows Location is OFF on this computer (Settings → Privacy → Location).',
+  denied: 'Not shared — desktop apps are not allowed to use Location on this computer.',
+  nodata: 'Not found yet — Windows has no GPS/Wi-Fi position for this computer.',
+  unsupported: 'Only the approximate position (from IP) is available on this system.',
+  pending: 'Looking for the position…',
+  error: 'The location service could not be read.',
+};
 
 /** Everything the POS reports about one computer. */
 export default function DeviceInfoModal({ device: d, onClose }) {

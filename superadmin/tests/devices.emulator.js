@@ -96,6 +96,11 @@ async function main() {
   const dv = await (await fetch(`${base}/devices/L1_AAAA-AAAA-AAAA-AAAA`)).json();
   assert.equal(dv.fields.city.stringValue, 'Lahore'); assert.equal(dv.fields.model.stringValue, 'OptiPlex'); assert.equal(dv.fields.status.stringValue, 'active');
   console.log('OK   heartbeat carries device details + IP location');
+  const tier = await cloud.heartbeat({ lid: 'L1', machineId: 'AAAA-AAAA-AAAA-AAAA', version: '1.8.0', extra: { hostname: 'SHOP-PC', ownerName: 'Ali', ownerPhone: '0300', gpsLat: 31.5204, gpsLng: 74.3587, gpsAcc: 35, gpsStatus: 'ok' } });
+  assert.equal(tier, 0, 'current rules accept every field');
+  const dv2 = await (await fetch(`${base}/devices/L1_AAAA-AAAA-AAAA-AAAA`)).json();
+  assert.equal(dv2.fields.gpsLat.doubleValue, 31.5204); assert.equal(dv2.fields.gpsStatus.stringValue, 'ok'); assert.equal(dv2.fields.ownerName.stringValue, 'Ali');
+  console.log('OK   heartbeat carries the exact (GPS) location + status');
   const evil = await fetch(`${base}/devices/L1_AAAA-AAAA-AAAA-AAAA?updateMask.fieldPaths=lat`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ fields: { lat: { doubleValue: 1 } } }) });
   assert.notEqual(evil.status, 200); console.log('OK   POS cannot set the admin-pinned location');
   assert.equal((await admin.set('activity/A1', { action: S('x.y'), by: S('digitaltarget.digital@gmail.com') })).status, 200);

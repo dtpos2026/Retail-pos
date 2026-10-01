@@ -189,25 +189,46 @@ async function sendMessage({ lid, businessName, text }) {
   ]);
 }
 
-const HEARTBEAT_KEYS = ['ownerName', 'ownerPhone', 'gpsLat', 'gpsLng', 'gpsAcc', 'hostname', 'osVersion', 'arch', 'cpu', 'cores', 'ramGb', 'username', 'manufacturer', 'model', 'localIp', 'mac', 'publicIp', 'city', 'region', 'country', 'isp', 'ipLat', 'ipLng'];
+const HEARTBEAT_KEYS = ['ownerName', 'ownerPhone', 'gpsLat', 'gpsLng', 'gpsAcc', 'gpsStatus', 'hostname', 'osVersion', 'arch', 'cpu', 'cores', 'ramGb', 'username', 'manufacturer', 'model', 'localIp', 'mac', 'publicIp', 'city', 'region', 'country', 'isp', 'ipLat', 'ipLng'];
 
-/** Tell the server this device is alive (last seen, version, name, hardware, IP and approximate location). Best effort. */
+// Older Firestore rules (not redeployed yet) refuse a write that contains a field they do not know — and then
+// NOTHING (not even "last seen") gets through. Each tier drops the newest group of fields so the device stays
+// visible and the provider is told to redeploy the rules for the rest.
+const BEAT_TIERS = [
+  [],
+  ['gpsStatus'],
+  ['gpsStatus', 'gpsLat', 'gpsLng', 'gpsAcc', 'ownerName', 'ownerPhone'],
+  HEARTBEAT_KEYS,
+];
+
+/** Tell the server this device is alive (last seen, version, name, hardware, IP and location). Resolves to the tier that worked (0 = everything). */
 async function heartbeat({ lid, machineId, version, extra = {} }) {
   const info = deviceInfo(version);
-  const fields = { name: str(info.name), os: str(info.os), appVersion: str(info.appVersion) };
-  for (const k of HEARTBEAT_KEYS) {
-    const v = extra[k];
-    if (v === undefined || v === null || v === '') continue;
-    fields[k] = typeof v === 'number' ? { doubleValue: v } : str(String(v).slice(0, 120));
+  let lastErr = null;
+  for (let tier = 0; tier < BEAT_TIERS.length; tier++) {
+    const drop = new Set(BEAT_TIERS[tier]);
+    const fields = { name: str(info.name), os: str(info.os), appVersion: str(info.appVersion) };
+    for (const k of HEARTBEAT_KEYS) {
+      const v = extra[k];
+      if (drop.has(k) || v === undefined || v === null || v === '') continue;
+      fields[k] = typeof v === 'number' ? { doubleValue: v } : str(String(v).slice(0, 120));
+    }
+    try {
+      await commit([
+        {
+          update: { name: docName(`devices/${lid}_${machineId}`), fields },
+          updateMask: { fieldPaths: Object.keys(fields) },
+          updateTransforms: [{ fieldPath: 'lastSeen', setToServerValue: 'REQUEST_TIME' }],
+          currentDocument: { exists: true },
+        },
+      ]);
+      return tier;
+    } catch (err) {
+      lastErr = err;
+      if (!(err instanceof CloudError) || err.code !== 'DENIED') throw err; // offline / server error: no point trying fewer fields
+    }
   }
-  await commit([
-    {
-      update: { name: docName(`devices/${lid}_${machineId}`), fields },
-      updateMask: { fieldPaths: Object.keys(fields) },
-      updateTransforms: [{ fieldPath: 'lastSeen', setToServerValue: 'REQUEST_TIME' }],
-      currentDocument: { exists: true },
-    },
-  ]);
+  throw lastErr;
 }
 
 module.exports = { CloudError, getKeyByCode, getRequest, getPublicKey, fetchState, registerDevice, heartbeat, listMessages, sendMessage };

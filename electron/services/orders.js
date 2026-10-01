@@ -10,6 +10,7 @@ const { AppError, assert } = require('../core/errors');
 const { nowLocal, localDate, round2, toNumber, cleanStr, isDateStr } = require('../core/util');
 const { calcOrder, calcPayment } = require('../../shared/calc.mjs');
 const staff = require('./staff');
+const productsSvc = require('./products');
 
 const ORDER_TYPES = ['dine_in', 'takeaway', 'delivery'];
 
@@ -106,7 +107,7 @@ function save(input) {
     // ---- items ---------------------------------------------------------
     let manualDiscount = toNumber(input.orderDiscount) > 0;
     const items = rawItems.map((it) => {
-      const qty = round2(toNumber(it.qty));
+      const qty = Math.round((toNumber(it.qty) + Number.EPSILON) * 1000) / 1000; // weighed items: grams precision
       assert(qty > 0, 'Item quantity must be greater than zero.');
       let product = null;
       if (it.productId) {
@@ -116,15 +117,20 @@ function save(input) {
         );
         assert(product, `Product "${it.name || ''}" no longer exists. Remove it from the cart.`);
       }
+      let variant = null;
+      if (product && it.variantId) {
+        variant = ctx.db.get('SELECT * FROM product_variants WHERE id = ? AND product_id = ?', [Number(it.variantId), product.id]);
+        assert(variant, `The size / variant of "${product.name}" no longer exists. Remove it from the cart and add it again.`);
+      }
       let dealNote = null;
       if (product && product.is_deal) {
         const parts = ctx.db.all('SELECT di.qty, cp.name FROM deal_items di JOIN products cp ON cp.id = di.product_id WHERE di.deal_id = ? ORDER BY di.id', [product.id]);
         dealNote = parts.map((d) => `${Math.round(d.qty * 100) / 100} × ${d.name}`).join(' + ');
       }
-      const unitPrice = round2(toNumber(it.unitPrice, product ? product.sale_price : 0));
+      const unitPrice = round2(toNumber(it.unitPrice, variant ? variant.price : product ? product.sale_price : 0));
       const unitDiscount = round2(Math.min(unitPrice, Math.max(0, toNumber(it.unitDiscount))));
       if (unitDiscount > (product ? product.discount : 0) + 0.001) manualDiscount = true;
-      const name = cleanStr(it.name || product?.name, 120);
+      const name = cleanStr(it.name || (variant ? `${product.name} (${variant.name})` : product?.name), 120);
       assert(name, 'Item name is required.');
       return {
         productId: product ? product.id : null,
@@ -133,7 +139,10 @@ function save(input) {
         qty,
         unitPrice,
         unitDiscount,
-        costPrice: product ? product.cost_price : 0,
+        costPrice: product ? productsSvc.costFor(product.id, variant ? variant.id : null) : 0,
+        variantId: variant ? variant.id : null,
+        variantName: variant ? variant.name : null,
+        recipeFactor: variant ? variant.recipe_factor : 1,
         notes: cleanStr(it.notes, 200) || dealNote,
       };
     });
@@ -242,9 +251,9 @@ function save(input) {
     items.forEach((it, i) => {
       const line = totals.lines[i];
       ctx.db.run(
-        `INSERT INTO order_items (order_id, product_id, name, category, qty, unit_price, cost_price, discount, total, notes)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [orderId, it.productId, it.name, it.category, it.qty, it.unitPrice, it.costPrice, line.discount, line.total, it.notes]
+        `INSERT INTO order_items (order_id, product_id, name, category, qty, unit_price, cost_price, discount, total, notes, variant_id, variant_name, recipe_factor)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [orderId, it.productId, it.name, it.category, it.qty, it.unitPrice, it.costPrice, line.discount, line.total, it.notes, it.variantId, it.variantName, it.recipeFactor]
       );
     });
 

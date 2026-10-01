@@ -132,8 +132,8 @@ function split({ orderId, lines, toTableId }) {
     for (const { it, qty } of moves) {
       const unitDiscount = it.qty ? it.discount / it.qty : 0;
       ctx.db.run(
-        'INSERT INTO order_items (order_id, product_id, name, category, qty, unit_price, cost_price, discount, total, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [newId, it.product_id, it.name, it.category, qty, it.unit_price, it.cost_price, round2(unitDiscount * qty), 0, it.notes]
+        'INSERT INTO order_items (order_id, product_id, name, category, qty, unit_price, cost_price, discount, total, notes, variant_id, variant_name, recipe_factor) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [newId, it.product_id, it.name, it.category, qty, it.unit_price, it.cost_price, round2(unitDiscount * qty), 0, it.notes, it.variant_id, it.variant_name, it.recipe_factor]
       );
       if (qty >= it.qty - 0.0001) ctx.db.run('DELETE FROM order_items WHERE id = ?', [it.id]);
       else ctx.db.run('UPDATE order_items SET qty = ? WHERE id = ?', [round2(it.qty - qty), it.id]);

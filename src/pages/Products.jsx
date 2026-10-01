@@ -9,12 +9,13 @@ import { PageHead, Button, SearchBox, Select, Loading, Empty, Money, Modal, Fiel
 
 const UNITS = ['pcs', 'plate', 'kg', 'g', 'litre', 'ml', 'dozen', 'pack', 'bottle', 'box', 'cup', 'glass', 'serving'];
 
-function ProductForm({ product, categories, onClose, onSaved }) {
+function ProductForm({ product, categories, allProducts = [], onClose, onSaved }) {
   const { toast, toastError, settings, confirm } = useApp();
   const [f, setF] = useState(() => ({
     name: '', sku: '', barcode: '', category_id: categories[0]?.id || '', sale_price: '', cost_price: '', discount: 0,
-    stock_qty: 0, low_stock: 5, unit: 'pcs', track_stock: true, active: true, ...product, image: undefined,
+    stock_qty: 0, low_stock: 5, unit: 'pcs', track_stock: true, active: true, weighed: false, is_ingredient: false, variants: [], recipe: [], ...product, image: undefined,
   }));
+  const [ingQ, setIngQ] = useState('');
   const [preview, setPreview] = useState(product?.image_url || null);
   const [busy, setBusy] = useState(false);
   const fileRef = useRef(null);
@@ -113,6 +114,53 @@ function ProductForm({ product, categories, onClose, onSaved }) {
           <Field label="Barcode" className="full">
             <div className="input-icon"><Barcode size={17} /><Input value={f.barcode || ''} onChange={(e) => set('barcode')(e.target.value)} placeholder="Scan or type barcode" /></div>
           </Field>
+          <div className="full card card-pad col" style={{ background: 'var(--surface-2)', gap: 10 }}>
+            <div className="row">
+              <div className="grow"><div className="b">Sold by weight / measure</div><div className="small faint">Tap the item on the POS and type the quantity on a number pad (e.g. 1.5 kg). Price = quantity × price per {f.unit}.</div></div>
+              <Switch checked={!!f.weighed} onChange={(on) => setF((x) => ({ ...x, weighed: on, unit: on && !['kg', 'g', 'litre', 'ml'].includes(x.unit) ? 'kg' : x.unit }))} />
+            </div>
+            <div className="row">
+              <div className="grow"><div className="b">Ingredient / raw material</div><div className="small faint">Hidden from the POS screen. Use it inside recipes (flour, cheese, beef…). Buy it with Inventory → Stock In.</div></div>
+              <Switch checked={!!f.is_ingredient} onChange={set('is_ingredient')} />
+            </div>
+          </div>
+          <div className="full card card-pad col" style={{ background: 'var(--surface-2)', gap: 8 }}>
+            <div className="row"><div className="grow"><div className="b">Variants (sizes)</div><div className="small faint">e.g. Small / Medium / Large — each with its own price. The cashier picks one when tapping the item.</div></div>
+              <Button size="sm" icon={Plus} onClick={() => setF((x) => ({ ...x, variants: [...(x.variants || []), { name: '', price: '', recipe_factor: 1 }] }))}>Add size</Button></div>
+            {(f.variants || []).map((v, i) => (
+              <div key={v.id || i} className="row" style={{ gap: 8 }}>
+                <Input placeholder="Size name (Small)" value={v.name} onChange={(e) => setF((x) => ({ ...x, variants: x.variants.map((y, j) => (j === i ? { ...y, name: e.target.value } : y)) }))} />
+                <NumberInput style={{ maxWidth: 130 }} placeholder="Price" value={v.price} onChange={(val) => setF((x) => ({ ...x, variants: x.variants.map((y, j) => (j === i ? { ...y, price: val } : y)) }))} />
+                {(f.recipe || []).length > 0 && <NumberInput style={{ maxWidth: 110 }} title="Recipe size factor (Small 0.7, Large 1.5)" placeholder="× recipe" value={v.recipe_factor} onChange={(val) => setF((x) => ({ ...x, variants: x.variants.map((y, j) => (j === i ? { ...y, recipe_factor: val } : y)) }))} />}
+                <Button size="sm" variant="danger-ghost" icon={Trash2} onClick={() => setF((x) => ({ ...x, variants: x.variants.filter((_, j) => j !== i) }))} />
+              </div>
+            ))}
+          </div>
+          <div className="full card card-pad col" style={{ background: 'var(--surface-2)', gap: 8 }}>
+            <div className="row"><div className="grow"><div className="b">Recipe management</div><div className="small faint">Ingredients used for ONE sale. Stock of each ingredient is reduced automatically and the cost price is calculated from them.</div></div></div>
+            {(f.recipe || []).map((r, i) => {
+              const ing = allProducts.find((p) => p.id === r.ingredientId) || r;
+              return (
+                <div key={r.ingredientId || i} className="row" style={{ gap: 8 }}>
+                  <b className="grow"><bdi>{ing.name}</bdi></b>
+                  <NumberInput style={{ maxWidth: 110 }} value={r.qty} onChange={(val) => setF((x) => ({ ...x, recipe: x.recipe.map((y, j) => (j === i ? { ...y, qty: val } : y)) }))} />
+                  <span className="muted small" style={{ minWidth: 40 }}>{ing.unit}</span>
+                  <Button size="sm" variant="danger-ghost" icon={Trash2} onClick={() => setF((x) => ({ ...x, recipe: x.recipe.filter((_, j) => j !== i) }))} />
+                </div>
+              );
+            })}
+            <div className="input-icon"><Input placeholder="Search an ingredient to add…" value={ingQ} onChange={(e) => setIngQ(e.target.value)} /></div>
+            {ingQ.trim() && (
+              <div className="col" style={{ gap: 4, border: '1px solid var(--border)', borderRadius: 10, padding: 6 }}>
+                {allProducts.filter((p) => !p.is_deal && p.id !== f.id && p.name.toLowerCase().includes(ingQ.trim().toLowerCase()) && !(f.recipe || []).some((r) => r.ingredientId === p.id)).slice(0, 6).map((p) => (
+                  <button key={p.id} type="button" className="row" style={{ gap: 8, padding: '6px 8px', background: 'none', border: 0, cursor: 'pointer', textAlign: 'left' }} onClick={() => { setF((x) => ({ ...x, recipe: [...(x.recipe || []), { ingredientId: p.id, qty: 1 }] })); setIngQ(''); }}>
+                    <Plus size={14} color="var(--primary)" /><b className="grow"><bdi>{p.name}</bdi></b><span className="muted small">{p.unit}{p.is_ingredient ? ' · ingredient' : ''}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {(f.recipe || []).length > 0 && <div className="small muted">Cost per sale: <b>Rs. {Math.round((f.recipe || []).reduce((s, r) => s + (Number(r.qty) || 0) * ((allProducts.find((p) => p.id === r.ingredientId) || r).cost_price || 0), 0) * 100) / 100}</b></div>}
+          </div>
           <div className="full card card-pad" style={{ background: 'var(--surface-2)' }}>
             <div className="row" style={{ marginBottom: 10 }}>
               <div className="grow"><div className="b">Track stock</div><div className="small faint">{settings.inventory.enabled ? 'Sales reduce stock automatically.' : 'Inventory is disabled in Settings — stock will not change.'}</div></div>
@@ -147,7 +195,13 @@ export default function Products() {
   const [deal, setDeal] = useState(null);
 
   const openRow = async (p) => {
-    if (!p.is_deal) return setEdit(p);
+    if (!p.is_deal) {
+      try {
+        return setEdit(await api('products.get', { id: p.id }));
+      } catch (e) {
+        return toastError(e);
+      }
+    }
     try {
       setDeal(await api('products.get', { id: p.id }));
     } catch (e) {
@@ -224,7 +278,7 @@ export default function Products() {
       {tool === 'import' && <ImportMenuModal onClose={() => setTool(null)} onDone={() => { load(); api('categories.list').then(setCats).catch(() => {}); }} />}
       {tool === 'pictures' && rows && <BulkPicturesModal products={rows} onClose={() => setTool(null)} onDone={load} />}
       {deal && rows && <DealForm deal={deal.id ? deal : null} categories={cats} products={rows} onClose={() => setDeal(null)} onSaved={load} />}
-      {edit && <ProductForm product={edit.id ? edit : null} categories={cats} onClose={() => setEdit(null)} onSaved={load} />}
+      {edit && <ProductForm product={edit.id ? edit : null} categories={cats} allProducts={rows || []} onClose={() => setEdit(null)} onSaved={load} />}
     </div>
   );
 }

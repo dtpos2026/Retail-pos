@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Store, ReceiptText, Printer, Ticket, Percent, Wallet, Boxes, DatabaseBackup, KeyRound, SlidersHorizontal, Save, Upload, X, RefreshCw,
-  FolderOpen, HardDriveDownload, RotateCcw, CheckCircle2, AlertTriangle, Usb, Bluetooth, Database, Trash2, FlaskConical, FileText, Lock, Palette, ChefHat, Zap, MoveHorizontal, Landmark, LifeBuoy, UserRound, Plus, Bike, ShieldCheck,
+  FolderOpen, HardDriveDownload, RotateCcw, CheckCircle2, AlertTriangle, Usb, Bluetooth, Database, Trash2, FlaskConical, FileText, Lock, Palette, ChefHat, Zap, MoveHorizontal, Landmark, LifeBuoy, UserRound, Plus, Bike, ShieldCheck, MapPin, FileSpreadsheet, FileJson,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { useApp } from '../context/AppContext';
@@ -643,6 +643,27 @@ function BackupTab() {
     });
   };
 
+  const exportAll = (format) => act(`x-${format}`, async () => {
+    const r = await api('data.export', { format });
+    if (!r.canceled) toast(`Saved ${r.total.toLocaleString()} records (${fileSize(r.size)}) to ${r.file}`);
+  });
+  const importAll = async () => {
+    const info = await api('data.pickImport').catch((e) => (toastError(e), { canceled: true }));
+    if (info.canceled) return;
+    const ok = await confirm({
+      title: `Import this ${info.format === 'xlsx' ? 'Excel' : 'JSON'} file?`,
+      message: `Exported ${info.exportedAt || '—'}${info.appVersion ? ` (v${info.appVersion})` : ''}\n${info.products} products · ${info.orders} orders · ${info.total.toLocaleString()} records in total.\n\nALL current data (menu, sales, users, settings) will be replaced by this file. A safety backup of your current data is saved first and the app will restart.`,
+      confirmText: 'Replace all data & restart',
+      danger: true,
+    });
+    if (!ok) return;
+    act('import', async () => {
+      await api('data.import', { file: info.file });
+      toast('Data imported. Restarting…');
+      setTimeout(() => api('app.relaunch'), 800);
+    });
+  };
+
   const last = s.v.lastBackupAt;
   const stale = !last || Date.now() - new Date(last.replace(' ', 'T')).getTime() > 3 * 86400000;
 
@@ -663,6 +684,18 @@ function BackupTab() {
           </div>
           <div className="small faint">Tip: keep a copy on a USB drive or Google Drive folder in case the computer is damaged.</div>
         </div>
+        {can('backup') && (
+          <div className="card card-pad col">
+            <div className="row"><FileSpreadsheet /><div className="b grow" style={{ fontSize: 16 }}>Export / import all data</div></div>
+            <div className="small muted">Everything — menu, pictures, sales, customers, users, settings — in a file you can open in Excel or keep as JSON. Importing a file replaces all data on this computer.</div>
+            <div className="row wrap">
+              <Button icon={FileSpreadsheet} onClick={() => exportAll('xlsx')} loading={busy === 'x-xlsx'}>Export Excel (.xlsx)</Button>
+              <Button icon={FileJson} onClick={() => exportAll('json')} loading={busy === 'x-json'}>Export JSON</Button>
+              <Button icon={RotateCcw} onClick={importAll} loading={busy === 'import'}>Import Excel / JSON…</Button>
+            </div>
+            <div className="small faint">The file contains your sales and user accounts — keep it private. For normal daily protection use “Backup now” (fastest and safest).</div>
+          </div>
+        )}
         <div className="card card-pad">
           <ToggleRow title="Automatic daily backup" desc="Created in the background once a day while the app is open." checked={s.v.autoBackup} onChange={s.set('autoBackup')} />
           <div className="toggle-row">
@@ -767,6 +800,53 @@ function SupportTab() {
   );
 }
 
+const GPS_HELP = {
+  ok: 'Exact position shared.',
+  pending: 'Looking for the position…',
+  off: 'Windows Location is turned OFF. Open Windows Settings → Privacy → Location and switch it on.',
+  denied: 'Desktop apps are not allowed to use Location. Windows Settings → Privacy → Location → “Let desktop apps access your location”.',
+  nodata: 'Windows could not find the position yet (no GPS/Wi-Fi data). Try again in a minute.',
+  error: 'Could not read the Windows location service.',
+  unsupported: 'Exact position needs Windows; the provider sees the approximate position from the internet connection.',
+};
+
+/** What this computer shares with the provider's map + a "send now" button. */
+function LocationCard() {
+  const { toast, toastError } = useApp();
+  const [loc, setLoc] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const load = () => api('license.location').then(setLoc).catch(() => {});
+  useEffect(() => { load(); }, []);
+  const send = async () => {
+    setBusy(true);
+    try {
+      setLoc(await api('license.shareLocation'));
+      toast('Location sent to your provider');
+    } catch (e) {
+      toastError(e);
+      load();
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (!loc || !loc.registered) return null;
+  return (
+    <div className="card card-pad col" style={{ marginTop: 16 }}>
+      <div className="row"><MapPin /><div className="b grow" style={{ fontSize: 16 }}>Device location</div>
+        <Badge color={loc.gps ? 'green' : loc.ip ? 'amber' : ''}>{loc.gps ? 'Exact' : loc.ip ? 'Approximate' : 'Unknown'}</Badge></div>
+      <div className="kv">
+        <div>Exact position</div><div>{loc.gps ? `${loc.gps.lat.toFixed(5)}, ${loc.gps.lng.toFixed(5)}${loc.gps.acc ? ` (±${loc.gps.acc} m)` : ''}` : <span className="muted">{GPS_HELP[loc.gpsStatus] || GPS_HELP.error}</span>}</div>
+        <div>Internet position</div><div>{loc.ip ? `${[loc.ip.city, loc.ip.country].filter(Boolean).join(', ') || '—'} · ${loc.ip.ip}` : <span className="muted">Not available (offline?)</span>}</div>
+        <div>Last sent</div><div>{loc.lastSentAt ? formatDateTime(loc.lastSentAt) : 'Not yet'}</div>
+      </div>
+      {loc.rulesOutdated && <div className="small" style={{ color: 'var(--warn, #b45309)' }}>Your provider has not finished updating the server, so only part of the details reach them. Ask them to redeploy the Firestore rules.</div>}
+      {loc.error && <div className="small muted">Last error: {loc.error}</div>}
+      <div className="small muted">The provider sees this to support your computer and to show it on their map. It is sent at every login.</div>
+      <Button size="sm" icon={MapPin} onClick={send} loading={busy} style={{ alignSelf: 'flex-start' }}>Send my location now</Button>
+    </div>
+  );
+}
+
 function LicenseTab() {
   const { license, setLicense, confirm, toastError } = useApp();
   if (!license) return <Loading />;
@@ -776,7 +856,8 @@ function LicenseTab() {
     if (await confirm({ title: 'Remove license from this computer?', danger: true, confirmText: 'Remove' })) api('license.remove').then(setLicense).catch(toastError);
   };
   return (
-    <div className="grid grid-2" style={{ alignItems: 'start' }}>
+    <>
+      <div className="grid grid-2" style={{ alignItems: 'start' }}>
       <div className="card card-pad col">
         <div className="row"><KeyRound /><div className="b grow" style={{ fontSize: 16 }}>License status</div><Badge color={color}>{label}</Badge></div>
         <div className="kv">
@@ -801,7 +882,9 @@ function LicenseTab() {
           <LicenseActivateForm />
         </div>
       )}
-    </div>
+      </div>
+      {license.licenseId && <LocationCard />}
+    </>
   );
 }
 
@@ -838,6 +921,10 @@ function GeneralTab() {
           <div className="toggle-row">
             <div className="t"><div>POS product size</div></div>
             <Seg value={s.v.posGridSize} onChange={s.set('posGridSize')} options={[{ value: 'small', label: 'Small' }, { value: 'medium', label: 'Medium' }, { value: 'large', label: 'Large' }]} />
+          </div>
+          <div className="toggle-row">
+            <div className="t"><div>Categories on POS</div><div className="small muted">Top: one line, extra categories behind “⋯”. Left: a vertical list beside the products.</div></div>
+            <Seg value={s.v.categoryLayout || 'top'} onChange={s.set('categoryLayout')} options={[{ value: 'top', label: 'Top' }, { value: 'left', label: 'Left' }]} />
           </div>
           <div className="toggle-row">
             <div className="t"><div>Currency symbol</div></div>

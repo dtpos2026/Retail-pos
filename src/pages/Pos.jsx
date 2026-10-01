@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   UtensilsCrossed, ShoppingBag, Bike, Armchair, UserRound, PauseCircle, Percent, Plus, Minus, Trash2, FilePlus2,
-  CreditCard, Printer, Save, X, ScanBarcode, PlusSquare, StickyNote, ShoppingCart, LayoutGrid, CheckCircle2,
+  CreditCard, Printer, Save, X, ScanBarcode, PlusSquare, StickyNote, ShoppingCart, CheckCircle2, PanelLeft, PanelTop,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { useApp } from '../context/AppContext';
@@ -10,9 +10,9 @@ import { usePos, cartFromOrder } from '../context/PosContext';
 import { calcOrder, formatMoney, formatQty, initials, round2 } from '../lib/format';
 import { Button, Seg, Empty, NumberInput, Loading } from '../components/ui';
 import { PromoBanner } from '../components/Banner';
-import { CategoryIcon } from '../components/CategoryIcon';
+import { CategoryBar, CategoryRail } from '../components/pos/CategoryNav';
 import PaymentModal from '../components/pos/PaymentModal';
-import { ItemModal, DiscountModal, CustomerModal, TableModal, HeldOrdersModal, CustomItemModal } from '../components/pos/PosModals';
+import { ItemModal, DiscountModal, CustomerModal, TableModal, HeldOrdersModal, CustomItemModal, VariantModal, WeightPad } from '../components/pos/PosModals';
 
 const TYPE_OPTIONS = [
   { value: 'dine_in', label: 'Dine-In', icon: UtensilsCrossed, key: 'enableDineIn' },
@@ -21,7 +21,7 @@ const TYPE_OPTIONS = [
 ];
 
 export default function Pos() {
-  const { settings, toast, toastError, confirm, can } = useApp();
+  const { settings, reloadSettings, toast, toastError, confirm, can } = useApp();
   const { cart, dispatch } = usePos();
   const nav = useNavigate();
   const loc = useLocation();
@@ -52,6 +52,16 @@ export default function Pos() {
     loadHeld();
   }, [loadHeld, cart.orderId]);
 
+  const productsRef = useRef([]);
+  productsRef.current = products || [];
+  const cartWithMeta = (o) => {
+    const c = cartFromOrder(o);
+    c.items = c.items.map((i) => {
+      const p = productsRef.current.find((x) => x.id === i.productId);
+      return p ? { ...i, weighed: !!p.weighed, unit: p.unit, color: p.category_color || i.color } : i;
+    });
+    return c;
+  };
   const loadProducts = useCallback(() => api('products.list', { activeOnly: true }).then(setProducts).catch(toastError), [toastError]);
 
   useEffect(() => {
@@ -84,7 +94,7 @@ export default function Pos() {
           toast(`${o.order_no} is already ${o.status}.`, 'warn');
           return;
         }
-        dispatch({ type: 'load', cart: cartFromOrder(o) });
+        dispatch({ type: 'load', cart: cartWithMeta(o) });
         setModal(null);
       } catch (e) {
         toastError(e);
@@ -138,15 +148,26 @@ export default function Pos() {
   }, [cart.items]);
 
   const addProduct = useCallback(
-    (p) => {
-      if (inv.enabled && !inv.allowNegative && p.track_stock && (qtyInCart[p.id] || 0) + 1 > p.stock_qty) {
+    (p, opts = {}) => {
+      const qty = opts.qty || 1;
+      if (inv.enabled && !inv.allowNegative && p.track_stock && (qtyInCart[p.id] || 0) + qty > p.stock_qty) {
         toast(`Only ${formatQty(p.stock_qty)} ${p.unit} of "${p.name}" in stock.`, 'warn');
         return;
       }
       setLastSale(null);
-      dispatch({ type: 'add', product: p });
+      dispatch({ type: 'add', product: p, variant: opts.variant || null, qty });
     },
     [dispatch, inv, qtyInCart, toast]
+  );
+
+  /** Tap on a product: sizes first (Small / Medium / Large), then the weight pad for kg items, else add. */
+  const pick = useCallback(
+    (p) => {
+      if (p.variants && p.variants.length) setModal({ variant: p });
+      else if (p.weighed) setModal({ weigh: { product: p, variant: null } });
+      else addProduct(p);
+    },
+    [addProduct]
   );
 
   const onSearchKey = async (e) => {
@@ -179,7 +200,7 @@ export default function Pos() {
     waiterId: cart.orderType === 'dine_in' ? cart.waiterId || undefined : undefined,
     riderId: cart.orderType === 'delivery' ? cart.riderId || undefined : undefined,
     customer: cart.customer,
-    items: cart.items.map((i) => ({ productId: i.productId, name: i.name, qty: i.qty, unitPrice: i.unitPrice, unitDiscount: i.unitDiscount, notes: i.notes })),
+    items: cart.items.map((i) => ({ productId: i.productId, variantId: i.variantId || undefined, name: i.name, qty: i.qty, unitPrice: i.unitPrice, unitDiscount: i.unitDiscount, notes: i.notes })),
     orderDiscount,
     deliveryCharges: cart.deliveryCharges,
     notes: cart.notes,
@@ -201,7 +222,7 @@ export default function Pos() {
       const o = await api('orders.save', payload('hold'));
       if (printBill) {
         api('print.receipt', { orderId: o.id }).then(() => toast('Bill sent to printer')).catch(toastError);
-        dispatch({ type: 'load', cart: cartFromOrder(o) });
+        dispatch({ type: 'load', cart: cartWithMeta(o) });
       } else {
         toast(cart.orderType === 'dine_in' ? `Order saved to ${o.table_name}` : `Order ${o.order_no} held`);
         newOrder(cart.orderType);
@@ -313,6 +334,15 @@ export default function Pos() {
 
   const selectedItem = cart.items.find((i) => i.key === modal?.item);
   const gridSize = settings.general.posGridSize || 'medium';
+  const catLeft = settings.general.categoryLayout === 'left';
+  const toggleCatLayout = async () => {
+    try {
+      await api('settings.set', { section: 'general', values: { ...settings.general, categoryLayout: catLeft ? 'top' : 'left' } });
+      await reloadSettings();
+    } catch (e) {
+      toastError(e);
+    }
+  };
 
   return (
     <div className={`pos ${settings.general.showImagesOnPos ? '' : 'no-images'}`}>
@@ -324,19 +354,13 @@ export default function Pos() {
             <input ref={searchRef} className="input" placeholder="Search product or scan barcode…  (F2)" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onSearchKey} />
           </div>
           <Button icon={PlusSquare} onClick={() => setModal('custom')} title="Sell an item that is not in the list">Open Item</Button>
+          {can('settings') && <Button icon={catLeft ? PanelTop : PanelLeft} onClick={toggleCatLayout} title={catLeft ? 'Show categories on top' : 'Show categories on the left'} aria-label="Switch category layout" />}
         </div>
         <PromoBanner />
-        <div className="cats">
-          <button className={`cat-chip ${!cat ? 'on' : ''}`} style={!cat ? { background: 'var(--text)' } : undefined} onClick={() => setCat(null)}>
-            <LayoutGrid size={16} /> All
-          </button>
-          {cats.map((c) => (
-            <button key={c.id} className={`cat-chip ${cat === c.id ? 'on' : ''}`} style={cat === c.id ? { background: c.color } : undefined} onClick={() => setCat(c.id)}>
-              {cat === c.id ? <CategoryIcon name={c.icon} size={16} /> : <span className="dot" style={{ background: c.color }} />}
-              <bdi>{c.name}</bdi>
-            </button>
-          ))}
-        </div>
+        <div className={`pos-body ${catLeft ? 'with-rail' : ''}`}>
+          {catLeft && <CategoryRail cats={cats} cat={cat} setCat={setCat} />}
+          <div className="pos-main">
+            {!catLeft && <CategoryBar cats={cats} cat={cat} setCat={setCat} />}
         {!products ? (
           <Loading />
         ) : filtered.length === 0 ? (
@@ -354,7 +378,7 @@ export default function Pos() {
               const low = tracked && !out && p.stock_qty <= p.low_stock;
               const blocked = out && !inv.allowNegative;
               return (
-                <button key={p.id} className={`pcard ${blocked ? 'disabled' : ''}`} style={{ '--cat': p.category_color || '#6366f1' }} onClick={() => !blocked && addProduct(p)}>
+                <button key={p.id} className={`pcard ${blocked ? 'disabled' : ''}`} style={{ '--cat': p.category_color || '#6366f1' }} onClick={() => !blocked && pick(p)}>
                   <div className="img">
                     {p.image_url ? (
                       <img src={p.image_url} alt="" loading="lazy" draggable={false} />
@@ -363,6 +387,7 @@ export default function Pos() {
                     )}
                   </div>
                   {p.is_deal && <span className="deal-badge">DEAL</span>}
+                  {!p.is_deal && p.variants && p.variants.length > 0 && <span className="var-badge">{p.variants.length} sizes</span>}
                   {qtyInCart[p.id] > 0 && <span className="qty-badge">{formatQty(qtyInCart[p.id])}</span>}
                   {tracked && <span className={`stock ${out ? 'out' : low ? 'low' : ''}`}>{out ? 'Out' : formatQty(p.stock_qty)}</span>}
                   <div className="body">
@@ -370,7 +395,7 @@ export default function Pos() {
                     {p.is_deal && p.deal_text && <div className="small faint" style={{ fontSize: 11, lineHeight: 1.2 }}>{p.deal_text}</div>}
                     <div className="price">
                       {p.discount > 0 && <s className="faint small" style={{ fontWeight: 500, marginRight: 5 }}>{formatMoney(p.sale_price, '')}</s>}
-                      {formatMoney(p.sale_price - (p.discount || 0), cur)}
+                      {p.variants && p.variants.length ? <span>from {formatMoney(Math.min(...p.variants.map((v) => v.price)), cur)}</span> : formatMoney(p.sale_price - (p.discount || 0), cur)}{p.weighed && !p.variants?.length ? <small className="muted"> /{p.unit}</small> : null}
                     </div>
                   </div>
                 </button>
@@ -378,6 +403,8 @@ export default function Pos() {
             })}
           </div>
         )}
+          </div>
+        </div>
       </div>
 
       {/* ------------------------------------------------------------ cart */}
@@ -454,15 +481,15 @@ export default function Pos() {
                   <div className="grow">
                     <div className="nm"><bdi>{i.name}</bdi></div>
                     <div className="sub">
-                      {formatMoney(i.unitPrice, cur)}
+                      {formatMoney(i.unitPrice, cur)}{i.weighed ? ` / ${i.unit}` : ''}
                       {i.unitDiscount > 0 && <span style={{ color: 'var(--success)' }}> · −{formatMoney(i.unitDiscount, '')} each</span>}
                       {i.notes && <span> · <StickyNote size={11} /> <bdi>{i.notes}</bdi></span>}
                     </div>
                   </div>
                   <div className="stepper" onClick={(e) => e.stopPropagation()}>
-                    <button onClick={() => dispatch({ type: 'inc', key: i.key, by: -1 })}><Minus size={14} /></button>
-                    <span onClick={() => setModal({ item: i.key })} style={{ cursor: 'pointer' }}>{formatQty(i.qty)}</span>
-                    <button onClick={() => dispatch({ type: 'inc', key: i.key, by: 1 })}><Plus size={14} /></button>
+                    <button onClick={() => dispatch({ type: 'inc', key: i.key, by: i.weighed ? -0.5 : -1 })}><Minus size={14} /></button>
+                    <span onClick={() => setModal(i.weighed ? { weighEdit: i.key } : { item: i.key })} style={{ cursor: 'pointer' }}>{formatQty(i.qty)}{i.weighed ? <small> {i.unit}</small> : null}</span>
+                    <button onClick={() => dispatch({ type: 'inc', key: i.key, by: i.weighed ? 0.5 : 1 })}><Plus size={14} /></button>
                   </div>
                   <div className="tot">{formatMoney(line, '')}</div>
                   <Button variant="ghost" size="sm" icon={Trash2} onClick={(e) => { e.stopPropagation(); dispatch({ type: 'remove', key: i.key }); }} title="Remove (Del)" />
@@ -539,6 +566,49 @@ export default function Pos() {
         }} />
       )}
       {modal === 'held' && <HeldOrdersModal onClose={() => setModal(null)} onOpen={openOrder} />}
+      {modal?.variant && (
+        <VariantModal
+          product={modal.variant}
+          onClose={() => setModal(null)}
+          onPick={(v) => {
+            const p = modal.variant;
+            if (p.weighed) setModal({ weigh: { product: p, variant: v } });
+            else {
+              addProduct(p, { variant: v });
+              setModal(null);
+            }
+          }}
+        />
+      )}
+      {modal?.weigh && (
+        <WeightPad
+          product={modal.weigh.product}
+          variant={modal.weigh.variant}
+          unitPrice={modal.weigh.variant ? modal.weigh.variant.price : modal.weigh.product.sale_price - (modal.weigh.product.discount || 0)}
+          onClose={() => setModal(null)}
+          onSave={(qty) => {
+            addProduct(modal.weigh.product, { variant: modal.weigh.variant, qty });
+            setModal(null);
+          }}
+        />
+      )}
+      {modal?.weighEdit && (() => {
+        const it = cart.items.find((x) => x.key === modal.weighEdit);
+        if (!it) return null;
+        return (
+          <WeightPad
+            product={{ name: it.name, unit: it.unit }}
+            unitPrice={it.unitPrice - Math.min(it.unitPrice, it.unitDiscount || 0)}
+            title={it.name}
+            initial={it.qty}
+            onClose={() => setModal(null)}
+            onSave={(qty) => {
+              dispatch({ type: 'qty', key: it.key, qty });
+              setModal(null);
+            }}
+          />
+        );
+      })()}
       {modal === 'custom' && (
         <CustomItemModal onClose={() => setModal(null)} onAdd={(it) => { dispatch({ type: 'addCustom', ...it }); setModal(null); }} />
       )}

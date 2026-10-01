@@ -4,17 +4,37 @@ const ctx = require('../core/context');
 const settings = require('./settings');
 const { AppError, assert } = require('../core/errors');
 const { nowLocal, round2, toNumber, cleanStr } = require('../core/util');
+const round3 = (n) => Math.round((Number(n) + Number.EPSILON) * 1000) / 1000; // kg / litre precision to the gram
 
-/** Stock lines of an order: normal items as sold, deals expanded into their components. */
+/**
+ * Stock lines of an order. A dish with a recipe uses its ingredients (× the size factor), a deal uses its
+ * components (each of which may have its own recipe), everything else uses itself.
+ */
 function stockLines(orderId) {
-  return ctx.db.all(
-    `SELECT t.product_id, SUM(t.qty) qty, p.name, p.stock_qty, p.track_stock FROM (
-       SELECT i.product_id AS product_id, i.qty AS qty FROM order_items i JOIN products d ON d.id = i.product_id WHERE i.order_id = ? AND d.is_deal = 0
-       UNION ALL
-       SELECT di.product_id, i.qty * di.qty FROM order_items i JOIN deal_items di ON di.deal_id = i.product_id WHERE i.order_id = ?
-     ) t JOIN products p ON p.id = t.product_id GROUP BY t.product_id`,
-    [orderId, orderId]
-  );
+  const acc = new Map();
+  const add = (pid, q) => acc.set(pid, (acc.get(pid) || 0) + q);
+  const expand = (pid, qty, factor, depth) => {
+    const p = ctx.db.get('SELECT id, is_deal FROM products WHERE id = ?', [pid]);
+    if (!p || depth > 4) return;
+    if (p.is_deal) {
+      for (const c of ctx.db.all('SELECT product_id, qty FROM deal_items WHERE deal_id = ?', [pid])) expand(c.product_id, qty * c.qty, 1, depth + 1);
+      return;
+    }
+    const rec = ctx.db.all('SELECT ingredient_id, qty FROM recipe_items WHERE product_id = ?', [pid]);
+    if (rec.length) {
+      for (const r of rec) add(r.ingredient_id, qty * factor * r.qty);
+      return;
+    }
+    add(pid, qty);
+  };
+  for (const it of ctx.db.all('SELECT product_id, qty, recipe_factor FROM order_items WHERE order_id = ? AND product_id IS NOT NULL', [orderId])) {
+    expand(it.product_id, it.qty, it.recipe_factor || 1, 0);
+  }
+  if (!acc.size) return [];
+  return [...acc.entries()].map(([pid, qty]) => {
+    const p = ctx.db.get('SELECT name, stock_qty, track_stock FROM products WHERE id = ?', [pid]);
+    return { product_id: pid, qty: round3(qty), name: p.name, stock_qty: p.stock_qty, track_stock: p.track_stock };
+  });
 }
 
 function isEnabled() {
@@ -24,12 +44,12 @@ function isEnabled() {
 function move(productId, type, qty, { note, orderId, unitCost } = {}) {
   const p = ctx.db.get('SELECT id, name, stock_qty FROM products WHERE id = ?', [productId]);
   if (!p) return;
-  const balance = round2(p.stock_qty + qty);
+  const balance = round3(p.stock_qty + qty);
   ctx.db.run('UPDATE products SET stock_qty = ? WHERE id = ?', [balance, productId]);
   ctx.db.run(
     `INSERT INTO stock_movements (product_id, type, qty, balance, unit_cost, note, order_id, user_id, user_name, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [productId, type, round2(qty), balance, unitCost ?? null, note || null, orderId || null, ctx.user?.id, ctx.user?.name, nowLocal()]
+    [productId, type, round3(qty), balance, unitCost ?? null, note || null, orderId || null, ctx.user?.id, ctx.user?.name, nowLocal()]
   );
   return balance;
 }

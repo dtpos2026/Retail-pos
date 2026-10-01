@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Percent, UserRound, Armchair, PauseCircle, PencilLine, PlusSquare, Search, Trash2, PlayCircle } from 'lucide-react';
+import { Scale, Delete as DeleteIcon, Ruler, Percent, UserRound, Armchair, PauseCircle, PencilLine, PlusSquare, Search, Trash2, PlayCircle } from 'lucide-react';
 import { Modal, Button, Field, Input, NumberInput, Seg, Empty, Money, StatusBadge, SearchBox } from '../ui';
 import { api } from '../../lib/api';
 import { useApp } from '../../context/AppContext';
@@ -247,6 +247,92 @@ export function CustomItemModal({ onClose, onAdd }) {
         </div>
       </div>
     </Modal>
+  );
+}
+
+/** Sizes of an item (Small / Medium / Large …). */
+export function VariantModal({ product, onClose, onPick }) {
+  return (
+    <Modal title={product.name} icon={Ruler} size="sm" onClose={onClose}>
+      <div className="col" style={{ gap: 10 }}>
+        <div className="muted small">Choose a size / variant</div>
+        {product.variants.map((v) => (
+          <button key={v.id} className="method" style={{ flexDirection: 'row', justifyContent: 'space-between', padding: '16px 18px', fontSize: 17 }} onClick={() => onPick(v)}>
+            <b>{v.name}</b>
+            <b style={{ color: 'var(--primary)' }}><Money value={v.price} /></b>
+          </button>
+        ))}
+      </div>
+    </Modal>
+  );
+}
+
+/**
+ * Right-side number pad for items sold by weight / measure (kg, litre …).
+ * Type the quantity (1.5 kg) or the amount (Rs 500) — the other follows from the price per unit.
+ */
+export function WeightPad({ product, variant, unitPrice, initial, onClose, onSave, title }) {
+  const unit = product.unit || 'kg';
+  const [mode, setMode] = useState('qty'); // qty | amount
+  const [text, setText] = useState(initial ? String(initial) : '');
+  const value = Number(text) || 0;
+  const qty = mode === 'qty' ? value : unitPrice > 0 ? value / unitPrice : 0;
+  const qtyR = Math.round(qty * 1000) / 1000;
+  const amount = Math.round(qtyR * unitPrice * 100) / 100;
+  const press = (k) => {
+    setText((t) => {
+      if (k === 'back') return t.slice(0, -1);
+      if (k === 'clear') return '';
+      if (k === '.') return t.includes('.') ? t : (t || '0') + '.';
+      const next = t + k;
+      return /^\d{0,6}(\.\d{0,3})?$/.test(next) ? next.replace(/^0+(?=\d)/, '') : t;
+    });
+  };
+  const ok = qtyR > 0;
+  const save = () => ok && onSave(qtyR);
+  useEffect(() => {
+    const h = (e) => {
+      if (/^[0-9]$/.test(e.key) || e.key === '.') press(e.key);
+      else if (e.key === 'Backspace') press('back');
+      else if (e.key === 'Enter') save();
+      else if (e.key === 'Escape') onClose();
+      else return;
+      e.preventDefault();
+    };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }); // eslint-disable-line react-hooks/exhaustive-deps
+  const keys = ['7', '8', '9', '4', '5', '6', '1', '2', '3', '.', '0', 'back'];
+  return (
+    <div className="overlay" style={{ placeItems: 'stretch end', padding: 0, background: 'rgba(15,23,42,.35)' }} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="weight-pad">
+        <div className="row" style={{ gap: 10 }}>
+          <Scale size={20} color="var(--primary)" />
+          <div className="grow"><b style={{ fontSize: 17 }}><bdi>{title || (variant ? `${product.name} (${variant.name})` : product.name)}</bdi></b><div className="small muted"><Money value={unitPrice} /> per {unit}</div></div>
+          <Button size="sm" variant="ghost" onClick={onClose}>✕</Button>
+        </div>
+        <Seg value={mode} onChange={(m) => { setMode(m); setText(''); }} options={[{ value: 'qty', label: `By weight (${unit})` }, { value: 'amount', label: 'By amount (Rs.)' }]} />
+        <div className="wp-display">
+          <div className="small muted">{mode === 'qty' ? `Enter ${unit}` : 'Enter amount'}</div>
+          <div className="wp-val">{text || '0'}<span>{mode === 'qty' ? ` ${unit}` : ' Rs.'}</span></div>
+        </div>
+        <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+          {(mode === 'qty' ? [0.25, 0.5, 1, 1.5, 2, 5] : [100, 200, 500, 1000, 2000]).map((q) => (
+            <Button key={q} size="sm" onClick={() => setText(String(q))}>{q}</Button>
+          ))}
+        </div>
+        <div className="wp-keys">
+          {keys.map((k) => (
+            <button key={k} className={`wp-key ${k === 'back' ? 'alt' : ''}`} onClick={() => press(k)}>{k === 'back' ? <DeleteIcon size={22} /> : k}</button>
+          ))}
+        </div>
+        <div className="wp-total">
+          <div className="row"><span className="muted">Quantity</span><span className="grow" /><b>{qtyR} {unit}</b></div>
+          <div className="row"><span className="muted">Price</span><span className="grow" /><b style={{ fontSize: 22, color: 'var(--primary)' }}><Money value={amount} /></b></div>
+        </div>
+        <Button variant="primary" size="lg" onClick={save} disabled={!ok}>{initial ? 'Update' : 'Add to cart'} <kbd>Enter</kbd></Button>
+      </div>
+    </div>
   );
 }
 

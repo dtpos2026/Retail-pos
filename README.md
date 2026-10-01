@@ -14,6 +14,13 @@ Retail-pos/                  ← POS software (Windows, offline). Run npm comman
 ```
 
 
+## What's new in v1.8.0
+
+- **Menu variants** (Small / Medium / Large with their own prices, chosen on tap), **recipe management** (ingredient stock is deducted, cost comes from the recipe) and **weighed items** (kg) with a right-side number pad — by weight or by amount.
+- **POS categories:** one line with a **“⋯ +n”** button that lists every category that does not fit (no more sideways scrolling), or switch to a **vertical category list on the left** (button next to *Open Item* or *Settings → General*).
+- **Backup as Excel or JSON:** *Settings → Backup & Restore → Export / import all data* writes every table (menu with pictures, sales, customers, users, settings) to a `.xlsx` (one sheet per table) or `.json` file and imports it back (replaces all data after a safety backup; nothing changes if the file is bad).
+- **Device location fix:** heartbeat falls back on older server rules, sends the location as soon as it is known, shows *why* exact location is missing and has a **Send my location now** button (*Settings → License*). Deploy the rules again: `cd superadmin && npx firebase-tools deploy`.
+
 ## What's new in v1.1.0
 
 - **Printing rebuilt** — direct *Thermal (ESC/POS)* printing: **no blank paper at the top**, exact length, precise cut and near-instant start. The Windows-driver method stays available. → [docs/PRINTER_SETUP.md](docs/PRINTER_SETUP.md)
@@ -68,7 +75,7 @@ npx firebase-tools deploy
 | **Users** | Admin, Manager, Cashier, Kitchen and Delivery roles with per-user permission checkboxes. Cashiers cannot open Settings, Users or Reports unless granted. |
 | **Receipt printing** | 6 real templates (Classic, Modern, Minimal, Restaurant, Retail Invoice, Compact), 58 mm and 80 mm, logo (size and alignment), margins, fonts, footer, show/hide fields, compact mode, copies, live preview identical to the print, test print, and embedded Urdu font. |
 | **Printers** | Any Windows printer (USB, Bluetooth, network) for receipts and a separate token/kitchen printer. Direct thermal ESC/POS printing (no blank paper, exact cut) or Windows driver mode; silent printing; clear error when printing fails. |
-| **Backup & Restore** | Backup now, backup to USB / folder, automatic daily backup (keeps the last N), restore with a safety copy, last-backup indicator. |
+| **Backup & Restore** | Backup now, backup to USB / folder, automatic daily backup (keeps the last N), restore with a safety copy, last-backup indicator. **Export / import all data as Excel (.xlsx) or JSON** (every table incl. pictures and sales). |
 | **Data safety** | SQLite WAL + `synchronous=FULL`, every sale in one transaction, integrity check at start-up, crash handlers, friendly error messages (technical details only in logs). |
 | **Bulk menu & deals** | Import the whole menu from Excel/CSV (template included, categories created automatically), attach pictures in bulk by file name (`Zinger Burger.jpg` → Zinger Burger), and create deals/combos whose component stock is deducted automatically. |
 | **License** | A license key is required from the first launch (no trial by default). The public key is downloaded automatically from your Super Admin, nothing to paste. The computer registers once (online) and is remembered; the Super Admin can block / suspend / remove devices live and set the device limit. Renewals and revocations are picked up automatically when online. |

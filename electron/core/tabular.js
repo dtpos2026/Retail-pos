@@ -67,30 +67,8 @@ function textOf(xml) {
   return out.join('');
 }
 
-function parseXlsx(buf) {
-  const files = unzip(buf);
-  const get = (n) => (files.has(n) ? files.get(n)().toString('utf8') : null);
-  const shared = [];
-  const sst = get('xl/sharedStrings.xml');
-  if (sst) {
-    const re = /<si[^>]*>([\s\S]*?)<\/si>/g;
-    let m;
-    while ((m = re.exec(sst))) shared.push(textOf(m[1]));
-  }
-  // first worksheet in workbook order
-  let sheetPath = 'xl/worksheets/sheet1.xml';
-  const wb = get('xl/workbook.xml');
-  const rels = get('xl/_rels/workbook.xml.rels');
-  if (wb && rels) {
-    const rid = /<sheet [^>]*r:id="([^"]+)"/.exec(wb);
-    if (rid) {
-      const rel = new RegExp(`<Relationship [^>]*Id="${rid[1]}"[^>]*>`).exec(rels);
-      const target = rel && /Target="([^"]+)"/.exec(rel[0]);
-      if (target) sheetPath = target[1].startsWith('/') ? target[1].slice(1) : `xl/${target[1].replace(/^\.\//, '')}`;
-    }
-  }
-  const sheet = get(sheetPath);
-  if (!sheet) throw new AppError('Could not find a worksheet in this Excel file.');
+/** Rows of one worksheet XML (cells as strings, gaps filled with ''). */
+function sheetRows(sheet, shared) {
   const rows = [];
   const rowRe = /<row[^>]*>([\s\S]*?)<\/row>/g;
   let rm;
@@ -118,6 +96,48 @@ function parseXlsx(buf) {
     rows.push(Array.from(cells, (c) => (c === undefined ? '' : String(c))));
   }
   return rows;
+}
+
+/** Every worksheet of an .xlsx file, in workbook order: [{ name, rows }]. */
+function parseWorkbook(buf) {
+  const files = unzip(buf);
+  const get = (n) => (files.has(n) ? files.get(n)().toString('utf8') : null);
+  const shared = [];
+  const sst = get('xl/sharedStrings.xml');
+  if (sst) {
+    const re = /<si[^>]*>([\s\S]*?)<\/si>/g;
+    let m;
+    while ((m = re.exec(sst))) shared.push(textOf(m[1]));
+  }
+  const wb = get('xl/workbook.xml');
+  const rels = get('xl/_rels/workbook.xml.rels');
+  const out = [];
+  if (wb && rels) {
+    const sheetRe = /<sheet\s[^>]*>/g;
+    let sm;
+    while ((sm = sheetRe.exec(wb))) {
+      const name = decodeXml((/name="([^"]*)"/.exec(sm[0]) || [])[1] || `Sheet${out.length + 1}`);
+      const rid = /r:id="([^"]+)"/.exec(sm[0]);
+      if (!rid) continue;
+      const rel = new RegExp(`<Relationship [^>]*Id="${rid[1]}"[^>]*>`).exec(rels);
+      const target = rel && /Target="([^"]+)"/.exec(rel[0]);
+      if (!target) continue;
+      const sheetPath = target[1].startsWith('/') ? target[1].slice(1) : `xl/${target[1].replace(/^\.\//, '')}`;
+      const xml = get(sheetPath);
+      if (xml) out.push({ name, rows: sheetRows(xml, shared) });
+    }
+  }
+  if (!out.length) {
+    const xml = get('xl/worksheets/sheet1.xml');
+    if (!xml) throw new AppError('Could not find a worksheet in this Excel file.');
+    out.push({ name: 'Sheet1', rows: sheetRows(xml, shared) });
+  }
+  return out;
+}
+
+/** First worksheet only (menu import etc.). */
+function parseXlsx(buf) {
+  return parseWorkbook(buf)[0].rows;
 }
 
 function parseCsv(text) {
@@ -165,4 +185,4 @@ function parseTable(buf, filename = '') {
   return rows.map((r) => r.map((c) => String(c ?? '').trim())).filter((r) => r.some((c) => c !== ''));
 }
 
-module.exports = { parseTable, parseXlsx, parseCsv };
+module.exports = { parseTable, parseXlsx, parseWorkbook, parseCsv };

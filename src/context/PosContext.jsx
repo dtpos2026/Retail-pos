@@ -26,7 +26,7 @@ export function emptyCart(orderType = 'takeaway', deliveryCharges = 0) {
 }
 
 function round2(n) {
-  return Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+  return Math.round((Number(n) + Number.EPSILON) * 1000) / 1000; // quantities keep gram precision (1.375 kg)
 }
 
 function reducer(state, a) {
@@ -37,7 +37,9 @@ function reducer(state, a) {
       return a.cart;
     case 'add': {
       const p = a.product;
-      const existing = state.items.find((i) => i.productId === p.id && !i.notes && i.unitPrice === p.sale_price);
+      const v = a.variant || null;
+      const price = v ? v.price : p.sale_price;
+      const existing = state.items.find((i) => i.productId === p.id && !i.notes && i.unitPrice === price && (i.variantId || null) === (v ? v.id : null));
       if (existing) {
         return {
           ...state,
@@ -48,13 +50,15 @@ function reducer(state, a) {
       const item = {
         key: newKey(),
         productId: p.id,
-        name: p.name,
-        unitPrice: p.sale_price,
-        unitDiscount: p.discount || 0,
+        name: v ? `${p.name} (${v.name})` : p.name,
+        variantId: v ? v.id : null,
+        unitPrice: price,
+        unitDiscount: v ? 0 : p.discount || 0,
         qty: a.qty || 1,
         notes: '',
         color: p.category_color,
         unit: p.unit,
+        weighed: !!p.weighed,
       };
       return { ...state, selected: item.key, items: [...state.items, item] };
     }
@@ -107,6 +111,7 @@ export function cartFromOrder(o) {
     items: o.items.map((i) => ({
       key: newKey(),
       productId: i.product_id,
+      variantId: i.variant_id || null,
       name: i.name,
       unitPrice: i.unit_price,
       unitDiscount: i.qty ? round2(i.discount / i.qty) : 0,

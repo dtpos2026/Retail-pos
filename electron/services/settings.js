@@ -120,6 +120,7 @@ const DEFAULTS = {
     currency: 'Rs.',
     showImagesOnPos: true,
     posGridSize: 'medium',
+    categoryLayout: 'top', // top (one line + ⋯ for the rest) | left (vertical list beside the products)
     onboarded: false,
   },
   appearance: {

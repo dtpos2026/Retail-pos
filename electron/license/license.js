@@ -341,21 +341,37 @@ async function registerDevice() {
 }
 
 let lastBeat = 0;
-/** Device details + alive signal, at most every 5 minutes. */
+let lastSig = '';
+const beatInfo = { at: 0, tier: -1, error: '' }; // last heartbeat outcome, shown in Settings -> License
+
+/** One heartbeat with whatever is known right now. */
+async function pushBeat(lid, mid) {
+  const si = require('./sysinfo');
+  const extra = si.snapshot();
+  const o = (load().owner) || {};
+  const tier = await cloud.heartbeat({ lid, machineId: mid, version: VERSION, extra: { ...extra, ownerName: o.owner, ownerPhone: o.phone } });
+  lastSig = si.signature(extra);
+  Object.assign(beatInfo, { at: Date.now(), tier, error: '' });
+  if (tier > 0) logger.warn('Heartbeat accepted only without newer fields (tier ' + tier + ') — Firestore rules need redeploying');
+}
+
+/**
+ * Device details + alive signal, at most every 5 minutes: first right away (so "online / last seen" is instant),
+ * then again as soon as the slow lookups (IP location, Windows location, hardware) bring something new.
+ */
 function sendHeartbeat(lid, mid) {
   if (Date.now() - lastBeat < 5 * 60 * 1000) return;
   lastBeat = Date.now();
-  require('./sysinfo').collect({ wait: !lastBeatSent })
-    .then((extra) => {
-      lastBeatSent = true;
-      const o = (load().owner) || {};
-      return cloud.heartbeat({ lid, machineId: mid, version: VERSION, extra: { ...extra, ownerName: o.owner, ownerPhone: o.phone } });
-    })
-    .catch(() => {
-      lastBeat = 0;
+  const si = require('./sysinfo');
+  const slow = si.refresh();
+  pushBeat(lid, mid)
+    .then(() => slow)
+    .then(() => (si.signature() !== lastSig ? pushBeat(lid, mid) : undefined))
+    .catch((err) => {
+      beatInfo.error = err.message || String(err);
+      lastBeat = 0; // try again on the next check
     });
 }
-let lastBeatSent = false;
 
 /** Called at login: send the device details and a fresh location right away. */
 function touch() {
@@ -365,6 +381,38 @@ function touch() {
   require('./sysinfo').invalidate();
   lastBeat = 0;
   sendHeartbeat(p.lid, machineId());
+}
+
+/** What this computer shares with the provider (Settings -> License). */
+function locationInfo() {
+  const p = keyPayload();
+  const s = load();
+  return {
+    registered: !!(p && s.device && s.device.regMid === machineId()),
+    lastSentAt: beatInfo.at ? new Date(beatInfo.at).toISOString() : '',
+    rulesOutdated: beatInfo.tier > 0,
+    error: beatInfo.error,
+    ...require('./sysinfo').locationInfo(),
+  };
+}
+
+/** "Send location now": take a fresh fix (waits up to 30 s) and push it to the provider immediately. */
+async function shareLocation() {
+  const p = keyPayload();
+  const s = load();
+  if (!p || !s.device || s.device.regMid !== machineId()) throw new AppError('This computer is not registered yet — connect to the internet and activate the license first.');
+  const si = require('./sysinfo');
+  si.invalidate();
+  await Promise.race([si.refresh(), new Promise((r) => setTimeout(r, 30000))]);
+  try {
+    await pushBeat(p.lid, machineId());
+  } catch (err) {
+    beatInfo.error = err.message || String(err);
+    if (err instanceof cloud.CloudError && err.offline) throw new AppError('No internet connection — the location will be sent as soon as you are online.', 'OFFLINE');
+    throw new AppError(beatInfo.error);
+  }
+  lastBeat = Date.now();
+  return locationInfo();
 }
 
 /** Support thread of this license (needs internet). */
@@ -535,4 +583,4 @@ async function onlineCheck() {
   return notify(before);
 }
 
-module.exports = { touch, status, ensureKey, supportMessages, sendSupport, activate, registerDevice, removeLicense, isUsable, maxUsers, onlineCheck, onChange, machineId, decode, VERSION };
+module.exports = { touch, locationInfo, shareLocation, status, ensureKey, supportMessages, sendSupport, activate, registerDevice, removeLicense, isUsable, maxUsers, onlineCheck, onChange, machineId, decode, VERSION };

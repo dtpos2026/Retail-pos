@@ -1,6 +1,7 @@
 'use strict';
 
 const fs = require('fs');
+const path = require('path');
 const { app, dialog, shell, BrowserWindow } = require('electron');
 const ctx = require('../core/context');
 const logger = require('../core/logger');
@@ -24,6 +25,7 @@ const inventory = require('../services/inventory');
 const reports = require('../services/reports');
 const dashboard = require('../services/dashboard');
 const backup = require('../services/backup');
+const dataExchange = require('../services/dataExchange');
 const seed = require('../db/seed');
 const license = require('../license/license');
 const printService = require('../printing/printService');
@@ -95,6 +97,8 @@ const routes = {
   'support.send': { open: true, fn: (a) => license.sendSupport(a) },
   'license.refresh': { open: true, fn: async () => (await license.onlineCheck()) || license.status() },
   'license.remove': { perm: 'settings', fn: () => license.removeLicense() },
+  'license.location': { perm: 'settings', fn: () => license.locationInfo() },
+  'license.shareLocation': { perm: 'settings', fn: () => license.shareLocation() },
 
   // ---- auth ----------------------------------------------------------------
   'auth.login': { open: true, fn: (a) => { const u = auth.login(a); license.touch(); return u; } },
@@ -281,6 +285,34 @@ const routes = {
     },
   },
   'backup.restore': { perm: 'backup', fn: (a) => backup.restore(a) },
+  // Full data in portable formats (Excel / JSON): export every table, or replace all data from such a file.
+  'data.export': {
+    perm: 'backup',
+    fn: async ({ format }) => {
+      const f = format === 'xlsx' ? 'xlsx' : 'json';
+      const r = await dialog.showSaveDialog(win(), {
+        title: f === 'xlsx' ? 'Save all data as Excel' : 'Save all data as JSON',
+        defaultPath: path.join(backup.folder(), dataExchange.defaultName(f)),
+        filters: [f === 'xlsx' ? { name: 'Excel workbook', extensions: ['xlsx'] } : { name: 'JSON file', extensions: ['json'] }],
+      });
+      if (r.canceled || !r.filePath) return { canceled: true };
+      return dataExchange.exportTo({ file: r.filePath, format: f });
+    },
+  },
+  'data.pickImport': {
+    perm: 'backup',
+    fn: async () => {
+      const r = await dialog.showOpenDialog(win(), {
+        title: 'Select an Excel or JSON data file',
+        defaultPath: backup.folder(),
+        properties: ['openFile'],
+        filters: [{ name: 'Retail POS data (Excel / JSON)', extensions: ['xlsx', 'json'] }],
+      });
+      if (r.canceled || !r.filePaths[0]) return { canceled: true };
+      return dataExchange.inspect({ file: r.filePaths[0] });
+    },
+  },
+  'data.import': { perm: 'backup', fn: (a) => dataExchange.importFrom(a) },
   'backup.openFolder': { perm: 'backup', fn: () => shell.openPath(backup.folder()) },
   'data.loadDemo': { perm: 'settings', fn: () => seed.loadDemo() },
   'data.clearSales': { perm: 'settings', fn: () => seed.clearSales() },
