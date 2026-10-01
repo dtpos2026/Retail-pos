@@ -34,7 +34,7 @@ const NAV = [
 ];
 
 function Shell({ children }) {
-  const { user, role, logout, isHead } = useAdmin();
+  const { user, role, logout, isHead, requests } = useAdmin();
   const loc = useLocation();
   const current = NAV.find((n) => loc.pathname.startsWith(n.to));
   const [unread, setUnread] = useState(0);
@@ -55,6 +55,7 @@ function Shell({ children }) {
               <n.icon size={19} />
               <span className="nav-label">{n.label}</span>
               {n.badge === 'support' && unread > 0 && <span className="badge-dot">{unread}</span>}
+              {n.to === '/devices' && requests.length > 0 && <span className="badge-dot">{requests.length}</span>}
             </NavLink>
           ))}
         </nav>

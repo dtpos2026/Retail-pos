@@ -238,6 +238,10 @@ function status() {
         const suspended = s.hold && s.hold.status === 'suspended';
         return { ...info, state: 'revoked', usable: false, message: (s.hold && s.hold.message) || (suspended ? 'This license has been suspended by your provider.' : 'This license has been deactivated by your provider.') };
       }
+      if (!dev && payload.mid === '*' && s.approval) {
+        if (s.approval.rejected) return { ...info, state: 'rejected', usable: false, message: 'Your provider did not approve this computer. Please contact them.' };
+        return { ...info, state: 'approval', usable: false, message: 'This license is already used on its maximum number of computers. An approval request was sent to your provider — this screen opens by itself once it is approved.' };
+      }
       // Device registration: license keys that are not locked to this computer need an online registration once.
       if (!dev && payload.mid === '*') {
         return { ...info, state: 'unregistered', usable: false, message: s.deviceError || 'This device is not registered yet. Register it to continue (internet needed once).' };
@@ -303,15 +307,22 @@ async function registerDevice() {
   const mid = machineId();
   const before = status();
   try {
-    const r = await cloud.registerDevice({ lid: payload.lid, machineId: mid, businessName: payload.bn, version: VERSION });
+    const r = await cloud.registerDevice({ lid: payload.lid, machineId: mid, businessName: (s.owner && s.owner.business) || payload.bn, version: VERSION, owner: s.owner || {} });
     s.device = { regMid: mid, status: r.status, name: require('os').hostname(), registeredAt: new Date().toISOString() };
     s.maxDevices = Number(r.license?.maxDevices) || s.maxDevices;
     delete s.deviceError;
+    delete s.approval;
     delete s.revoked;
     s.lastOnlineCheck = new Date().toISOString();
     save();
     logger.info('Device registered', payload.lid, r.created ? '(new)' : '(existing)');
   } catch (err) {
+    if (err instanceof cloud.CloudError && (err.code === 'APPROVAL' || err.code === 'REJECTED')) {
+      s.approval = { at: new Date().toISOString(), rejected: err.code === 'REJECTED' };
+      delete s.deviceError;
+      save();
+      return notify(before);
+    }
     if (err instanceof cloud.CloudError) {
       if (err.offline) {
         s.deviceError = 'Internet is needed once to register this device. Please connect to the internet and try again.';
@@ -337,13 +348,24 @@ function sendHeartbeat(lid, mid) {
   require('./sysinfo').collect({ wait: !lastBeatSent })
     .then((extra) => {
       lastBeatSent = true;
-      return cloud.heartbeat({ lid, machineId: mid, version: VERSION, extra });
+      const o = (load().owner) || {};
+      return cloud.heartbeat({ lid, machineId: mid, version: VERSION, extra: { ...extra, ownerName: o.owner, ownerPhone: o.phone } });
     })
     .catch(() => {
       lastBeat = 0;
     });
 }
 let lastBeatSent = false;
+
+/** Called at login: send the device details and a fresh location right away. */
+function touch() {
+  const s = load();
+  const p = keyPayload();
+  if (!p || !s.device || s.device.regMid !== machineId()) return;
+  require('./sysinfo').invalidate();
+  lastBeat = 0;
+  sendHeartbeat(p.lid, machineId());
+}
 
 /** Support thread of this license (needs internet). */
 async function supportMessages() {
@@ -369,8 +391,21 @@ async function sendSupport({ text }) {
   return true;
 }
 
-async function activate({ key }) {
+const SHORT_RE = /^DTPOS-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/;
+
+async function activate({ key, business, owner, phone }) {
   if (!(await ensureKey())) throw new AppError('Could not set up licensing. Connect to the internet and try again.', 'OFFLINE');
+  const typed = String(key || '').replace(/\s+/g, '').toUpperCase();
+  if (SHORT_RE.test(typed)) {
+    let doc;
+    try {
+      doc = await cloud.getKeyByCode(typed);
+    } catch (err) {
+      throw new AppError(err instanceof cloud.CloudError && err.offline ? 'Internet is needed once to activate with a license code.' : 'Could not check the license code. Try again.', 'OFFLINE');
+    }
+    if (!doc || !doc.key) throw new AppError('This license code was not found. Check the code or contact your provider.');
+    key = doc.key;
+  }
   const { payload, key: clean } = decode(key);
   const mid = machineId();
   if (payload.mid !== '*' && payload.mid !== mid) {
@@ -380,7 +415,11 @@ async function activate({ key }) {
   const s = load();
   const before = status();
   const prev = keyPayload();
-  if (!prev || prev.lid !== payload.lid) delete s.device; // a different license: register again
+  if (!prev || prev.lid !== payload.lid) {
+    delete s.device; // a different license: register again
+    delete s.approval;
+  }
+  if (business || owner || phone) s.owner = { business: String(business || '').trim().slice(0, 100), owner: String(owner || '').trim().slice(0, 80), phone: String(phone || '').trim().slice(0, 30) };
   s.key = clean;
   delete s.deviceError;
   if (s.revoked === payload.lid) delete s.revoked;
@@ -391,7 +430,7 @@ async function activate({ key }) {
   } catch (err) {
     if (payload.mid === '*') {
       // Limit reached: do not keep a key that cannot be used on this computer.
-      if (err.code === 'DEVICE_LIMIT' || err.code === 'INACTIVE' || err.code === 'NOT_FOUND') {
+      if (err.code === 'INACTIVE' || err.code === 'NOT_FOUND') {
         delete s.key;
         delete s.device;
         save();
@@ -468,6 +507,18 @@ async function onlineCheck() {
       // Registered before, but the admin deleted the device (freeing the slot).
       s.device.status = 'removed';
     }
+  } else if (license && device && payload.mid === '*' && s.approval) {
+    // The provider approved this extra computer: the device document now exists.
+    s.device = { regMid: mid, status: device.status || 'active', name: device.name, registeredAt: new Date().toISOString() };
+    delete s.approval;
+  } else if (license && !device && payload.mid === '*' && s.approval) {
+    try {
+      const rq = await cloud.getRequest(payload.lid, mid);
+      if (rq && rq.status === 'rejected') s.approval.rejected = true;
+      else if (rq && rq.status === 'pending') s.approval.rejected = false;
+    } catch {
+      /* offline */
+    }
   } else if (license && device && payload.mid !== '*') {
     // Machine-locked key that had not finished registering: adopt the server record.
     s.device = { regMid: mid, status: device.status || 'active', name: device.name, registeredAt: new Date().toISOString() };
@@ -484,4 +535,4 @@ async function onlineCheck() {
   return notify(before);
 }
 
-module.exports = { status, ensureKey, supportMessages, sendSupport, activate, registerDevice, removeLicense, isUsable, maxUsers, onlineCheck, onChange, machineId, decode, VERSION };
+module.exports = { touch, status, ensureKey, supportMessages, sendSupport, activate, registerDevice, removeLicense, isUsable, maxUsers, onlineCheck, onChange, machineId, decode, VERSION };

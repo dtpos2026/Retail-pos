@@ -86,6 +86,15 @@ async function getPublicKey() {
   return getDoc('publicConfig/signing');
 }
 
+/** Short code (DTPOS-XXXX-XXXX-XXXX-XXXX) -> the signed license key. */
+async function getKeyByCode(code) {
+  return getDoc(`licenseCodes/${encodeURIComponent(code)}`);
+}
+
+async function getRequest(lid, machineId) {
+  return getDoc(`deviceRequests/${encodeURIComponent(`${lid}_${machineId}`)}`);
+}
+
 /** Read license + this device's document. */
 async function fetchState(lid, machineId) {
   const [license, device] = await Promise.all([getDoc(`licenseStatus/${encodeURIComponent(lid)}`), getDoc(`devices/${encodeURIComponent(`${lid}_${machineId}`)}`)]);
@@ -97,17 +106,32 @@ async function fetchState(lid, machineId) {
  * are written in one batch; the security rules reject it when the limit is reached.
  * Resolves { status: 'active'|'blocked'|'suspended', created: boolean }.
  */
-async function registerDevice({ lid, machineId, businessName, version }) {
+async function registerDevice({ lid, machineId, businessName, version, owner = {} }) {
   const { license, device } = await fetchState(lid, machineId);
   if (!license) throw new CloudError('This license was not found online. Please contact your provider.', { code: 'NOT_FOUND' });
   if (license.status !== 'active') throw new CloudError('This license is not active. Please contact your provider.', { code: 'INACTIVE' });
   if (device) return { status: device.status || 'active', created: false, license };
   const count = Number(license.deviceCount) || 0;
   const max = Number(license.maxDevices) || 1;
-  if (count >= max) {
-    throw new CloudError(`This license is already used on ${count} device${count === 1 ? '' : 's'} (limit ${max}). Ask your provider to increase the device limit or remove an old device.`, { code: 'DEVICE_LIMIT' });
-  }
   const info = deviceInfo(version);
+  if (count >= max) {
+    // Over the limit: ask the provider to approve this extra computer instead of refusing outright.
+    const reqId = `${lid}_${machineId}`;
+    const existing = await getRequest(lid, machineId);
+    if (existing && existing.status === 'rejected') throw new CloudError('Your provider did not approve this computer. Please contact them.', { code: 'REJECTED' });
+    if (!existing || existing.status !== 'pending') {
+      await commit([
+        {
+          update: {
+            name: docName(`deviceRequests/${reqId}`),
+            fields: { licenseId: str(lid), machineId: str(machineId), name: str(info.name), os: str(info.os), appVersion: str(info.appVersion), businessName: str(businessName), ownerName: str(owner.owner || ''), ownerPhone: str(owner.phone || ''), status: str('pending') },
+          },
+          updateTransforms: [{ fieldPath: 'createdAt', setToServerValue: 'REQUEST_TIME' }],
+        },
+      ]).catch(() => {});
+    }
+    throw new CloudError(`This license is already used on ${count} computer${count === 1 ? '' : 's'} (limit ${max}). An approval request was sent to your provider.`, { code: 'APPROVAL' });
+  }
   const id = `${lid}_${machineId}`;
   try {
     await commit([
@@ -119,7 +143,7 @@ async function registerDevice({ lid, machineId, businessName, version }) {
       {
         update: {
           name: docName(`devices/${id}`),
-          fields: { licenseId: str(lid), machineId: str(machineId), name: str(info.name), os: str(info.os), appVersion: str(info.appVersion), status: str('active'), businessName: str(businessName) },
+          fields: { licenseId: str(lid), machineId: str(machineId), name: str(info.name), os: str(info.os), appVersion: str(info.appVersion), status: str('active'), businessName: str(businessName), ownerName: str(owner.owner || ''), ownerPhone: str(owner.phone || '') },
         },
         updateTransforms: [
           { fieldPath: 'firstSeen', setToServerValue: 'REQUEST_TIME' },
@@ -165,7 +189,7 @@ async function sendMessage({ lid, businessName, text }) {
   ]);
 }
 
-const HEARTBEAT_KEYS = ['hostname', 'osVersion', 'arch', 'cpu', 'cores', 'ramGb', 'username', 'manufacturer', 'model', 'localIp', 'mac', 'publicIp', 'city', 'region', 'country', 'isp', 'ipLat', 'ipLng'];
+const HEARTBEAT_KEYS = ['ownerName', 'ownerPhone', 'gpsLat', 'gpsLng', 'gpsAcc', 'hostname', 'osVersion', 'arch', 'cpu', 'cores', 'ramGb', 'username', 'manufacturer', 'model', 'localIp', 'mac', 'publicIp', 'city', 'region', 'country', 'isp', 'ipLat', 'ipLng'];
 
 /** Tell the server this device is alive (last seen, version, name, hardware, IP and approximate location). Best effort. */
 async function heartbeat({ lid, machineId, version, extra = {} }) {
@@ -186,4 +210,4 @@ async function heartbeat({ lid, machineId, version, extra = {} }) {
   ]);
 }
 
-module.exports = { CloudError, getPublicKey, fetchState, registerDevice, heartbeat, listMessages, sendMessage };
+module.exports = { CloudError, getKeyByCode, getRequest, getPublicKey, fetchState, registerDevice, heartbeat, listMessages, sendMessage };

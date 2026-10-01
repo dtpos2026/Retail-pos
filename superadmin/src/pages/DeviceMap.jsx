@@ -4,7 +4,7 @@ import 'leaflet/dist/leaflet.css';
 import { MapPin, Crosshair, XCircle } from 'lucide-react';
 import { useAdmin } from '../context';
 import { setDeviceLocation, clearDeviceLocation } from '../lib/data';
-import { isOnline } from '../lib/devices';
+import { isOnline, ago } from '../lib/devices';
 import { PageHead, Loading, Button, Badge, Empty } from '../components/ui';
 import { fmtDateTime } from '../lib/format';
 
@@ -19,7 +19,7 @@ export default function DeviceMap() {
   const placing = useRef(null);
   const [place, setPlace] = useState(null); // device waiting for a click on the map
 
-  const pos = (d) => (Number.isFinite(d.lat) && Number.isFinite(d.lng) ? { lat: d.lat, lng: d.lng, src: 'pinned' } : Number.isFinite(d.ipLat) && Number.isFinite(d.ipLng) ? { lat: d.ipLat, lng: d.ipLng, src: 'ip' } : null);
+  const pos = (d) => (Number.isFinite(d.lat) && Number.isFinite(d.lng) ? { lat: d.lat, lng: d.lng, src: 'pinned' } : Number.isFinite(d.gpsLat) && Number.isFinite(d.gpsLng) ? { lat: d.gpsLat, lng: d.gpsLng, src: 'gps' } : Number.isFinite(d.ipLat) && Number.isFinite(d.ipLng) ? { lat: d.ipLat, lng: d.ipLng, src: 'ip' } : null);
   const located = useMemo(() => (devices || []).map((d) => ({ ...d, _pos: pos(d) })).filter((d) => d._pos), [devices]);
   const unlocated = useMemo(() => (devices || []).filter((d) => !pos(d)), [devices]);
   placing.current = place;
@@ -51,7 +51,8 @@ export default function DeviceMap() {
     layer.current.clearLayers();
     located.forEach((d) => {
       L.circleMarker([d._pos.lat, d._pos.lng], { radius: 9, dashArray: d._pos.src === 'ip' ? '3 3' : undefined, color: '#fff', weight: 2, fillColor: colorOf(d), fillOpacity: 0.95 })
-        .bindPopup(`<b>${esc(d.businessName)}</b><br>${esc(d.name || '')}<br>${isOnline(d) ? 'Online now' : `Last seen ${esc(fmtDateTime(d.lastSeen))}`}<br>Status: ${esc(d.status)}${d.publicIp ? `<br>IP ${esc(d.publicIp)}` : ''}${d.city ? `<br>${esc([d.city, d.country].filter(Boolean).join(', '))}` : ''}<br><i>${d._pos.src === 'ip' ? 'Approximate (from IP)' : 'Pinned by you'}</i>`)
+        .bindPopup(`<b>${esc(d.businessName)}</b><br>${esc(d.name || '')}<br>${isOnline(d) ? 'Online now' : `Last seen ${esc(fmtDateTime(d.lastSeen))}`}<br>Status: ${esc(d.status)}${d.publicIp ? `<br>IP ${esc(d.publicIp)}` : ''}${d.city ? `<br>${esc([d.city, d.country].filter(Boolean).join(', '))}` : ''}<br><i>${d._pos.src === 'ip' ? 'Approximate (from IP address)' : d._pos.src === 'gps' ? `Exact (computer location${d.gpsAcc ? `, ±${d.gpsAcc} m` : ''})` : 'Pinned by you'}</i>`)
+        .bindTooltip(`${esc(d.businessName)} — ${isOnline(d) ? 'online' : `last seen ${esc(ago(d.lastSeen))}`}`, { direction: 'top', offset: [0, -8] })
         .addTo(layer.current);
     });
     if (located.length && map.current) map.current.fitBounds(L.latLngBounds(located.map((d) => [d._pos.lat, d._pos.lng])).pad(0.3), { maxZoom: 12 });

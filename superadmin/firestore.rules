@@ -57,7 +57,7 @@ service cloud.firestore {
       allow get: if true;
       allow list: if isAdmin();
       allow create: if isAdmin() || (
-        request.resource.data.keys().hasOnly(['licenseId', 'machineId', 'name', 'os', 'appVersion', 'status', 'businessName', 'firstSeen', 'lastSeen'])
+        request.resource.data.keys().hasOnly(['licenseId', 'machineId', 'name', 'os', 'appVersion', 'status', 'businessName', 'ownerName', 'ownerPhone', 'firstSeen', 'lastSeen'])
         && deviceId == request.resource.data.licenseId + '_' + request.resource.data.machineId
         && request.resource.data.status == 'active'
         && request.resource.data.firstSeen is timestamp
@@ -71,7 +71,7 @@ service cloud.firestore {
       );
       // Heartbeat from the POS: only descriptive fields + lastSeen; it can never change its own status.
       allow update: if isAdmin() || (
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'os', 'appVersion', 'lastSeen', 'hostname', 'osVersion', 'arch', 'cpu', 'cores', 'ramGb', 'username', 'manufacturer', 'model', 'localIp', 'mac', 'publicIp', 'city', 'region', 'country', 'isp', 'ipLat', 'ipLng'])
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'os', 'appVersion', 'lastSeen', 'hostname', 'osVersion', 'arch', 'cpu', 'cores', 'ramGb', 'username', 'manufacturer', 'model', 'localIp', 'mac', 'publicIp', 'city', 'region', 'country', 'isp', 'ipLat', 'ipLng', 'ownerName', 'ownerPhone', 'gpsLat', 'gpsLng', 'gpsAcc'])
         && request.resource.data.lastSeen is timestamp
       );
       allow delete: if isAdmin();
@@ -128,6 +128,25 @@ service cloud.firestore {
     }
     // What an invoice QR opens: one record per random code. Anyone holding the code can read that one record.
     match /invoiceVerify/{code} {
+      allow get: if true;
+      allow list: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // A computer beyond the license's device limit asks for approval; the admin approves or rejects it.
+    match /deviceRequests/{requestId} {
+      allow get: if true;
+      allow list: if isAdmin();
+      allow create: if request.resource.data.keys().hasOnly(['licenseId', 'machineId', 'name', 'os', 'appVersion', 'businessName', 'ownerName', 'ownerPhone', 'status', 'createdAt'])
+        && requestId == request.resource.data.licenseId + '_' + request.resource.data.machineId
+        && request.resource.data.status == 'pending'
+        && request.resource.data.createdAt is timestamp
+        && exists(/databases/$(database)/documents/licenseStatus/$(request.resource.data.licenseId));
+      allow update, delete: if isAdmin();
+    }
+
+    // Short license code -> the signed key. The POS looks it up once when it activates (internet needed once).
+    match /licenseCodes/{code} {
       allow get: if true;
       allow list: if isAdmin();
       allow write: if isAdmin();

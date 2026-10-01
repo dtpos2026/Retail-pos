@@ -19,8 +19,10 @@ const sign = (payload) => {
   return `RPOS1.${body}.${crypto.sign('sha256', Buffer.from(body), { key: privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64url')}`;
 };
 const str = (v) => ({ stringValue: String(v) });
+const KEYHOLDER = { key: '' };
 const db = new Map(); // "licenseStatus/L1" -> fields
 db.set('publicConfig/signing', { publicPem: str(pem) });
+db.set('licenseCodes/DTPOS-ABCD-EFGH-JKLM-NPQR', { key: str(KEYHOLDER.key) });
 db.set('licenseStatus/LIC1', { status: str('active'), message: str(''), maxDevices: { integerValue: '1' }, deviceCount: { integerValue: '0' }, key: str('x') });
 
 const server = http.createServer((req, res) => {
@@ -80,12 +82,18 @@ const step = async (name, fn) => { try { await fn(); console.log('OK  ', name); 
     await page.screenshot({ path: path.join(SHOTS, '70-first-launch.png') });
   });
   const key = sign({ lid: 'LIC1', cid: 'C1', bn: 'Sample Restaurant', mid: '*', plan: 'yearly', iat: '2026-01-01', exp: '2099-12-31', mu: 0, md: 1 });
-  await step('activate with the key: device registers, login screen opens', async () => {
-    await page.fill('textarea', key);
+  db.set('licenseCodes/DTPOS-ABCD-EFGH-JKLM-NPQR', { key: str(key) });
+  await step('activate with the SHORT code + business/owner/mobile: device registers, login opens', async () => {
+    await page.fill('input[placeholder="Your restaurant or business name"]', 'Sample Restaurant');
+    await page.fill('input[placeholder="Owner\'s full name"]', 'Ali Raza');
+    await page.fill('input[placeholder="03XX XXXXXXX"]', '03001234567');
+    await page.fill('input[placeholder="DTPOS-XXXX-XXXX-XXXX-XXXX"]', 'dtpos-abcd-efgh-jklm-npqr');
     await page.click('button:has-text("Activate License")');
     await page.waitForSelector('text=Welcome back', { timeout: 30000 });
     if (!db.get('devices/LIC1_' + [...db.keys()].find((k) => k.startsWith('devices/LIC1_')).split('_')[1])) throw new Error('device not registered online');
     if (db.get('licenseStatus/LIC1').deviceCount.integerValue !== '1') throw new Error('device counter not bumped');
+    const dv = db.get([...db.keys()].find((k) => k.startsWith('devices/LIC1_')));
+    if (!dv.ownerName || dv.ownerName.stringValue !== 'Ali Raza' && dv.ownerName !== 'Ali Raza') throw new Error('owner name not sent to the provider: ' + JSON.stringify(dv.ownerName));
   });
   await step('login works', async () => {
     await page.click('.user-tile');

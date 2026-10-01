@@ -66,8 +66,19 @@ async function main() {
   const a2 = await cloud.registerDevice({ lid: 'L1', machineId: 'AAAA-AAAA-AAAA-AAAA', businessName: 'Shop', version: '1.1.0' });
   assert.equal(a2.created, false); console.log('OK   re-registering same device is idempotent');
   // 2) second device refused (client check)
-  await assert.rejects(() => cloud.registerDevice({ lid: 'L1', machineId: 'BBBB-BBBB-BBBB-BBBB', businessName: 'Shop', version: '1.1.0' }), (e) => e.code === 'DEVICE_LIMIT');
-  console.log('OK   second device refused: limit 1');
+  await assert.rejects(() => cloud.registerDevice({ lid: 'L1', machineId: 'BBBB-BBBB-BBBB-BBBB', businessName: 'Shop', version: '1.1.0' }), (e) => e.code === 'APPROVAL');
+  const rq = await (await fetch(`${base}/deviceRequests/L1_BBBB-BBBB-BBBB-BBBB`)).json();
+  assert.equal(rq.fields.status.stringValue, 'pending');
+  console.log('OK   second device over the limit -> approval request created (not registered)');
+  const bad = await fetch(`${base}/deviceRequests/L1_CCCC-CCCC-CCCC-CCCC`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ fields: { licenseId: S('L1'), machineId: S('CCCC-CCCC-CCCC-CCCC'), status: S('approved'), createdAt: { timestampValue: new Date().toISOString() } } }) });
+  assert.notEqual(bad.status, 200); console.log('OK   a computer cannot approve itself');
+  const selfApprove = await fetch(`${base}/deviceRequests/L1_BBBB-BBBB-BBBB-BBBB?updateMask.fieldPaths=status`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ fields: { status: S('approved') } }) });
+  assert.notEqual(selfApprove.status, 200); console.log('OK   a computer cannot change its own request');
+  assert.equal((await admin.set('licenseCodes/DTPOS-ABCD-EFGH-JKLM-NPQR', { licenseId: S('L1'), key: S('RPOS1.x.y') })).status, 200);
+  assert.equal((await cloud.getKeyByCode('DTPOS-ABCD-EFGH-JKLM-NPQR')).key, 'RPOS1.x.y');
+  assert.notEqual((await fetch(`${base}/licenseCodes`)).status, 200);
+  console.log('OK   short license code readable by the POS, not listable');
+  await admin.del('deviceRequests/L1_BBBB-BBBB-BBBB-BBBB');
   // 3) bypass attempt: skip the client check and commit directly -> rules must reject
   const bypass = await fetch(`${base}:commit`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ writes: [
     { update: { name: 'projects/retail-pos-db7c6/databases/(default)/documents/licenseStatus/L1', fields: { deviceCount: { integerValue: '2' }, lastDevice: S('BBBB-BBBB-BBBB-BBBB') } }, updateMask: { fieldPaths: ['deviceCount', 'lastDevice'] }, currentDocument: { exists: true } },

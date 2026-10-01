@@ -11,6 +11,7 @@ import SupportBox from '../components/SupportBox';
 export function LicenseActivateForm({ onDone }) {
   const { license, setLicense, toast } = useApp();
   const [key, setKey] = useState('');
+  const [biz, setBiz] = useState({ business: '', owner: '', phone: '' });
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
 
@@ -36,7 +37,12 @@ export function LicenseActivateForm({ onDone }) {
   };
 
   const activate = async () => {
-    const st = await run('activate', () => api('license.activate', { key }));
+    const first = !license?.licenseId;
+    if (first && (!biz.business.trim() || !biz.phone.trim())) {
+      setError('Enter your restaurant / business name and mobile number.');
+      return;
+    }
+    const st = await run('activate', () => api('license.activate', { key, ...(first ? biz : {}) }));
     if (st?.usable) {
       toast('License activated. Thank you!');
       setKey('');
@@ -55,7 +61,8 @@ export function LicenseActivateForm({ onDone }) {
   };
 
   const needsRegister = license?.state === 'unregistered';
-  const locked = ['blocked', 'suspended', 'revoked', 'pending'].includes(license?.state);
+  const locked = ['blocked', 'suspended', 'revoked', 'pending', 'approval', 'rejected'].includes(license?.state);
+  const first = !license?.licenseId;
   const needsKey = license?.state === 'needs_key';
 
   return (
@@ -87,8 +94,17 @@ export function LicenseActivateForm({ onDone }) {
         <Button icon={RefreshCw} onClick={refresh} loading={busy === 'refresh'}>Check again (internet needed)</Button>
       )}
 
+      {first && (
+        <>
+          <Field label="Business name *"><input className="input" dir="auto" autoFocus value={biz.business} onChange={(e) => setBiz({ ...biz, business: e.target.value })} placeholder="Your restaurant or business name" /></Field>
+          <div className="form-grid">
+            <Field label="Owner name"><input className="input" dir="auto" value={biz.owner} onChange={(e) => setBiz({ ...biz, owner: e.target.value })} placeholder="Owner's full name" /></Field>
+            <Field label="Mobile number *"><input className="input" value={biz.phone} onChange={(e) => setBiz({ ...biz, phone: e.target.value })} placeholder="03XX XXXXXXX" /></Field>
+          </div>
+        </>
+      )}
       <Field label={license?.licenseId ? 'Enter a new license key (renewal / different license)' : 'License Key'}>
-        <textarea className="textarea mono" rows={4} value={key} onChange={(e) => setKey(e.target.value)} placeholder="Paste your RPOS1.… license key here" style={{ fontSize: 12 }} />
+        <input className="input mono" value={key} onChange={(e) => setKey(e.target.value)} placeholder="DTPOS-XXXX-XXXX-XXXX-XXXX" style={{ letterSpacing: 1 }} onKeyDown={(e) => e.key === 'Enter' && key.trim() && activate()} />
       </Field>
       {error && <div className="badge red" style={{ padding: '10px 12px', whiteSpace: 'normal', borderRadius: 10 }}>{error}</div>}
       <div className="row">
@@ -114,6 +130,8 @@ const GATE = {
   clock: { icon: ShieldAlert, color: 'var(--danger)', title: 'Check date & time' },
   pending: { icon: PauseCircle, color: 'var(--warning)', title: 'Payment pending' },
   needs_key: { icon: Wifi, color: 'var(--primary)', title: 'Set up licensing' },
+  approval: { icon: MonitorSmartphone, color: 'var(--warning)', title: 'Waiting for approval' },
+  rejected: { icon: ShieldOff, color: 'var(--danger)', title: 'Computer not approved' },
   unlicensed: { icon: KeyRound, color: 'var(--primary)', title: 'Activate DT Retail POS' },
 };
 

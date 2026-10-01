@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Building2, KeyRound, AlarmClock, Ban, Wallet, Plus, AlertTriangle, Monitor, Wifi, TrendingUp, Layers , LifeBuoy } from 'lucide-react';
 import { watch, getSigningConfig, publishPublicKey } from '../lib/data';
 import { watchThreads } from '../lib/support';
+import DeviceRequests from '../components/DeviceRequests';
 import { useAdmin } from '../context';
 import { money, fmtDate, licenseState, tsToDate, daysLeft, initials } from '../lib/format';
 import { isOnline, ago } from '../lib/devices';
@@ -93,6 +94,8 @@ export default function Dashboard() {
           <Button icon={Plus} onClick={() => nav('/licenses?new=1')} style={{ background: '#fff', color: 'var(--primary-600)', borderColor: '#fff' }}>Generate license</Button>
         </div>
       </div>
+
+      <DeviceRequests />
 
       {!signing && (
         <div className="card card-pad row" style={{ background: 'var(--warning-50)', borderColor: 'transparent' }}>

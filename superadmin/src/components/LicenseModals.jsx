@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { KeyRound, Copy, MessageCircle, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { Modal, Button, Field, Input, Select, NumberInput, Check, Badge } from './ui';
 import { useAdmin, friendly } from '../context';
-import { issueLicense, setLicenseStatus, saveClient } from '../lib/data';
+import { issueLicense, setLicenseStatus, saveClient, ensureCode } from '../lib/data';
 import { PLANS, expiryFor, ymd, MACHINE_ID_RE, normalizeMachineId } from '../lib/license';
 import { fmtDate } from '../lib/format';
 
@@ -145,10 +145,15 @@ export function LicenseForm({ clients, client: fixedClient, license, mode = 'new
 
 export function KeyResult({ license, onClose }) {
   const { toast } = useAdmin();
+  const [code, setCode] = useState(license.code || '');
+  useEffect(() => {
+    if (!code) ensureCode(license).then(setCode).catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const shown = code || license.key;
   const message = useMemo(
     () =>
-      `Assalam o Alaikum!\n\nYour Retail POS license for *${license.businessName}* is ready.\n\nPlan: ${license.plan}\nValid until: ${license.expiresAt ? fmtDate(license.expiresAt) : 'Lifetime'}\n${license.machineId === '*' ? `Devices allowed: ${license.maxDevices || 1}` : `Computer ID: ${license.machineId}`}\n\nLicense key (copy all):\n${license.key}\n\nOpen Retail POS → paste the key → Activate License (internet needed once).\nThank you!`,
-    [license]
+      `Assalam o Alaikum!\n\nYour DT Retail POS license for *${license.businessName}* is ready.\n\nPlan: ${license.plan}\nValid until: ${license.expiresAt ? fmtDate(license.expiresAt) : 'Lifetime'}\n${license.machineId === '*' ? `Devices allowed: ${license.maxDevices || 1}` : `Computer ID: ${license.machineId}`}\n\nLicense key:\n${shown}\n\nOpen DT Retail POS → enter your restaurant name, owner name, mobile and this key → Activate (internet needed once).\nThank you!`,
+    [license, shown]
   );
   const copy = (text, what) => {
     navigator.clipboard.writeText(text);
@@ -163,7 +168,7 @@ export function KeyResult({ license, onClose }) {
       footer={
         <>
           <Button icon={MessageCircle} onClick={() => copy(message, 'WhatsApp message')}>Copy WhatsApp message</Button>
-          <Button variant="primary" icon={Copy} onClick={() => copy(license.key, 'License key')}>Copy key</Button>
+          <Button variant="primary" icon={Copy} onClick={() => copy(shown, 'License key')}>Copy key</Button>
         </>
       }
     >
@@ -175,8 +180,9 @@ export function KeyResult({ license, onClose }) {
           <div>Expires</div><div>{license.expiresAt ? fmtDate(license.expiresAt) : 'Never (lifetime)'}</div>
           <div>Max users</div><div>{license.maxUsers || 'Unlimited'}</div>
         </div>
-        <div className="key-box">{license.key}</div>
-        <div className="small faint">The client pastes this key in Retail POS → Activate License. It works fully offline. If the POS is online, renewals and revocations are picked up automatically.</div>
+        <div className="key-box">{shown}</div>
+        <div className="small faint">The client enters the restaurant name, owner, mobile and this short key in DT Retail POS (internet needed once). After that the computer is remembered and the POS verifies with you in the background.</div>
+        {code && <details className="small"><summary className="faint" style={{ cursor: 'pointer' }}>Long offline key (only for a computer with no internet)</summary><div className="key-box mono" style={{ fontSize: 11, wordBreak: 'break-all' }}>{license.key}</div></details>}
       </div>
     </Modal>
   );

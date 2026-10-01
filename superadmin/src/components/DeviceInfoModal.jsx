@@ -5,6 +5,8 @@ import { isOnline, ago, DEVICE_STATUS } from '../lib/devices';
 
 const rows = (d) => [
   ['Business', d.businessName],
+  ['Owner', d.ownerName],
+  ['Owner phone', d.ownerPhone],
   ['Computer name', d.name || d.hostname],
   ['Windows user', d.username],
   ['Manufacturer / model', [d.manufacturer, d.model].filter(Boolean).join(' ')],
@@ -19,7 +21,7 @@ const rows = (d) => [
   ['Public IP', d.publicIp],
   ['Internet provider', d.isp],
   ['Approx. location (from IP)', [d.city, d.region, d.country].filter(Boolean).join(', ')],
-  ['Coordinates', Number.isFinite(d.lat) ? `${d.lat.toFixed(5)}, ${d.lng.toFixed(5)} (set by you)` : Number.isFinite(d.ipLat) ? `${d.ipLat.toFixed(4)}, ${d.ipLng.toFixed(4)} (from IP)` : ''],
+  ['Coordinates', Number.isFinite(d.gpsLat) && !Number.isFinite(d.lat) ? `${d.gpsLat.toFixed(5)}, ${d.gpsLng.toFixed(5)} (exact, from the computer${d.gpsAcc ? `, ±${d.gpsAcc} m` : ''})` : Number.isFinite(d.lat) ? `${d.lat.toFixed(5)}, ${d.lng.toFixed(5)} (set by you)` : Number.isFinite(d.ipLat) ? `${d.ipLat.toFixed(4)}, ${d.ipLng.toFixed(4)} (from IP)` : ''],
   ['Registered', fmtDateTime(d.firstSeen)],
   ['Last seen', fmtDateTime(d.lastSeen)],
 ];
@@ -34,7 +36,7 @@ export default function DeviceInfoModal({ device: d, onClose }) {
         <span className={`dot ${on ? 'on' : ''}`} />
         <b>{on ? 'Online now' : `Offline — last seen ${ago(d.lastSeen)}`}</b>
         <Badge color={st.color}>{st.label}</Badge>
-        {(Number.isFinite(d.lat) || Number.isFinite(d.ipLat)) && <a href="#/map" className="row small" style={{ gap: 4 }}><MapPin size={14} /> on the map</a>}
+        {(Number.isFinite(d.lat) || Number.isFinite(d.gpsLat) || Number.isFinite(d.ipLat)) && <a href="#/map" className="row small" style={{ gap: 4 }}><MapPin size={14} /> on the map</a>}
       </div>
       {rows(d).filter(([, v]) => v).map(([k, v]) => (
         <div key={k} className="row" style={{ padding: '7px 0', borderBottom: '1px solid var(--border)', gap: 12 }}>

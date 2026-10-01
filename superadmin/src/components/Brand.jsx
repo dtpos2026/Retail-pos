@@ -1,7 +1,7 @@
 import lockupWhite from '../assets/brand/dt-lockup-white.png';
 import lockupPurple from '../assets/brand/dt-lockup-purple.png';
 
-export const BRAND = { developer: 'Digital Target', product: 'DT Retail POS', panel: 'Super Admin', email: 'digitaltarget.digital@gmail.com', version: '1.3.0' };
+export const BRAND = { developer: 'Digital Target', product: 'DT Retail POS', panel: 'Super Admin', email: 'digitaltarget.digital@gmail.com', version: '1.4.0' };
 export const DT_LOCKUP_WHITE = lockupWhite;
 export const DT_LOCKUP_PURPLE = lockupPurple;
 

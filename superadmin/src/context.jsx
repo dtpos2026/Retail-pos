@@ -12,6 +12,7 @@ export function AdminProvider({ children }) {
   const [user, setUser] = useState(undefined); // undefined = loading
   const [role, setRole] = useState(null);
   const [devices, setDevices] = useState(null); // live list of every registered device
+  const [requests, setRequests] = useState([]); // computers waiting for approval
   const [toasts, setToasts] = useState([]);
   const [dialog, setDialog] = useState(null);
   const idRef = useRef(0);
@@ -35,7 +36,12 @@ export function AdminProvider({ children }) {
       setDevices(null);
       return undefined;
     }
-    return watch('devices', setDevices, () => setDevices([]));
+    const a = watch('devices', setDevices, () => setDevices([]));
+    const b = watch('deviceRequests', (r) => setRequests(r.filter((x) => x.status === 'pending')), () => {});
+    return () => {
+      a();
+      b();
+    };
   }, [role]);
 
   const toast = useCallback((message, type = 'success') => {
@@ -53,7 +59,7 @@ export function AdminProvider({ children }) {
 
   const logout = useCallback(() => signOut(auth), []);
 
-  const value = useMemo(() => ({ user, role, setRole, isHead: role === 'head', devices, toast, toastError, confirm, logout }), [user, role, devices, toast, toastError, confirm, logout]);
+  const value = useMemo(() => ({ user, role, setRole, isHead: role === 'head', devices, requests, toast, toastError, confirm, logout }), [user, role, devices, requests, toast, toastError, confirm, logout]);
 
   const close = (ok) => {
     const d = dialog;

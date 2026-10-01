@@ -3,6 +3,7 @@ import { Monitor, Wifi, ShieldOff, PauseCircle } from 'lucide-react';
 import { useAdmin } from '../context';
 import { PageHead, Stat, SearchBox, Select, Loading, Empty } from '../components/ui';
 import DeviceList from '../components/DeviceList';
+import DeviceRequests from '../components/DeviceRequests';
 import { isOnline } from '../lib/devices';
 import { tsToDate } from '../lib/format';
 
@@ -24,6 +25,7 @@ export default function Devices() {
   return (
     <div className="col" style={{ gap: 16 }}>
       <PageHead title="Devices" sub="Every computer that registered a license. Block, suspend or remove a device — the POS reacts as soon as it is online." />
+      <DeviceRequests />
       <div className="grid grid-4">
         <Stat hero icon={Monitor} label="Registered devices" value={devices.length} hint="across all licenses" />
         <Stat icon={Wifi} label="Online now" value={online} hint="seen in the last 15 min" color="#16a34a" />

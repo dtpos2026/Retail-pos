@@ -74,7 +74,22 @@ const routes = {
     },
   },
   'license.status': { open: true, fn: () => license.status() },
-  'license.activate': { open: true, fn: (a) => license.activate(a) },
+  'license.activate': {
+    open: true,
+    fn: async (a) => {
+      const st = await license.activate(a);
+      try {
+        const b = settings.get('business');
+        const patch = {};
+        if (a && String(a.business || '').trim() && (!b.name || b.name === 'My Business')) patch.name = String(a.business).trim();
+        if (a && String(a.phone || '').trim() && !b.phone) patch.phone = String(a.phone).trim();
+        if (Object.keys(patch).length) settings.set('business', patch);
+      } catch {
+        /* the settings may not be writable before the first login; ignore */
+      }
+      return st;
+    },
+  },
   'license.registerDevice': { open: true, fn: () => license.registerDevice() },
   'support.list': { open: true, fn: () => license.supportMessages() },
   'support.send': { open: true, fn: (a) => license.sendSupport(a) },
@@ -82,8 +97,8 @@ const routes = {
   'license.remove': { perm: 'settings', fn: () => license.removeLicense() },
 
   // ---- auth ----------------------------------------------------------------
-  'auth.login': { open: true, fn: (a) => auth.login(a) },
-  'auth.loginPin': { open: true, fn: (a) => auth.loginPin(a) },
+  'auth.login': { open: true, fn: (a) => { const u = auth.login(a); license.touch(); return u; } },
+  'auth.loginPin': { open: true, fn: (a) => { const u = auth.loginPin(a); license.touch(); return u; } },
   'auth.loginUsers': { open: true, fn: () => auth.loginUsers() },
   'auth.current': { open: true, fn: () => auth.current() },
   'auth.logout': { open: true, fn: () => auth.logout() },

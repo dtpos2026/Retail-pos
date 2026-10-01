@@ -124,6 +124,28 @@ export async function saveSigningConfig({ privateJwk, publicPem }) {
   await logActivity('config.signing', 'Created license signing key');
 }
 
+// ------------------------------------------------------------------ short license codes
+const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+/** DTPOS-XXXX-XXXX-XXXX-XXXX — 80 random bits; the POS looks the real signed key up by this code. */
+export function makeCode() {
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  const c = [...bytes].map((b) => CODE_ALPHABET[b % 32]).join('');
+  return `DTPOS-${c.slice(0, 4)}-${c.slice(4, 8)}-${c.slice(8, 12)}-${c.slice(12, 16)}`;
+}
+
+/** Make sure a license has a short code (older licenses get one on demand). */
+export async function ensureCode(lic) {
+  if (lic.code) return lic.code;
+  const code = makeCode();
+  const batch = writeBatch(db);
+  batch.set(doc(db, 'licenseCodes', code), { licenseId: lic.id, key: lic.key, updatedAt: serverTimestamp() });
+  batch.update(doc(db, 'licenses', lic.id), { code });
+  batch.set(doc(db, 'licenseStatus', lic.id), { code }, { merge: true });
+  await batch.commit();
+  lic.code = code;
+  return code;
+}
+
 // ------------------------------------------------------------------ licenses
 /**
  * Create (or re-issue) a signed license and publish its public status.
@@ -145,7 +167,10 @@ export async function issueLicense(input) {
     md: Math.max(1, Number(input.maxDevices) || 1),
   };
   const key = await signLicense(cfg.privateJwk, payload);
+  const prev = input.id ? await getDoc(ref) : null;
+  const code = (prev && prev.exists() && prev.data().code) || makeCode();
   const record = {
+    code,
     clientId: input.client.id,
     businessName: input.client.businessName,
     clientPhone: input.client.phone || '',
@@ -168,7 +193,8 @@ export async function issueLicense(input) {
   if (input.id) batch.update(ref, record);
   else batch.set(ref, { ...record, createdAt: serverTimestamp(), createdBy: me() });
   // Public status doc: merge so the live device counter survives renewals.
-  const status = { status: 'active', key, expiresAt: payload.exp, maxDevices, updatedAt: serverTimestamp() };
+  batch.set(doc(db, 'licenseCodes', code), { licenseId: ref.id, key, updatedAt: serverTimestamp() });
+  const status = { status: 'active', key, code, expiresAt: payload.exp, maxDevices, updatedAt: serverTimestamp() };
   batch.set(doc(db, 'licenseStatus', ref.id), input.id ? status : { ...status, deviceCount: 0 }, { merge: true });
   await batch.commit();
   await logActivity(input.id ? 'license.renew' : 'license.create', `${input.id ? 'Re-issued' : 'Issued'} ${payload.plan} license for ${payload.bn}${payload.exp ? ` until ${payload.exp}` : ' (lifetime)'}`, { licenseId: ref.id, clientId: payload.cid });
@@ -269,6 +295,30 @@ export function licensesCsv(licenses) {
   const head = ['Business', 'Phone', 'Plan', 'Status', 'Issued', 'Expires', 'Max devices', 'Max users', 'Price', 'Paid', 'Key'];
   const rows = licenses.map((l) => [l.businessName, l.clientPhone, l.plan, l.status, l.issuedAt, l.expiresAt || 'Lifetime', l.maxDevices || 1, l.maxUsers || 0, l.price || 0, l.paid ? 'yes' : 'no', l.key]);
   return '\uFEFF' + [head, ...rows].map((r) => r.map(q).join(',')).join('\r\n');
+}
+
+/** A computer asked to join a license that is full. Approve = the computer is registered and the limit grows if needed. */
+export async function approveRequest(req) {
+  const lsRef = doc(db, 'licenseStatus', req.licenseId);
+  const ls = await getDoc(lsRef);
+  if (!ls.exists()) throw new Error('This license no longer exists.');
+  const count = (ls.data().deviceCount || 0) + 1;
+  const max = Math.max(ls.data().maxDevices || 1, count);
+  const batch = writeBatch(db);
+  batch.set(doc(db, 'devices', `${req.licenseId}_${req.machineId}`), {
+    licenseId: req.licenseId, machineId: req.machineId, name: req.name || '', os: req.os || '', appVersion: req.appVersion || '', status: 'active',
+    businessName: req.businessName || '', ownerName: req.ownerName || '', ownerPhone: req.ownerPhone || '', firstSeen: serverTimestamp(), lastSeen: serverTimestamp(),
+  });
+  batch.update(lsRef, { deviceCount: count, maxDevices: max, updatedAt: serverTimestamp() });
+  batch.update(doc(db, 'licenses', req.licenseId), { maxDevices: max, updatedAt: serverTimestamp() });
+  batch.update(doc(db, 'deviceRequests', req.id), { status: 'approved', decidedBy: me(), decidedAt: serverTimestamp() });
+  await batch.commit();
+  await logActivity('device.approve', `Approved ${req.name || req.machineId} for ${req.businessName} (limit now ${max})`, { licenseId: req.licenseId });
+}
+
+export async function rejectRequest(req) {
+  await updateDoc(doc(db, 'deviceRequests', req.id), { status: 'rejected', decidedBy: me(), decidedAt: serverTimestamp() });
+  await logActivity('device.reject', `Rejected ${req.name || req.machineId} for ${req.businessName}`, { licenseId: req.licenseId });
 }
 
 /** Change how many computers may use a license. */

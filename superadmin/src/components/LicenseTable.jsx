@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Copy, RefreshCw, Ban, PlayCircle, ArrowRightLeft, Trash2, Eye, PauseCircle, Monitor, Hourglass } from 'lucide-react';
 import { Button, Badge, Empty } from './ui';
 import { useAdmin } from '../context';
-import { setLicenseStatus, deleteLicense } from '../lib/data';
+import { setLicenseStatus, deleteLicense, ensureCode } from '../lib/data';
 import DevicesModal from './DevicesModal';
 import { fmtDate, money, licenseState } from '../lib/format';
 import { LicenseForm, KeyResult } from './LicenseModals';
@@ -77,7 +77,7 @@ export default function LicenseTable({ licenses, showClient = true }) {
                   <td><Badge color={st.color}>{st.label}</Badge></td>
                   <td className="right nowrap">
                     <Button size="sm" variant="ghost" icon={Eye} title="Show key" onClick={() => setResult(l)} />
-                    <Button size="sm" variant="ghost" icon={Copy} title="Copy key" onClick={() => { navigator.clipboard.writeText(l.key); toast('License key copied'); }} />
+                    <Button size="sm" variant="ghost" icon={Copy} title="Copy key" onClick={async () => { try { navigator.clipboard.writeText(l.code || (await ensureCode(l))); toast('License key copied'); } catch (e) { toastError(e); } }} />
                     {l.status !== 'revoked' && <Button size="sm" variant="ghost" icon={RefreshCw} title="Renew / extend" onClick={() => setForm({ mode: 'renew', license: l })} />}
                     {l.status !== 'revoked' && <Button size="sm" variant="ghost" icon={ArrowRightLeft} title="Transfer to new computer" onClick={() => setForm({ mode: 'transfer', license: l })} />}
                     {l.status === 'active' && <Button size="sm" variant="ghost" icon={PauseCircle} title="Suspend" onClick={() => status(l, 'suspended')} />}

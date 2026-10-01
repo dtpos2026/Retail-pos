@@ -32,9 +32,14 @@ const realFetch = globalThis.fetch;
 globalThis.fetch = async (url, opts = {}) => {
   if (offline) throw new Error('network down');
   const u = String(url);
-  const m = /documents\/(licenseStatus|devices)\/([^?]+)/.exec(u);
+  const m = /documents\/(licenseStatus|devices|deviceRequests|licenseCodes)\/([^?]+)/.exec(u);
   if (opts.method === 'POST' && u.includes(':commit')) {
     const writes = JSON.parse(opts.body).writes;
+    const rqW = writes.find((w) => w.update.name.includes('/deviceRequests/'));
+    if (rqW) {
+      db.set(`deviceRequests/${rqW.update.name.split('/deviceRequests/')[1]}`, Object.fromEntries(Object.entries(rqW.update.fields).map(([k, v]) => [k, v.stringValue])));
+      return { ok: true, status: 200, json: async () => ({}) };
+    }
     const lsW = writes.find((w) => w.update.name.includes('/licenseStatus/'));
     const dvW = writes.find((w) => w.update.name.includes('/devices/'));
     const lsId = lsW.update.name.split('/licenseStatus/')[1];
@@ -78,17 +83,30 @@ test('trial -> activate a "*" key registers this device online and stays active 
   off();
 });
 
-test('device limit: a second computer cannot use the same license', async () => {
+test('device limit: a second computer asks for approval; the provider approves; short code activation works', async () => {
   reset();
   db.set('licenseStatus/L2', { status: 'active', maxDevices: 1, deviceCount: 1, key: 'x' }); // another PC already registered
-  await assert.rejects(() => lic.activate({ key: sign({ ...base, lid: 'L2', mid: '*' }) }), /already used on 1 device/);
-  assert.notEqual(lic.status().state, 'active');
-  assert.equal(lic.status().device, undefined, 'a key that cannot be used here is not kept');
-  // provider raises the limit -> registration works
-  db.set('licenseStatus/L2', { status: 'active', maxDevices: 2, deviceCount: 1, key: 'x' });
-  const st = await lic.activate({ key: sign({ ...base, lid: 'L2', mid: '*' }) });
-  assert.equal(st.state, 'active');
-  assert.equal(db.get('licenseStatus/L2').deviceCount, 2);
+  const full = sign({ ...base, lid: 'L2', mid: '*' });
+  db.set('licenseCodes/DTPOS-ABCD-EFGH-JKLM-NPQR', { licenseId: 'L2', key: full });
+  const st0 = await lic.activate({ key: 'dtpos-abcd-efgh-jklm-npqr', business: 'Sample Restaurant', owner: 'Ali', phone: '0300' });
+  assert.equal(st0.state, 'approval'); assert.equal(st0.usable, false);
+  assert.match(st0.message, /approval request/);
+  const rq = db.get(`deviceRequests/L2_${MID}`);
+  assert.equal(rq.status, 'pending'); assert.equal(rq.ownerName, 'Ali'); assert.equal(rq.businessName, 'Sample Restaurant');
+  // still waiting
+  assert.equal((await lic.onlineCheck()).state, 'approval');
+  // provider approves: creates the device document and raises the limit
+  db.set(`devices/L2_${MID}`, { status: 'active', name: 'PC2' });
+  db.set('licenseStatus/L2', { status: 'active', maxDevices: 2, deviceCount: 2, key: 'x' });
+  const st = await lic.onlineCheck();
+  assert.equal(st.state, 'active'); assert.equal(st.usable, true);
+  // rejected request
+  reset();
+  db.set('licenseStatus/L2', { status: 'active', maxDevices: 1, deviceCount: 1, key: 'x' });
+  db.set(`deviceRequests/L2_${MID}`, { status: 'rejected' });
+  const st2 = await lic.activate({ key: full });
+  assert.equal(st2.state, 'rejected');
+  await assert.rejects(() => lic.activate({ key: 'DTPOS-AAAA-AAAA-AAAA-AAAA' }), /not found/);
 });
 
 test('a "*" key needs internet once', async () => {

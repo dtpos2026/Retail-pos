@@ -36,9 +36,47 @@ function hardware() {
   });
 }
 
+let gps = null; // Windows location service fix { gpsLat, gpsLng, gpsAcc }
+let gpsAt = 0;
+let gpsBusy = null;
+const GPS_SCRIPT = [
+  'Add-Type -AssemblyName System.Device',
+  '$w = New-Object System.Device.Location.GeoCoordinateWatcher([System.Device.Location.GeoPositionAccuracy]::High)',
+  '[void]$w.TryStart($false, [TimeSpan]::FromSeconds(8))',
+  '$l = $w.Position.Location',
+  'if (-not $l.IsUnknown) { $c = [Globalization.CultureInfo]::InvariantCulture; ($l.Latitude.ToString($c) + "," + $l.Longitude.ToString($c) + "," + $l.HorizontalAccuracy.ToString($c)) }',
+].join('; ');
+
+/** Precise position from the Windows location service (Wi-Fi / GPS) when location is allowed on the computer. */
+function refreshGps() {
+  if (process.platform !== 'win32') return Promise.resolve();
+  if (gpsBusy) return gpsBusy;
+  if (gpsAt && Date.now() - gpsAt < GEO_TTL) return Promise.resolve();
+  gpsAt = Date.now();
+  gpsBusy = new Promise((resolve) => {
+    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', GPS_SCRIPT], { windowsHide: true, timeout: 15000 }, (err, out) => {
+      try {
+        const m = !err && /^(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?),(\d+(?:\.\d+)?)\s*$/m.exec(String(out));
+        if (m && Math.abs(Number(m[1])) <= 90 && Math.abs(Number(m[2])) <= 180) gps = { gpsLat: Number(m[1]), gpsLng: Number(m[2]), gpsAcc: Math.round(Number(m[3])) };
+      } catch {
+        /* location not available / denied */
+      }
+      gpsBusy = null;
+      resolve();
+    });
+  });
+  return gpsBusy;
+}
+
+/** Force a new position fix on the next collect (called at login). */
+function invalidate() {
+  gpsAt = 0;
+  geoAt = 0;
+}
+
 function refreshGeo() {
   if (geoBusy) return geoBusy;
-  if (geo && Date.now() - geoAt < GEO_TTL) return Promise.resolve();
+  if (geo && geoAt && Date.now() - geoAt < GEO_TTL) return Promise.resolve();
   const c = new AbortController();
   const t = setTimeout(() => c.abort(), 6000);
   geoBusy = fetch('https://ipwho.is/', { signal: c.signal })
@@ -80,7 +118,7 @@ function network() {
 
 /** Everything known right now (kicks off the slow parts in the background). */
 async function collect({ wait = false } = {}) {
-  const slow = Promise.all([hardware(), refreshGeo()]);
+  const slow = Promise.all([hardware(), refreshGeo(), refreshGps()]);
   if (wait) await Promise.race([slow, new Promise((r) => setTimeout(r, 7000))]);
   const cpus = os.cpus() || [];
   let username = '';
@@ -100,7 +138,8 @@ async function collect({ wait = false } = {}) {
     ...(model || {}),
     ...network(),
     ...(geo ? { ...geo, geoAt: undefined } : {}),
+    ...(gps || {}),
   };
 }
 
-module.exports = { collect };
+module.exports = { collect, invalidate };

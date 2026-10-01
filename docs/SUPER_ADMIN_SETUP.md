@@ -106,3 +106,10 @@ Sign-in screen: **Test cloud connection** checks Firestore, the deployed rules a
 * **Support:** new client messages appear on the Dashboard (Support inbox) and the sidebar badge; the POS shows “✉ new message” when you answer. Delete a single message or the whole chat.
 * **Audit log housekeeping (head admin):** Export CSV, Delete > 30 days, Delete > 90 days, Clear all. Entries older than a year are removed automatically so the database never fills up.
 * Re-deploy rules after updating: `npx firebase-tools deploy` (device-detail fields and audit deletion need the new rules).
+
+## 9. v1.7 — short keys, first-time details, device approval
+* **Short license key:** `DTPOS-XXXX-XXXX-XXXX-XXXX`. The POS looks the signed key up with it once (internet needed once). Older licenses get a short code the first time you open or copy their key. The long `RPOS1…` key stays available (collapsed) for a computer with no internet.
+* **First launch asks:** business name, owner name, mobile, license key. They are saved with the computer and shown in the Super Admin (Devices → ⓘ). After that the POS never asks again; it verifies with you in the background every minute.
+* **Device approval:** when a license is already used on its maximum computers, the new computer sends an **approval request**. You get an alert (Dashboard, Devices page, sidebar badge). **Approve** registers it and raises the limit; **Reject** blocks it. The POS shows "waiting for approval" and opens by itself once approved.
+* **Exact location:** at every login the POS reports the Windows location (Wi-Fi/GPS) when location is allowed on the computer, otherwise the approximate IP location. The map shows exact > IP, with online / last seen.
+* Deploy again: `npx firebase-tools deploy` (new rules for `licenseCodes`, `deviceRequests`).

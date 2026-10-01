@@ -40,7 +40,9 @@ export default function Support() {
     markThreadRead(active).catch(() => {});
     return off;
   }, [active, toastError]);
-  useEffect(() => end.current?.scrollIntoView({ block: 'end' }), [msgs]);
+  useEffect(() => {
+    end.current?.scrollIntoView({ block: 'end' });
+  }, [msgs]);
 
   if (!threads) return <Loading />;
   const cur = list.find((t) => t.id === active);
