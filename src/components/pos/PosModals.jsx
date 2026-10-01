@@ -154,25 +154,43 @@ export function CustomerModal({ customer, required, onClose, onSave }) {
 
 export function TableModal({ current, onClose, onPick }) {
   const [tables, setTables] = useState(null);
+  const [floors, setFloors] = useState([]);
   useEffect(() => {
     api('tables.list').then(setTables).catch(() => setTables([]));
+    api('tables.floors').then(setFloors).catch(() => {});
   }, []);
+  const groups = [];
+  if (tables) {
+    for (const f of floors) {
+      const list = tables.filter((t) => t.floor_id === f.id);
+      if (list.length) groups.push({ key: f.id, name: f.name, list });
+    }
+    const rest = tables.filter((t) => !floors.some((f) => f.id === t.floor_id));
+    if (rest.length) groups.push({ key: 0, name: groups.length ? 'Other tables' : '', list: rest });
+  }
   return (
     <Modal title="Select Table" icon={Armchair} size="lg" onClose={onClose}>
       {!tables ? null : tables.length === 0 ? (
         <Empty icon={Armchair} title="No tables yet" text="Add tables from the Tables screen." />
       ) : (
-        <div className="tgrid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))' }}>
-          {tables.map((t) => {
-            const running = t.status === 'occupied' && t.id !== current?.id;
-            return (
-              <div key={t.id} className={`tcard ${t.status}`} style={{ minHeight: 96, alignItems: 'center' }} onClick={() => onPick(t)}>
-                <TableVisual name={t.name} capacity={t.capacity} />
-                <StatusBadge status={t.status} />
-                <div className="small faint">{running ? `Open ${t.order_no}` : `${t.capacity} seats`}</div>
+        <div className="col" style={{ gap: 14 }}>
+          {groups.map((g) => (
+            <div key={g.key}>
+              {g.name && <div className="label" style={{ marginBottom: 6 }}>{g.name}</div>}
+              <div className="tgrid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))' }}>
+                {g.list.map((t) => {
+                  const running = t.status === 'occupied' && t.id !== current?.id;
+                  return (
+                    <div key={t.id} className={`tcard ${t.status}`} style={{ minHeight: 96, alignItems: 'center' }} onClick={() => onPick(t)}>
+                      <TableVisual name={t.name} capacity={t.capacity} />
+                      <StatusBadge status={t.status} />
+                      <div className="small faint">{running ? `Open ${t.order_no}` : `${t.capacity} seats`}</div>
+                    </div>
+                  );
+                })}
               </div>
-            );
-          })}
+            </div>
+          ))}
         </div>
       )}
     </Modal>

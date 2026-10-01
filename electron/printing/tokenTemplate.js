@@ -48,7 +48,7 @@ function tokenParts(order, token, cfg) {
           .join('')}</div>`
       : '';
   const totalHtml = cfg.showTotal ? `<div class="row b" style="font-size:1.2em;margin-top:1mm"><span>Total</span><span>${formatMoney(total, currency)}</span></div>` : '';
-  const type = `${esc(orderTypeLabel(order.order_type))}${order.table_name ? ' · ' + t(order.table_name) : ''}`;
+  const type = `${esc(orderTypeLabel(order.order_type))}${order.table_name ? ' · ' + t(order.table_name) : ''}${order.waiter_name ? ' · W: ' + t(order.waiter_name) : ''}${order.rider_name ? ' · R: ' + t(order.rider_name) : ''}`;
   const foot = `<div class="row" style="font-size:.9em;margin-top:1.2mm"><span>${formatDate(token.created_at)}</span><span>${formatTime(token.created_at)}</span></div>${cfg.footer ? `<div style="margin-top:1.5mm">${t(cfg.footer)}</div>` : ''}`;
   return { logo, name, itemsHtml, totalHtml, type, foot, items };
 }
