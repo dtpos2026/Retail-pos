@@ -37,6 +37,7 @@ function ProfileModal({ profile, onClose, onSaved }) {
   const [busy, setBusy] = useState(false);
   const logo = useRef(null);
   const sig = useRef(null);
+  const payq = useRef(null);
   const set = (k) => (e) => setP({ ...p, [k]: e.target ? e.target.value : e });
   const pick = (k) => async (e) => {
     const f = e.target.files?.[0];
@@ -75,7 +76,11 @@ function ProfileModal({ profile, onClose, onSaved }) {
         <Field label="Currency"><Input value={p.currency} onChange={set('currency')} /></Field>
         <Field label="Verification page URL" hint="Empty = this panel's address. The invoice QR opens  URL?verify=CODE"><Input value={p.verifyBase} onChange={set('verifyBase')} placeholder="https://your-app.web.app/" /></Field>
         <Field label="Footer note" className="full"><Input value={p.footer} onChange={set('footer')} /></Field>
-        {[['logo', 'Logo', logo], ['signature', 'Signature', sig]].map(([k, label, ref]) => (
+        <Field label="Payment: account title"><Input value={p.paymentTitle} onChange={set('paymentTitle')} placeholder="e.g. TAIMOOR YOUNAS" /></Field>
+        <Field label="Payment: bank"><Input value={p.paymentBank} onChange={set('paymentBank')} placeholder="e.g. Meezan Bank" /></Field>
+        <Field label="Payment: account / IBAN" className="full"><Input value={p.paymentAccount} onChange={set('paymentAccount')} /></Field>
+        <Field label="Terms & conditions (one per line)" className="full"><textarea className="textarea" rows={3} value={p.terms} onChange={set('terms')} /></Field>
+        {[['logo', 'Logo (empty = Digital Target logo)', logo], ['signature', 'Signature', sig], ['paymentQr', 'Payment QR (bank / JazzCash)', payq]].map(([k, label, ref]) => (
           <div key={k} className="col" style={{ gap: 6 }}>
             <div className="label">{label}</div>
             <div className="row">
@@ -98,7 +103,7 @@ function InvoiceForm({ invoice, invoices, clients, licenses, profile, onClose, o
     invoiceNo: nextInvoiceNo(invoices, profile.prefix),
     date: today(),
     customer: { restaurant: '', owner: '', address: '', phone: '', whatsapp: '', licenseKey: '', licenseRef: '' },
-    pkg: '', description: '', amount: '', extras: [], discount: '', paid: '', paymentDate: '', paymentMethod: 'Cash', notes: '',
+    pkg: '', service: '', project: '', period: '', dueDate: '', items: [{ description: '', qty: 1, rate: '' }], extras: [], discount: '', paid: '', paymentDate: '', paymentMethod: 'Bank Transfer', notes: '',
   });
   const [busy, setBusy] = useState(false);
   const setC = (k) => (e) => setF({ ...f, customer: { ...f.customer, [k]: e.target.value } });
@@ -111,7 +116,8 @@ function InvoiceForm({ invoice, invoices, clients, licenses, profile, onClose, o
     setF({
       ...f,
       customer: { ...f.customer, restaurant: l.businessName, owner: c.ownerName || '', phone: l.clientPhone || c.phone || '', whatsapp: c.phone || '', address: c.address || '', licenseKey: l.key, licenseRef: l.id },
-      pkg: l.plan, description: `${String(l.plan).replace('_', ' ')} license${l.expiresAt ? ` until ${l.expiresAt}` : ' (lifetime)'}`, amount: f.amount || l.price || '',
+      pkg: l.plan, service: 'DT Retail POS license',
+      items: [{ description: `DT Retail POS — ${String(l.plan).replace('_', ' ')} license${l.expiresAt ? ` until ${l.expiresAt}` : ' (lifetime)'}`, qty: 1, rate: l.price || '' }],
     });
   };
   const save = async () => {
@@ -120,7 +126,8 @@ function InvoiceForm({ invoice, invoices, clients, licenses, profile, onClose, o
       let licenseStatus = 'unknown';
       const l = licenses.find((x) => x.id === f.customer.licenseRef);
       if (l) licenseStatus = l.status;
-      await saveInvoice({ ...f, amount: Number(f.amount) || 0, discount: Number(f.discount) || 0, paid: Number(f.paid) || 0 }, profile, invoices, licenseStatus);
+      const items = (f.items || []).filter((i) => String(i.description).trim() || Number(i.rate)).map((i) => ({ description: i.description, qty: Number(i.qty) || 1, rate: Number(i.rate) || 0 }));
+      await saveInvoice({ ...f, items, amount: items.reduce((s, i) => s + i.qty * i.rate, 0), discount: Number(f.discount) || 0, paid: Number(f.paid) || 0 }, profile, invoices, licenseStatus);
       toast('Invoice saved');
       onSaved();
       onClose();
@@ -143,9 +150,22 @@ function InvoiceForm({ invoice, invoices, clients, licenses, profile, onClose, o
           <Field label="Phone"><Input value={f.customer.phone} onChange={setC('phone')} /></Field>
           <Field label="Address"><Input value={f.customer.address} onChange={setC('address')} /></Field>
           <Field label="Package / plan"><Input value={f.pkg} onChange={(e) => setF({ ...f, pkg: e.target.value })} placeholder="e.g. yearly" /></Field>
-          <Field label="Description"><Input value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} /></Field>
-          <Field label="Amount"><NumberInput value={f.amount} onChange={(v) => setF({ ...f, amount: v })} /></Field>
+          <Field label="Service"><Input value={f.service} onChange={(e) => setF({ ...f, service: e.target.value })} placeholder="e.g. DT Retail POS license" /></Field>
+          <Field label="Project (optional)"><Input value={f.project} onChange={(e) => setF({ ...f, project: e.target.value })} /></Field>
+          <Field label="Period (optional)"><Input value={f.period} onChange={(e) => setF({ ...f, period: e.target.value })} placeholder="2026-09-29 → 2026-10-01" /></Field>
+          <Field label="Due date (empty = on receipt)"><Input type="date" value={f.dueDate} onChange={(e) => setF({ ...f, dueDate: e.target.value })} /></Field>
           <Field label="Discount"><NumberInput value={f.discount} onChange={(v) => setF({ ...f, discount: v })} /></Field>
+        </div>
+        <div className="col" style={{ gap: 6 }}>
+          <div className="row"><div className="label grow">Items</div><Button size="sm" icon={Plus} onClick={() => setF({ ...f, items: [...(f.items || []), { description: '', qty: 1, rate: '' }] })}>Add item</Button></div>
+          {(f.items || []).map((x, i) => (
+            <div key={i} className="row">
+              <Input placeholder="Description" value={x.description} onChange={(e) => setF({ ...f, items: f.items.map((y, j) => (j === i ? { ...y, description: e.target.value } : y)) })} />
+              <NumberInput style={{ maxWidth: 80 }} value={x.qty} onChange={(v) => setF({ ...f, items: f.items.map((y, j) => (j === i ? { ...y, qty: v } : y)) })} />
+              <NumberInput style={{ maxWidth: 130 }} placeholder="Rate" value={x.rate} onChange={(v) => setF({ ...f, items: f.items.map((y, j) => (j === i ? { ...y, rate: v } : y)) })} />
+              <Button size="sm" variant="danger-ghost" icon={Trash2} onClick={() => setF({ ...f, items: f.items.filter((_, j) => j !== i) })} />
+            </div>
+          ))}
         </div>
         <div className="col" style={{ gap: 6 }}>
           <div className="row"><div className="label grow">Extra charges (installation, training, hardware…)</div><Button size="sm" icon={Plus} onClick={() => setF({ ...f, extras: [...(f.extras || []), { label: '', amount: '' }] })}>Add</Button></div>
@@ -175,12 +195,20 @@ function InvoiceForm({ invoice, invoices, clients, licenses, profile, onClose, o
 function PreviewModal({ invoice, profile, onClose }) {
   const [format, setFormat] = useState('a4');
   const [html, setHtml] = useState('');
+  const boxRef = useRef(null);
+  const [scale, setScale] = useState(0.8);
   useEffect(() => {
     invoiceHtml(invoice, profile, format).then(setHtml);
   }, [invoice, profile, format]);
+  useEffect(() => {
+    const w = boxRef.current?.clientWidth || 700;
+    setScale(format === 'a4' ? Math.min(1, w / 794) : 1);
+  }, [format, html]);
   return (
     <Modal title={`Invoice ${invoice.invoiceNo}`} icon={Eye} size="lg" onClose={onClose} footer={<><Seg value={format} onChange={setFormat} options={[{ value: 'a4', label: 'A4' }, { value: '80mm', label: '80 mm' }]} /><div className="grow" /><Button onClick={onClose}>Close</Button><Button variant="primary" icon={Printer} onClick={() => printHtml(html)} disabled={!html}>Print / Save PDF</Button></>}>
-      <iframe title="Invoice preview" srcDoc={html} style={{ width: '100%', height: 520, border: '1px solid var(--border)', borderRadius: 12, background: '#fff' }} />
+      <div ref={boxRef} style={{ width: '100%', height: Math.round((format === 'a4' ? 1123 : 700) * scale) + 2, overflow: 'hidden', border: '1px solid var(--border)', borderRadius: 12, background: '#fff' }}>
+        <iframe title="Invoice preview" srcDoc={html} style={{ width: format === 'a4' ? 794 : 302, height: format === 'a4' ? 1123 : 700, border: 0, transform: `scale(${scale})`, transformOrigin: 'top left', display: 'block', margin: format === 'a4' ? 0 : '0 auto' }} />
+      </div>
     </Modal>
   );
 }

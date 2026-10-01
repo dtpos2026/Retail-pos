@@ -17,14 +17,21 @@ export const DEFAULT_PROFILE = {
   footer: 'Thank you for choosing Digital Target.',
   logo: '',
   signature: '',
+  paymentTitle: '',
+  paymentBank: '',
+  paymentAccount: '',
+  paymentQr: '',
+  terms: 'Payment due within 7 days of invoice date.\nWork starts after advance payment confirmation.',
+  dueDays: 0,
 };
 
 const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 
 /** amount + extras − discount, never below zero. */
 export function invoiceTotal(inv) {
+  const base = Array.isArray(inv.items) && inv.items.length ? inv.items.reduce((s, i) => s + (Number(i.qty) || 0) * (Number(i.rate) || 0), 0) : Number(inv.amount) || 0;
   const extras = (inv.extras || []).reduce((s, e) => s + (Number(e.amount) || 0), 0);
-  return Math.max(0, round2((Number(inv.amount) || 0) + extras - (Number(inv.discount) || 0)));
+  return Math.max(0, round2(base + extras - (Number(inv.discount) || 0)));
 }
 
 /** PREFIX-YYYY-0001 — one more than the highest number used this year for that prefix. */
