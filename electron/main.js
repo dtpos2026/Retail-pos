@@ -186,7 +186,7 @@ async function start() {
   scheduleLicenseCheck(4000);
 }
 
-/** Checks in every 5 minutes (every 45 s while blocked, so an un-block shows up quickly). Silent when offline. */
+/** Checks in every minute (every 30 s while locked, so an un-block shows up quickly). Silent when offline. */
 function scheduleLicenseCheck(delay) {
   setTimeout(async () => {
     try {
@@ -195,7 +195,7 @@ function scheduleLicenseCheck(delay) {
       logger.warn('License check failed', err.message);
     }
     const st = license.status();
-    scheduleLicenseCheck(st.usable ? 5 * 60 * 1000 : 45 * 1000);
+    scheduleLicenseCheck(st.usable ? 60 * 1000 : 30 * 1000);
   }, delay).unref?.();
 }
 

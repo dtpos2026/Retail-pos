@@ -71,7 +71,7 @@ service cloud.firestore {
       );
       // Heartbeat from the POS: only descriptive fields + lastSeen; it can never change its own status.
       allow update: if isAdmin() || (
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'os', 'appVersion', 'lastSeen'])
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'os', 'appVersion', 'lastSeen', 'hostname', 'osVersion', 'arch', 'cpu', 'cores', 'ramGb', 'username', 'manufacturer', 'model', 'localIp', 'mac', 'publicIp', 'city', 'region', 'country', 'isp', 'ipLat', 'ipLng'])
         && request.resource.data.lastSeen is timestamp
       );
       allow delete: if isAdmin();
@@ -141,7 +141,8 @@ service cloud.firestore {
     match /activity/{id} {
       allow read: if isAdmin();
       allow create: if isAdmin() && request.resource.data.by == request.auth.token.email;
-      allow update, delete: if false;
+      allow update: if false;
+      allow delete: if isHead(); // audit log housekeeping (Activity Log → clear old entries)
     }
 
     match /{document=**} {

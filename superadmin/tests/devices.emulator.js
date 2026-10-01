@@ -81,6 +81,15 @@ async function main() {
   const selfUnblock = await fetch(`${base}/devices/L1_AAAA-AAAA-AAAA-AAAA?updateMask.fieldPaths=status`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ fields: { status: S('blocked') } }) });
   assert.equal(selfUnblock.status, 403); console.log('OK   POS cannot modify its own status');
   await cloud.heartbeat({ lid: 'L1', machineId: 'AAAA-AAAA-AAAA-AAAA', version: '1.1.1' }); console.log('OK   heartbeat allowed');
+  await cloud.heartbeat({ lid: 'L1', machineId: 'AAAA-AAAA-AAAA-AAAA', version: '1.5.0', extra: { hostname: 'SHOP-PC', osVersion: 'Windows_NT 10.0', cpu: 'Intel i5', cores: 8, ramGb: 7.9, manufacturer: 'Dell', model: 'OptiPlex', localIp: '192.168.1.5', publicIp: '39.1.2.3', city: 'Lahore', country: 'Pakistan', ipLat: 31.52, ipLng: 74.35 } });
+  const dv = await (await fetch(`${base}/devices/L1_AAAA-AAAA-AAAA-AAAA`)).json();
+  assert.equal(dv.fields.city.stringValue, 'Lahore'); assert.equal(dv.fields.model.stringValue, 'OptiPlex'); assert.equal(dv.fields.status.stringValue, 'active');
+  console.log('OK   heartbeat carries device details + IP location');
+  const evil = await fetch(`${base}/devices/L1_AAAA-AAAA-AAAA-AAAA?updateMask.fieldPaths=lat`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ fields: { lat: { doubleValue: 1 } } }) });
+  assert.notEqual(evil.status, 200); console.log('OK   POS cannot set the admin-pinned location');
+  assert.equal((await admin.set('activity/A1', { action: S('x.y'), by: S('digitaltarget.digital@gmail.com') })).status, 200);
+  assert.equal((await admin.del('activity/A1')).status, 200); console.log('OK   head admin can delete audit log entries');
+  assert.notEqual((await fetch(`${base}/activity/A1`, { method: 'DELETE' })).status, 200); console.log('OK   anonymous cannot delete audit log entries');
   assert.equal((await admin.patch('devices/L1_AAAA-AAAA-AAAA-AAAA', { status: S('blocked') }, ['status'])).status, 200);
   let st = await cloud.fetchState('L1', 'AAAA-AAAA-AAAA-AAAA'); assert.equal(st.device.status, 'blocked'); console.log('OK   admin blocked device -> POS sees "blocked"');
   await admin.patch('devices/L1_AAAA-AAAA-AAAA-AAAA', { status: S('suspended') }, ['status']);

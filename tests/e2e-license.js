@@ -92,6 +92,14 @@ const step = async (name, fn) => { try { await fn(); console.log('OK  ', name); 
     for (const d of '1234') await page.click(`.pinpad button:text-is("${d}")`);
     await page.waitForSelector('.sidebar');
   });
+  await step('device details (name, OS, model/CPU/RAM, IP) reach the provider', async () => {
+    const dk = () => [...db.keys()].find((k) => k.startsWith('devices/LIC1_'));
+    const t0 = Date.now();
+    while (Date.now() - t0 < 40000 && !(db.get(dk()) && db.get(dk()).hostname)) await new Promise((r) => setTimeout(r, 1000));
+    const d = db.get(dk());
+    if (!d || !d.hostname || !d.osVersion || !d.cpu || !d.localIp === undefined) throw new Error('heartbeat details missing: ' + JSON.stringify(Object.keys(d || {})));
+    console.log('     device fields:', Object.keys(d).filter((k) => !['licenseId', 'machineId'].includes(k)).join(', '));
+  });
   await step('support: message the provider from Settings', async () => {
     await page.click('a[href="#/settings"]');
     await page.click('.tabs button:has-text("Support")');

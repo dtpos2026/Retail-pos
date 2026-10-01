@@ -1,0 +1,48 @@
+import { Monitor, MapPin } from 'lucide-react';
+import { Modal, Button, Badge } from './ui';
+import { fmtDateTime } from '../lib/format';
+import { isOnline, ago, DEVICE_STATUS } from '../lib/devices';
+
+const rows = (d) => [
+  ['Business', d.businessName],
+  ['Computer name', d.name || d.hostname],
+  ['Windows user', d.username],
+  ['Manufacturer / model', [d.manufacturer, d.model].filter(Boolean).join(' ')],
+  ['Operating system', d.osVersion || d.os],
+  ['Processor', d.cpu ? `${d.cpu}${d.cores ? ` · ${d.cores} cores` : ''}` : ''],
+  ['Memory (RAM)', d.ramGb ? `${d.ramGb} GB` : ''],
+  ['Architecture', d.arch],
+  ['Computer ID', d.machineId],
+  ['App version', d.appVersion ? `v${d.appVersion}` : ''],
+  ['Local IP', d.localIp],
+  ['MAC address', d.mac],
+  ['Public IP', d.publicIp],
+  ['Internet provider', d.isp],
+  ['Approx. location (from IP)', [d.city, d.region, d.country].filter(Boolean).join(', ')],
+  ['Coordinates', Number.isFinite(d.lat) ? `${d.lat.toFixed(5)}, ${d.lng.toFixed(5)} (set by you)` : Number.isFinite(d.ipLat) ? `${d.ipLat.toFixed(4)}, ${d.ipLng.toFixed(4)} (from IP)` : ''],
+  ['Registered', fmtDateTime(d.firstSeen)],
+  ['Last seen', fmtDateTime(d.lastSeen)],
+];
+
+/** Everything the POS reports about one computer. */
+export default function DeviceInfoModal({ device: d, onClose }) {
+  const st = DEVICE_STATUS[d.status] || DEVICE_STATUS.active;
+  const on = isOnline(d);
+  return (
+    <Modal title={d.businessName || 'Device'} icon={Monitor} size="lg" onClose={onClose} footer={<Button variant="primary" onClick={onClose}>Close</Button>}>
+      <div className="row" style={{ gap: 10, marginBottom: 10 }}>
+        <span className={`dot ${on ? 'on' : ''}`} />
+        <b>{on ? 'Online now' : `Offline — last seen ${ago(d.lastSeen)}`}</b>
+        <Badge color={st.color}>{st.label}</Badge>
+        {(Number.isFinite(d.lat) || Number.isFinite(d.ipLat)) && <a href="#/map" className="row small" style={{ gap: 4 }}><MapPin size={14} /> on the map</a>}
+      </div>
+      {rows(d).filter(([, v]) => v).map(([k, v]) => (
+        <div key={k} className="row" style={{ padding: '7px 0', borderBottom: '1px solid var(--border)', gap: 12 }}>
+          <span className="muted" style={{ minWidth: 190 }}>{k}</span>
+          <b className="grow mono" style={{ textAlign: 'right', wordBreak: 'break-all', fontFamily: 'inherit' }}>{v}</b>
+        </div>
+      ))}
+      <div className="small faint" style={{ marginTop: 10 }}>Details refresh every few minutes while the computer is online. Location is approximate (internet connection); you can pin the exact place on the Device map.</div>
+    </Modal>
+  );
+}

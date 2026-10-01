@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Building2, KeyRound, AlarmClock, Ban, Wallet, Plus, AlertTriangle, Monitor, Wifi, TrendingUp, Layers } from 'lucide-react';
+import { Building2, KeyRound, AlarmClock, Ban, Wallet, Plus, AlertTriangle, Monitor, Wifi, TrendingUp, Layers , LifeBuoy } from 'lucide-react';
 import { watch, getSigningConfig, publishPublicKey } from '../lib/data';
+import { watchThreads } from '../lib/support';
 import { useAdmin } from '../context';
 import { money, fmtDate, licenseState, tsToDate, daysLeft, initials } from '../lib/format';
 import { isOnline, ago } from '../lib/devices';
@@ -25,15 +26,18 @@ export default function Dashboard() {
   const [clients, setClients] = useState(null);
   const [licenses, setLicenses] = useState(null);
   const [signing, setSigning] = useState(undefined);
+  const [threads, setThreads] = useState([]);
   const nav = useNavigate();
 
   useEffect(() => {
     const a = watch('clients', setClients, toastError);
     const b = watch('licenses', setLicenses, toastError);
+    const t = watchThreads(setThreads, () => {});
     getSigningConfig().then((c) => { setSigning(c); if (c?.publicPem) publishPublicKey(c.publicPem); }).catch(() => setSigning(null));
     return () => {
       a();
       b();
+      t();
     };
   }, [toastError]);
 
@@ -127,6 +131,19 @@ export default function Dashboard() {
             <div className="row"><span className="muted">Unpaid</span><span className="grow" /><b style={{ color: stats.unpaid ? 'var(--danger)' : undefined }}>{money(stats.unpaid)}</b></div>
           </div>
         </div>
+      </div>
+
+      <div className="card">
+        <div className="card-head"><LifeBuoy size={17} /><h3>Support inbox</h3><div className="actions"><Button size="sm" variant="ghost" onClick={() => nav('/support')}>Open</Button></div></div>
+        {threads.filter((x) => x.unreadAdmin).length === 0 ? (
+          <div className="card-pad muted small">No new messages from clients. Clients write from POS → Settings → Support.</div>
+        ) : threads.filter((x) => x.unreadAdmin).slice(0, 5).map((x) => (
+          <div key={x.id} className="list-item" style={{ cursor: 'pointer' }} onClick={() => nav('/support')}>
+            <div className="thumb" style={{ width: 34, height: 34, fontSize: 13, background: 'var(--primary-50)', color: 'var(--primary)' }}>{initials(x.businessName)}</div>
+            <div className="grow" style={{ minWidth: 0 }}><div className="b"><bdi>{x.businessName}</bdi></div><div className="small faint ellipsis">{x.lastText}</div></div>
+            <Badge color="red">new</Badge>
+          </div>
+        ))}
       </div>
 
       <div className="card">

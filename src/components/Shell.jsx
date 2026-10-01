@@ -70,6 +70,44 @@ function PrinterPill() {
   );
 }
 
+/** Checks (quietly, only while online) whether the provider has written, and offers a shortcut to the chat. */
+function SupportPing() {
+  const { toast } = useApp();
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    const check = () => {
+      api('support.list')
+        .then((m) => {
+          if (!alive) return;
+          const admin = m.filter((x) => x.from === 'admin').length;
+          let seen = 0;
+          try { seen = Number(localStorage.getItem('rpos-support-seen') || 0); } catch { /* ignore */ }
+          if (admin > seen) {
+            setN((prev) => {
+              if (prev === 0) toast('New message from your provider — open Settings → Support', 'info');
+              return admin - seen;
+            });
+          } else setN(0);
+        })
+        .catch(() => {});
+    };
+    const first = setTimeout(check, 8000);
+    const t = setInterval(check, 120000);
+    return () => {
+      alive = false;
+      clearTimeout(first);
+      clearInterval(t);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!n) return null;
+  return (
+    <a className="chip on" href="#/settings" style={{ textDecoration: 'none', padding: '6px 12px', fontSize: 12.5 }}>
+      ✉ {n} new message{n > 1 ? 's' : ''}
+    </a>
+  );
+}
+
 function Clock() {
   const [now, setNow] = useState(new Date());
   useEffect(() => {
@@ -144,6 +182,7 @@ export default function Shell({ children }) {
         <header className="topbar">
           <h1>{current?.label || 'DT Retail POS'}</h1>
           <div className="spacer" />
+          <SupportPing />
           <PrinterPill />
           <Clock />
           <div className="user-chip">

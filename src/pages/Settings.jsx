@@ -760,8 +760,9 @@ function StaffTab() {
 
 function SupportTab() {
   return (
-    <div className="card card-pad" style={{ maxWidth: 720 }}>
+    <div className="card card-pad col" style={{ maxWidth: 720, gap: 14 }}>
       <SupportBox />
+      <div className="small faint">When this computer is online, DT Retail POS shares basic device details with your provider for support and licensing: computer name, Windows version, model, memory, IP address and the approximate city of your internet connection. Your sales data, customers and prices are never sent.</div>
     </div>
   );
 }

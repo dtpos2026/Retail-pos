@@ -329,6 +329,22 @@ async function registerDevice() {
   return notify(before);
 }
 
+let lastBeat = 0;
+/** Device details + alive signal, at most every 5 minutes. */
+function sendHeartbeat(lid, mid) {
+  if (Date.now() - lastBeat < 5 * 60 * 1000) return;
+  lastBeat = Date.now();
+  require('./sysinfo').collect({ wait: !lastBeatSent })
+    .then((extra) => {
+      lastBeatSent = true;
+      return cloud.heartbeat({ lid, machineId: mid, version: VERSION, extra });
+    })
+    .catch(() => {
+      lastBeat = 0;
+    });
+}
+let lastBeatSent = false;
+
 /** Support thread of this license (needs internet). */
 async function supportMessages() {
   const payload = keyPayload();
@@ -447,7 +463,7 @@ async function onlineCheck() {
   if (s.device && s.device.regMid === mid) {
     if (device) {
       s.device.status = device.status || 'active';
-      cloud.heartbeat({ lid: payload.lid, machineId: mid, version: VERSION }).catch(() => {});
+      sendHeartbeat(payload.lid, mid);
     } else if (license) {
       // Registered before, but the admin deleted the device (freeing the slot).
       s.device.status = 'removed';

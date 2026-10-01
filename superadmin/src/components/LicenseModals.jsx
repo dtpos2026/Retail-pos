@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { KeyRound, Copy, MessageCircle, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { Modal, Button, Field, Input, Select, NumberInput, Check, Badge } from './ui';
 import { useAdmin, friendly } from '../context';
-import { issueLicense, setLicenseStatus } from '../lib/data';
+import { issueLicense, setLicenseStatus, saveClient } from '../lib/data';
 import { PLANS, expiryFor, ymd, MACHINE_ID_RE, normalizeMachineId } from '../lib/license';
 import { fmtDate } from '../lib/format';
 
@@ -15,7 +15,10 @@ export function LicenseForm({ clients, client: fixedClient, license, mode = 'new
   const today = ymd(new Date());
   const renewStart = license?.expiresAt && license.expiresAt > today ? license.expiresAt : today;
   const [f, setF] = useState(() => ({
-    clientId: fixedClient?.id || license?.clientId || clients?.[0]?.id || '',
+    clientId: fixedClient?.id || license?.clientId || '__new',
+    newName: '',
+    newOwner: '',
+    newPhone: '',
     machineId: mode === 'transfer' ? '' : license?.machineId === '*' ? '' : license?.machineId || '',
     plan: license?.plan && mode !== 'new' ? license.plan : 'yearly',
     startDate: mode === 'renew' ? renewStart : today,
@@ -30,6 +33,7 @@ export function LicenseForm({ clients, client: fixedClient, license, mode = 'new
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const set = (k) => (v) => setF((x) => ({ ...x, [k]: v }));
+  const isNew = mode === 'new' && !fixedClient && f.clientId === '__new';
   const client = fixedClient || clients?.find((c) => c.id === f.clientId) || (license && { id: license.clientId, businessName: license.businessName, phone: license.clientPhone });
   const mid = normalizeMachineId(f.machineId);
   const midOk = f.online || MACHINE_ID_RE.test(mid);
@@ -39,15 +43,21 @@ export function LicenseForm({ clients, client: fixedClient, license, mode = 'new
 
   const submit = async () => {
     setErr('');
-    if (!client) return setErr('Select a client.');
+    if (!client && !isNew) return setErr('Select a client.');
+    if (isNew && (!f.newName.trim() || !f.newPhone.trim())) return setErr('Enter the restaurant name and phone number.');
     if (!midOk) return setErr('Enter the Computer ID shown on the POS activation screen (format XXXX-XXXX-XXXX-XXXX), or choose online device registration.');
     if (f.plan !== 'lifetime' && !f.expiresAt) return setErr('Select an expiry date.');
     setBusy(true);
     try {
       if (mode === 'transfer') await setLicenseStatus(license, 'revoked');
+      let useClient = client;
+      if (isNew) {
+        const id = await saveClient({ businessName: f.newName, ownerName: f.newOwner, phone: f.newPhone });
+        useClient = { id, businessName: f.newName.trim(), phone: f.newPhone.trim() };
+      }
       const lic = await issueLicense({
         id: mode === 'renew' ? license.id : undefined,
-        client,
+        client: useClient,
         machineId: f.online ? '*' : mid,
         maxDevices: f.online ? f.maxDevices : 1,
         plan: f.plan,
@@ -86,8 +96,15 @@ export function LicenseForm({ clients, client: fixedClient, license, mode = 'new
           <Field label="Client" className="full"><Input value={client?.businessName || license?.businessName || ''} disabled /></Field>
         ) : (
           <Field label="Client" className="full">
-            <Select value={f.clientId} onChange={(e) => set('clientId')(e.target.value)} options={[{ value: '', label: '— Select client —' }, ...(clients || []).map((c) => ({ value: c.id, label: `${c.businessName}${c.city ? ` · ${c.city}` : ''}` }))]} />
+            <Select value={f.clientId} onChange={(e) => set('clientId')(e.target.value)} options={[{ value: '__new', label: '+ New restaurant (enter details below)' }, ...(clients || []).map((c) => ({ value: c.id, label: `${c.businessName}${c.city ? ` · ${c.city}` : ''}` }))]} />
           </Field>
+        )}
+        {isNew && (
+          <>
+            <Field label="Restaurant / business name *"><Input autoFocus dir="auto" value={f.newName} onChange={(e) => set('newName')(e.target.value)} placeholder="e.g. Al-Madina Restaurant" /></Field>
+            <Field label="Owner name"><Input dir="auto" value={f.newOwner} onChange={(e) => set('newOwner')(e.target.value)} /></Field>
+            <Field label="Owner phone / WhatsApp *" className="full"><Input value={f.newPhone} onChange={(e) => set('newPhone')(e.target.value)} placeholder="03XX-XXXXXXX" /></Field>
+          </>
         )}
         <div className="full seg-radio">
           <div className={`radio-card ${f.online ? 'on' : ''}`} onClick={() => set('online')(true)}>

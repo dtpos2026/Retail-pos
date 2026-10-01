@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Monitor, Ban, ShieldCheck, PauseCircle, PlayCircle, Trash2 } from 'lucide-react';
+import { Monitor, Ban, ShieldCheck, PauseCircle, PlayCircle, Trash2, Info } from 'lucide-react';
+import DeviceInfoModal from './DeviceInfoModal';
 import { Button, Badge } from './ui';
 import { useAdmin } from '../context';
 import { setDeviceStatus, removeDevice } from '../lib/data';
@@ -10,6 +11,7 @@ import { isOnline, ago, DEVICE_STATUS } from '../lib/devices';
 export default function DeviceList({ devices, showBusiness = true, empty = 'No devices registered yet.' }) {
   const { toast, toastError, confirm } = useAdmin();
   const [busy, setBusy] = useState('');
+  const [info, setInfo] = useState(null);
 
   const setStatus = async (d, status) => {
     const text = {
@@ -42,9 +44,11 @@ export default function DeviceList({ devices, showBusiness = true, empty = 'No d
     }
   };
 
+  const modal = info ? <DeviceInfoModal device={devices.find((x) => x.id === info.id) || info} onClose={() => setInfo(null)} /> : null;
   if (!devices.length) return <div className="card-pad muted center" style={{ padding: 30 }}>{empty}</div>;
   return (
     <div>
+      {modal}
       {devices.map((d) => {
         const st = DEVICE_STATUS[d.status] || DEVICE_STATUS.active;
         const on = isOnline(d);
@@ -59,11 +63,13 @@ export default function DeviceList({ devices, showBusiness = true, empty = 'No d
               </div>
               <div className="small muted ellipsis">
                 {showBusiness && <span>{d.name} · </span>}
-                <span className="mono">{d.machineId}</span> · {d.os} · v{d.appVersion}
+                <span className="mono">{d.machineId}</span> · {[d.manufacturer, d.model].filter(Boolean).join(' ') || d.os} · v{d.appVersion}
               </div>
+              {(d.publicIp || d.localIp) && <div className="small faint">{d.publicIp ? `IP ${d.publicIp}` : `LAN ${d.localIp}`}{d.city ? ` · ${d.city}${d.country ? `, ${d.country}` : ''}` : ''}</div>}
               <div className="small faint">Registered {fmtDateTime(d.firstSeen)} · {on ? <b style={{ color: '#16a34a' }}>online now</b> : `last seen ${ago(d.lastSeen)}`}</div>
             </div>
             <div className="row" style={{ gap: 6, flexShrink: 0 }}>
+              <Button size="sm" variant="ghost" icon={Info} title="All details of this computer" onClick={() => setInfo(d)} />
               {d.status === 'blocked' ? (
                 <Button size="sm" variant="soft" icon={ShieldCheck} loading={busy === d.id} onClick={() => setStatus(d, 'active')}>Unblock</Button>
               ) : (

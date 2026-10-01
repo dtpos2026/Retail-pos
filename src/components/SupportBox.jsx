@@ -16,7 +16,7 @@ export default function SupportBox({ compact }) {
 
   const load = () => {
     setErr('');
-    api('support.list').then(setMsgs).catch((e) => { setErr(e.message); setMsgs([]); });
+    api('support.list').then((m) => { setMsgs(m); try { localStorage.setItem('rpos-support-seen', String(m.filter((x) => x.from === 'admin').length)); } catch { /* ignore */ } }).catch((e) => { setErr(e.message); setMsgs([]); });
   };
   useEffect(() => {
     load();

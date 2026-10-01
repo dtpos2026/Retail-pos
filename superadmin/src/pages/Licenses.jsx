@@ -44,7 +44,7 @@ export default function Licenses() {
   return (
     <div className="col" style={{ gap: 16 }}>
       <PageHead title="Licenses" sub={`${licenses.length} issued`}>
-        <Button variant="primary" icon={Plus} onClick={() => setGen(true)} disabled={!clients.length}>Generate license</Button>
+        <Button variant="primary" icon={Plus} onClick={() => setGen(true)}>Generate license</Button>
       </PageHead>
       <div className="card card-pad row wrap">
         <SearchBox value={q} onChange={setQ} placeholder="Search business, computer ID, phone…" style={{ flex: 1, minWidth: 240 }} />

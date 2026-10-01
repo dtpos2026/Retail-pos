@@ -1,5 +1,5 @@
 import {
-  collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, addDoc, query, where, orderBy, limit, serverTimestamp, writeBatch, onSnapshot,
+  collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, addDoc, query, where, orderBy, limit, serverTimestamp, writeBatch, onSnapshot, Timestamp, getCountFromServer,
 } from 'firebase/firestore';
 import { db, auth, HEAD_ADMIN_EMAIL } from '../firebase';
 import { signLicense, ymd } from './license';
@@ -28,6 +28,27 @@ export async function logActivity(action, detail, extra = {}) {
   } catch {
     /* activity is best effort */
   }
+}
+
+/** Audit-log housekeeping (head admin): delete entries older than N days (0 = everything). Returns how many were removed. */
+export async function pruneActivity(days) {
+  const cutoff = days > 0 ? Timestamp.fromMillis(Date.now() - days * 86400000) : null;
+  let removed = 0;
+  for (;;) {
+    const q = cutoff ? query(collection(db, 'activity'), where('at', '<', cutoff), limit(400)) : query(collection(db, 'activity'), limit(400));
+    const snap = await getDocs(q);
+    if (snap.empty) break;
+    const batch = writeBatch(db);
+    snap.docs.forEach((d) => batch.delete(d.ref));
+    await batch.commit();
+    removed += snap.size;
+    if (snap.size < 400) break;
+  }
+  return removed;
+}
+
+export async function countActivity() {
+  return (await getCountFromServer(collection(db, 'activity'))).data().count;
 }
 
 // ------------------------------------------------------------------ live lists

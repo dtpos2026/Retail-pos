@@ -165,13 +165,21 @@ async function sendMessage({ lid, businessName, text }) {
   ]);
 }
 
-/** Tell the server this device is alive (last seen, version, name). Best effort. */
-async function heartbeat({ lid, machineId, version }) {
+const HEARTBEAT_KEYS = ['hostname', 'osVersion', 'arch', 'cpu', 'cores', 'ramGb', 'username', 'manufacturer', 'model', 'localIp', 'mac', 'publicIp', 'city', 'region', 'country', 'isp', 'ipLat', 'ipLng'];
+
+/** Tell the server this device is alive (last seen, version, name, hardware, IP and approximate location). Best effort. */
+async function heartbeat({ lid, machineId, version, extra = {} }) {
   const info = deviceInfo(version);
+  const fields = { name: str(info.name), os: str(info.os), appVersion: str(info.appVersion) };
+  for (const k of HEARTBEAT_KEYS) {
+    const v = extra[k];
+    if (v === undefined || v === null || v === '') continue;
+    fields[k] = typeof v === 'number' ? { doubleValue: v } : str(String(v).slice(0, 120));
+  }
   await commit([
     {
-      update: { name: docName(`devices/${lid}_${machineId}`), fields: { name: str(info.name), os: str(info.os), appVersion: str(info.appVersion) } },
-      updateMask: { fieldPaths: ['name', 'os', 'appVersion'] },
+      update: { name: docName(`devices/${lid}_${machineId}`), fields },
+      updateMask: { fieldPaths: Object.keys(fields) },
       updateTransforms: [{ fieldPath: 'lastSeen', setToServerValue: 'REQUEST_TIME' }],
       currentDocument: { exists: true },
     },

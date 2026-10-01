@@ -97,3 +97,12 @@ Sign-in screen: **Test cloud connection** checks Firestore, the deployed rules a
 * Support threads are readable by anyone who knows the license id (a long random id). Do not put secrets in messages.
 * A computer that is offline cannot be controlled; block / suspend / pending apply the next time it goes online (about 5 minutes; 45 seconds while locked).
 * Map tiles come from OpenStreetMap and need internet in the browser.
+
+## 8. v1.6 additions
+* **Device details:** every registered computer reports (about every 5 minutes while online) its computer name, Windows user, manufacturer/model, OS, CPU, RAM, local IP, MAC, public IP, ISP and the approximate city of its internet connection. Open **Devices → ⓘ** for the full sheet.
+* **Device map:** pins come from the IP location in real time (dashed ring = approximate); you can pin the exact place (Place → click the map) which overrides it.
+* **Live control:** the POS checks the license + device status **every minute** (every 30 s while locked). Suspend / block / payment pending / reactivate reach an online POS within about a minute.
+* **Issue License:** choose “+ New restaurant” to enter restaurant name, owner and phone and generate the key in one step.
+* **Support:** new client messages appear on the Dashboard (Support inbox) and the sidebar badge; the POS shows “✉ new message” when you answer. Delete a single message or the whole chat.
+* **Audit log housekeeping (head admin):** Export CSV, Delete > 30 days, Delete > 90 days, Clear all. Entries older than a year are removed automatically so the database never fills up.
+* Re-deploy rules after updating: `npx firebase-tools deploy` (device-detail fields and audit deletion need the new rules).
