@@ -194,6 +194,8 @@ The UI never touches the database. It calls named methods, and the main process 
 ---
 
 ## 8. Documentation
+- [docs/DT_RETAIL_POS_USER_GUIDE.md](docs/DT_RETAIL_POS_USER_GUIDE.md): **User Guide** (Roman Urdu) — install, activation, setup, billing, tables, inventory, reports, backup, troubleshooting, Super Admin appendix
+- [docs/DT_RETAIL_POS_SYSTEM_DETAILS.md](docs/DT_RETAIL_POS_SYSTEM_DETAILS.md): **System Details** (Roman Urdu) — modules, billing formula, printing, licensing, security, architecture, testing, version history
 - [docs/SUPER_ADMIN_SETUP.md](docs/SUPER_ADMIN_SETUP.md): Firebase setup, deployment and admin accounts
 - [docs/LICENSING.md](docs/LICENSING.md): key format, signing key, renewals, security
 - [docs/PRINTER_SETUP.md](docs/PRINTER_SETUP.md): USB and Bluetooth thermal printers, 58/80 mm, auto-cut, Urdu
