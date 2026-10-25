@@ -106,4 +106,27 @@ function summary() {
   };
 }
 
-module.exports = { summary };
+/**
+ * Totals only (never single orders) for the provider's Super Admin: today, this month and the last 14 days.
+ * "Sales" = completed orders; cancelled and refunded orders are not counted (same as the dashboard).
+ */
+function salesTotals(now = new Date()) {
+  const today = localDate(now);
+  const monthStart = `${today.slice(0, 7)}-01`;
+  const from = addDays(today, -13) < monthStart ? addDays(today, -13) : monthStart;
+  const rows = ctx.db.all(
+    "SELECT business_date d, COALESCE(SUM(total), 0) t FROM orders WHERE status = 'completed' AND business_date >= ? AND business_date <= ? GROUP BY business_date",
+    [from, today]
+  );
+  const by = new Map(rows.map((r) => [r.d, round2(r.t)]));
+  let month = 0;
+  for (const [d, t] of by) if (d >= monthStart) month += t;
+  const days = [];
+  for (let i = 13; i >= 0; i--) {
+    const d = addDays(today, -i);
+    if (by.get(d)) days.push(`${d.slice(5)}:${by.get(d)}`); // MM-DD:amount
+  }
+  return { date: today, today: by.get(today) || 0, month: round2(month), days: days.join(',') };
+}
+
+module.exports = { summary, salesTotals };

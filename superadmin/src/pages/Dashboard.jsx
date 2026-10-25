@@ -9,6 +9,7 @@ import { money, fmtDate, licenseState, tsToDate, daysLeft, initials } from '../l
 import { isOnline, ago } from '../lib/devices';
 import { Stat, Button, Loading, Empty, Badge } from '../components/ui';
 import BarChart from '../components/BarChart';
+import SalesBoard from '../components/SalesBoard';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -111,6 +112,8 @@ export default function Dashboard() {
         <Stat icon={Monitor} label="Devices" value={devices.length} hint={<span><b style={{ color: '#16a34a' }}>{online.length} online</b> · {blocked} blocked/suspended</span>} color="#0ea5e9" />
         <Stat icon={AlarmClock} label="Expiring in 15 days" value={stats.expiring} hint={`${stats.revoked} revoked / suspended`} color="#d97706" />
       </div>
+
+      <SalesBoard />
 
       <div className="grid" style={{ gridTemplateColumns: '2fr 1fr' }}>
         <div className="card">

@@ -344,15 +344,90 @@ let lastBeat = 0;
 let lastSig = '';
 const beatInfo = { at: 0, tier: -1, error: '' }; // last heartbeat outcome, shown in Settings -> License
 
+// Business facts that travel with every heartbeat: sales TOTALS (never single orders), the user names (so the
+// provider can pick whose password to reset) and a tiny logo thumbnail for the map pin.
+let logoCache = { src: '', thumb: '' };
+let logoSent = '';
+
+function logoThumb() {
+  let src = '';
+  try {
+    src = require('../services/settings').get('business').logo || '';
+  } catch {
+    return '';
+  }
+  if (!src) return '';
+  if (src === logoCache.src) return logoCache.thumb;
+  let thumb = '';
+  try {
+    const { nativeImage } = require('electron');
+    const img = nativeImage.createFromDataURL(src);
+    if (!img.isEmpty()) {
+      const { width, height } = img.getSize();
+      const k = 96 / Math.max(width, height, 1);
+      const small = k < 1 ? img.resize({ width: Math.max(1, Math.round(width * k)), height: Math.max(1, Math.round(height * k)), quality: 'good' }) : img;
+      let buf = small.toPNG();
+      let mime = 'image/png';
+      if (buf.length > 28000) {
+        buf = small.toJPEG(70);
+        mime = 'image/jpeg';
+      }
+      if (buf.length <= 40000) thumb = `data:${mime};base64,${buf.toString('base64')}`;
+    }
+  } catch {
+    thumb = ''; // not running inside Electron (tests) or an unreadable image
+  }
+  logoCache = { src, thumb };
+  return thumb;
+}
+
+function businessFacts() {
+  const out = {};
+  try {
+    const t = require('../services/dashboard').salesTotals();
+    Object.assign(out, { salesToday: t.today, salesMonth: t.month, salesDate: t.date, salesDays: t.days });
+  } catch {
+    /* database not open */
+  }
+  try {
+    const rows = require('../core/context').db.all('SELECT username, name, role FROM users WHERE active = 1 ORDER BY id LIMIT 20');
+    out.posUsers = rows.map((u) => `${u.username}|${String(u.name || '').replace(/[|;]/g, ' ')}|${u.role}`).join(';');
+  } catch {
+    /* ignore */
+  }
+  const thumb = logoThumb();
+  if (thumb && thumb !== logoSent) out.logoThumb = thumb;
+  return out;
+}
+
 /** One heartbeat with whatever is known right now. */
 async function pushBeat(lid, mid) {
   const si = require('./sysinfo');
   const extra = si.snapshot();
   const o = (load().owner) || {};
-  const tier = await cloud.heartbeat({ lid, machineId: mid, version: VERSION, extra: { ...extra, ownerName: o.owner, ownerPhone: o.phone } });
+  const facts = businessFacts();
+  const tier = await cloud.heartbeat({ lid, machineId: mid, version: VERSION, extra: { ...extra, ...facts, ownerName: o.owner, ownerPhone: o.phone } });
   lastSig = si.signature(extra);
+  if (tier === 0 && facts.logoThumb) logoSent = facts.logoThumb;
   Object.assign(beatInfo, { at: Date.now(), tier, error: '' });
   if (tier > 0) logger.warn('Heartbeat accepted only without newer fields (tier ' + tier + ') — Firestore rules need redeploying');
+}
+
+let salesTimer = null;
+/** A sale / cancel / refund happened: tell the provider the new totals shortly (bursts are merged). */
+function salesChanged() {
+  if (salesTimer) return;
+  salesTimer = setTimeout(() => {
+    salesTimer = null;
+    const p = keyPayload();
+    const s = load();
+    if (!p || !s.device || s.device.regMid !== machineId()) return;
+    lastBeat = Date.now();
+    pushBeat(p.lid, machineId()).catch(() => {
+      lastBeat = 0; // offline: the next online check sends it
+    });
+  }, 20000);
+  if (salesTimer.unref) salesTimer.unref();
 }
 
 /**
@@ -381,6 +456,40 @@ function touch() {
   require('./sysinfo').invalidate();
   lastBeat = 0;
   sendHeartbeat(p.lid, machineId());
+}
+
+let resetBusy = false;
+/**
+ * Apply a password reset prepared by the provider in the Super Admin panel (needs internet; also runs with every
+ * online check). Resolves to { state: 'applied' | 'none' | 'failed' | 'expired' | 'offline', username, message }.
+ */
+async function checkPasswordReset() {
+  const p = keyPayload();
+  const s = load();
+  if (!p || !s.device || s.device.regMid !== machineId()) return { state: 'none', message: 'This computer is not registered with a provider yet.' };
+  if (resetBusy) return { state: 'none', message: 'Checking…' };
+  resetBusy = true;
+  const mid = machineId();
+  try {
+    let doc;
+    try {
+      doc = await cloud.getPasswordReset(p.lid, mid);
+    } catch (err) {
+      if (err instanceof cloud.CloudError && err.offline) return { state: 'offline', message: 'No internet connection. Connect to the internet and try again.' };
+      return { state: 'none', message: 'Could not reach the provider right now. Try again in a minute.' };
+    }
+    if (!doc || doc.status !== 'pending' || doc.licenseId !== p.lid || doc.machineId !== mid) return { state: 'none', message: 'No password reset is waiting for this computer. Ask your provider to reset it, then press the button again.' };
+    if (!doc.expiresAt || !(new Date(doc.expiresAt).getTime() > Date.now())) {
+      await cloud.finishPasswordReset(p.lid, mid, 'expired', 'Not applied in time').catch(() => {});
+      return { state: 'expired', username: doc.username, message: 'This reset has expired. Ask your provider to send a new one.' };
+    }
+    const r = require('../services/auth').applyRemoteReset({ username: doc.username, passwordHash: doc.passwordHash, pinHash: doc.pinHash, removePin: doc.removePin === true });
+    await cloud.finishPasswordReset(p.lid, mid, r.ok ? 'applied' : 'failed', r.ok ? 'Applied on the computer' : r.message).catch((err) => logger.warn('Could not report the password reset', err.message));
+    logger[r.ok ? 'info' : 'warn']('Remote password reset', doc.username, r.ok ? 'applied' : r.message);
+    return { state: r.ok ? 'applied' : 'failed', username: r.username, message: r.ok ? `The password of "${r.username}" was reset. Sign in with the new password your provider gave you.` : r.message };
+  } finally {
+    resetBusy = false;
+  }
 }
 
 /** What this computer shares with the provider (Settings -> License). */
@@ -551,6 +660,7 @@ async function onlineCheck() {
     if (device) {
       s.device.status = device.status || 'active';
       sendHeartbeat(payload.lid, mid);
+      checkPasswordReset().catch(() => {});
     } else if (license) {
       // Registered before, but the admin deleted the device (freeing the slot).
       s.device.status = 'removed';
@@ -583,4 +693,4 @@ async function onlineCheck() {
   return notify(before);
 }
 
-module.exports = { touch, locationInfo, shareLocation, status, ensureKey, supportMessages, sendSupport, activate, registerDevice, removeLicense, isUsable, maxUsers, onlineCheck, onChange, machineId, decode, VERSION };
+module.exports = { touch, locationInfo, shareLocation, salesChanged, checkPasswordReset, status, ensureKey, supportMessages, sendSupport, activate, registerDevice, removeLicense, isUsable, maxUsers, onlineCheck, onChange, machineId, decode, VERSION };

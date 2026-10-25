@@ -2,8 +2,12 @@ import { Monitor, MapPin } from 'lucide-react';
 import { Modal, Button, Badge } from './ui';
 import { fmtDateTime } from '../lib/format';
 import { isOnline, ago, DEVICE_STATUS } from '../lib/devices';
+import { salesOf, fmtSales, parseDays, parseUsers } from '../lib/sales';
+import { money } from '../lib/format';
 
 const rows = (d) => [
+  ['Sales today', salesOf(d).reported ? fmtSales(salesOf(d).today) : ''],
+  ['Sales this month', salesOf(d).reported ? fmtSales(salesOf(d).month) : ''],
   ['Business', d.businessName],
   ['Owner', d.ownerName],
   ['Owner phone', d.ownerPhone],
@@ -23,6 +27,7 @@ const rows = (d) => [
   ['Approx. location (from IP)', [d.city, d.region, d.country].filter(Boolean).join(', ')],
   ['Coordinates', Number.isFinite(d.gpsLat) && !Number.isFinite(d.lat) ? `${d.gpsLat.toFixed(5)}, ${d.gpsLng.toFixed(5)} (exact, from the computer${d.gpsAcc ? `, ±${d.gpsAcc} m` : ''})` : Number.isFinite(d.lat) ? `${d.lat.toFixed(5)}, ${d.lng.toFixed(5)} (set by you)` : Number.isFinite(d.ipLat) ? `${d.ipLat.toFixed(4)}, ${d.ipLng.toFixed(4)} (from IP)` : ''],
   ['Exact location', Number.isFinite(d.gpsLat) ? '' : GPS_NOTE[d.gpsStatus] || ''],
+  ['POS users', parseUsers(d.posUsers).map((u) => `${u.username} (${u.role})`).join(', ')],
   ['Registered', fmtDateTime(d.firstSeen)],
   ['Last seen', fmtDateTime(d.lastSeen)],
 ];
@@ -43,6 +48,7 @@ export default function DeviceInfoModal({ device: d, onClose }) {
   return (
     <Modal title={d.businessName || 'Device'} icon={Monitor} size="lg" onClose={onClose} footer={<Button variant="primary" onClick={onClose}>Close</Button>}>
       <div className="row" style={{ gap: 10, marginBottom: 10 }}>
+        {d.logoThumb && <img src={d.logoThumb} alt="" style={{ width: 34, height: 34, borderRadius: 8, objectFit: 'contain', background: '#fff', border: '1px solid var(--border)' }} />}
         <span className={`dot ${on ? 'on' : ''}`} />
         <b>{on ? 'Online now' : `Offline — last seen ${ago(d.lastSeen)}`}</b>
         <Badge color={st.color}>{st.label}</Badge>
@@ -54,6 +60,14 @@ export default function DeviceInfoModal({ device: d, onClose }) {
           <b className="grow mono" style={{ textAlign: 'right', wordBreak: 'break-all', fontFamily: 'inherit' }}>{v}</b>
         </div>
       ))}
+      {parseDays(d.salesDays).length > 0 && (
+        <div style={{ marginTop: 12 }}>
+          <div className="b" style={{ marginBottom: 6 }}>Sales per day (last 14 days{d.salesDate ? `, as of ${d.salesDate}` : ''})</div>
+          <div className="row wrap" style={{ gap: 6 }}>
+            {parseDays(d.salesDays).map((x) => <span key={x.date} className="badge" style={{ whiteSpace: 'nowrap' }}>{x.date} · <b>{money(x.total)}</b></span>)}
+          </div>
+        </div>
+      )}
       <div className="small faint" style={{ marginTop: 10 }}>Details refresh every few minutes while the computer is online. Location is approximate (internet connection); you can pin the exact place on the Device map.</div>
     </Modal>
   );

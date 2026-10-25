@@ -36,3 +36,17 @@
   .dev-card > .row:last-child { width: 100%; justify-content: flex-end; }
   .promo-hero { flex-direction: column; align-items: flex-start; }
 }
+
+/* ---- Device map: restaurant pins (logo inside the pin, name + today's sales beside it) ---- */
+.rpin-wrap { background: none; border: 0; }
+.rpin { position: relative; width: 46px; height: 58px; --c: #64748b; }
+.rpin-badge { width: 44px; height: 44px; border-radius: 50%; background: #fff; border: 3px solid var(--c); box-shadow: 0 4px 12px rgba(15, 23, 42, .35); display: flex; align-items: center; justify-content: center; overflow: hidden; font-weight: 800; font-size: 15px; color: var(--c); }
+.rpin.dashed .rpin-badge { border-style: dashed; }
+.rpin-badge img { width: 100%; height: 100%; object-fit: contain; background: #fff; }
+.rpin-tip { position: absolute; left: 15px; top: 40px; width: 0; height: 0; border-left: 8px solid transparent; border-right: 8px solid transparent; border-top: 14px solid var(--c); }
+.rpin-dot { position: absolute; right: -2px; top: -2px; width: 13px; height: 13px; border-radius: 50%; background: var(--c); border: 2px solid #fff; z-index: 2; }
+.rpin-label { position: absolute; left: 50px; top: 3px; white-space: nowrap; background: #fff; border: 1px solid var(--border, #e5e7eb); border-left: 4px solid var(--c); border-radius: 8px; padding: 3px 8px; box-shadow: 0 3px 10px rgba(15, 23, 42, .22); line-height: 1.2; font-size: 12px; color: #111827; max-width: 190px; overflow: hidden; text-overflow: ellipsis; }
+.rpin-label b { display: block; overflow: hidden; text-overflow: ellipsis; }
+.rpin-label span { display: block; color: #16a34a; font-weight: 700; }
+.rpin-label i { display: block; color: #6b7280; font-style: normal; }
+.leaflet-marker-icon.rpin-wrap:hover { z-index: 1000 !important; }

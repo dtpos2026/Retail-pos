@@ -189,19 +189,22 @@ async function sendMessage({ lid, businessName, text }) {
   ]);
 }
 
-const HEARTBEAT_KEYS = ['ownerName', 'ownerPhone', 'gpsLat', 'gpsLng', 'gpsAcc', 'gpsStatus', 'hostname', 'osVersion', 'arch', 'cpu', 'cores', 'ramGb', 'username', 'manufacturer', 'model', 'localIp', 'mac', 'publicIp', 'city', 'region', 'country', 'isp', 'ipLat', 'ipLng'];
+const NEWEST_KEYS = ['salesToday', 'salesMonth', 'salesDate', 'salesDays', 'posUsers', 'logoThumb']; // rules of v1.9
+const HEARTBEAT_KEYS = ['ownerName', 'ownerPhone', 'gpsLat', 'gpsLng', 'gpsAcc', 'gpsStatus', 'hostname', 'osVersion', 'arch', 'cpu', 'cores', 'ramGb', 'username', 'manufacturer', 'model', 'localIp', 'mac', 'publicIp', 'city', 'region', 'country', 'isp', 'ipLat', 'ipLng', ...NEWEST_KEYS];
+const MAX_LEN = { logoThumb: 45000, salesDays: 400, posUsers: 600 }; // everything else is cut at 120 characters
 
 // Older Firestore rules (not redeployed yet) refuse a write that contains a field they do not know — and then
 // NOTHING (not even "last seen") gets through. Each tier drops the newest group of fields so the device stays
 // visible and the provider is told to redeploy the rules for the rest.
 const BEAT_TIERS = [
   [],
-  ['gpsStatus'],
-  ['gpsStatus', 'gpsLat', 'gpsLng', 'gpsAcc', 'ownerName', 'ownerPhone'],
+  NEWEST_KEYS,
+  [...NEWEST_KEYS, 'gpsStatus'],
+  [...NEWEST_KEYS, 'gpsStatus', 'gpsLat', 'gpsLng', 'gpsAcc', 'ownerName', 'ownerPhone'],
   HEARTBEAT_KEYS,
 ];
 
-/** Tell the server this device is alive (last seen, version, name, hardware, IP and location). Resolves to the tier that worked (0 = everything). */
+/** Tell the server this device is alive (last seen, version, name, hardware, IP, location, sales totals). Resolves to the tier that worked (0 = everything). */
 async function heartbeat({ lid, machineId, version, extra = {} }) {
   const info = deviceInfo(version);
   let lastErr = null;
@@ -211,7 +214,7 @@ async function heartbeat({ lid, machineId, version, extra = {} }) {
     for (const k of HEARTBEAT_KEYS) {
       const v = extra[k];
       if (drop.has(k) || v === undefined || v === null || v === '') continue;
-      fields[k] = typeof v === 'number' ? { doubleValue: v } : str(String(v).slice(0, 120));
+      fields[k] = typeof v === 'number' ? { doubleValue: v } : str(String(v).slice(0, MAX_LEN[k] || 120));
     }
     try {
       await commit([
@@ -231,4 +234,22 @@ async function heartbeat({ lid, machineId, version, extra = {} }) {
   throw lastErr;
 }
 
-module.exports = { CloudError, getKeyByCode, getRequest, getPublicKey, fetchState, registerDevice, heartbeat, listMessages, sendMessage };
+/** A password reset the provider prepared for this computer (null when none). */
+async function getPasswordReset(lid, machineId) {
+  return getDoc(`passwordResets/${encodeURIComponent(`${lid}_${machineId}`)}`);
+}
+
+/** Report the outcome; the secrets in the document are wiped at the same time. */
+async function finishPasswordReset(lid, machineId, status, note = '') {
+  const fields = { status: str(status), note: str(String(note).slice(0, 200)), passwordHash: str(''), pinHash: str('') };
+  await commit([
+    {
+      update: { name: docName(`passwordResets/${lid}_${machineId}`), fields },
+      updateMask: { fieldPaths: Object.keys(fields) },
+      updateTransforms: [{ fieldPath: 'appliedAt', setToServerValue: 'REQUEST_TIME' }],
+      currentDocument: { exists: true },
+    },
+  ]);
+}
+
+module.exports = { CloudError, getKeyByCode, getRequest, getPublicKey, fetchState, registerDevice, heartbeat, getPasswordReset, finishPasswordReset, listMessages, sendMessage };

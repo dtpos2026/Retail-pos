@@ -71,8 +71,9 @@ service cloud.firestore {
       );
       // Heartbeat from the POS: only descriptive fields + lastSeen; it can never change its own status.
       allow update: if isAdmin() || (
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'os', 'appVersion', 'lastSeen', 'hostname', 'osVersion', 'arch', 'cpu', 'cores', 'ramGb', 'username', 'manufacturer', 'model', 'localIp', 'mac', 'publicIp', 'city', 'region', 'country', 'isp', 'ipLat', 'ipLng', 'ownerName', 'ownerPhone', 'gpsLat', 'gpsLng', 'gpsAcc', 'gpsStatus'])
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'os', 'appVersion', 'lastSeen', 'hostname', 'osVersion', 'arch', 'cpu', 'cores', 'ramGb', 'username', 'manufacturer', 'model', 'localIp', 'mac', 'publicIp', 'city', 'region', 'country', 'isp', 'ipLat', 'ipLng', 'ownerName', 'ownerPhone', 'gpsLat', 'gpsLng', 'gpsAcc', 'gpsStatus', 'salesToday', 'salesMonth', 'salesDate', 'salesDays', 'posUsers', 'logoThumb'])
         && request.resource.data.lastSeen is timestamp
+        && (!('logoThumb' in request.resource.data) || request.resource.data.logoThumb.size() <= 45000)
       );
       allow delete: if isAdmin();
     }
@@ -131,6 +132,23 @@ service cloud.firestore {
       allow get: if true;
       allow list: if isAdmin();
       allow write: if isAdmin();
+    }
+
+    // Password reset prepared by the provider for ONE computer (id = licenseId_machineId). The offline POS reads it
+    // when it is online, applies it, then reports the result and wipes the hashes. Only PBKDF2 hashes are stored here,
+    // never a readable password. Only admins can create / replace / delete it.
+    match /passwordResets/{resetId} {
+      allow get: if true;
+      allow list: if isAdmin();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (
+        resource.data.status == 'pending'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'note', 'passwordHash', 'pinHash', 'appliedAt'])
+        && request.resource.data.status in ['applied', 'failed', 'expired']
+        && request.resource.data.passwordHash == ''
+        && request.resource.data.pinHash == ''
+        && request.resource.data.appliedAt is timestamp
+      );
     }
 
     // A computer beyond the license's device limit asks for approval; the admin approves or rejects it.

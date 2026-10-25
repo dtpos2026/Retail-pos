@@ -1,16 +1,20 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Copy, RefreshCw, Ban, PlayCircle, ArrowRightLeft, Trash2, Eye, PauseCircle, Monitor, Hourglass } from 'lucide-react';
+import { Copy, RefreshCw, Ban, PlayCircle, ArrowRightLeft, Trash2, Eye, PauseCircle, Monitor, Hourglass, KeyRound } from 'lucide-react';
 import { Button, Badge, Empty } from './ui';
 import { useAdmin } from '../context';
 import { setLicenseStatus, deleteLicense, ensureCode } from '../lib/data';
 import DevicesModal from './DevicesModal';
+import ResetPasswordModal from './ResetPasswordModal';
+import { sumSales, fmtSales } from '../lib/sales';
 import { fmtDate, money, licenseState } from '../lib/format';
 import { LicenseForm, KeyResult } from './LicenseModals';
 
 export default function LicenseTable({ licenses, showClient = true }) {
   const { toast, toastError, confirm, isHead, devices } = useAdmin();
   const [manage, setManage] = useState(null);
+  const [pwFor, setPwFor] = useState(null);
+  const salesOfLicense = (id) => sumSales((devices || []).filter((d) => d.licenseId === id));
   const count = (id) => (devices || []).filter((d) => d.licenseId === id).length;
   const [form, setForm] = useState(null);
   const [result, setResult] = useState(null);
@@ -53,7 +57,7 @@ export default function LicenseTable({ licenses, showClient = true }) {
           <thead>
             <tr>
               {showClient && <th>Client</th>}
-              <th>Devices</th><th>Plan</th><th>Expires</th><th className="num">Users</th><th className="num">Price</th><th>Status</th><th />
+              <th>Devices</th><th className="num">Sales today / month</th><th>Plan</th><th>Expires</th><th className="num">Users</th><th className="num">Price</th><th>Status</th><th />
             </tr>
           </thead>
           <tbody>
@@ -70,12 +74,16 @@ export default function LicenseTable({ licenses, showClient = true }) {
                     </Button>
                     {l.machineId !== '*' && <div className="small mono faint" style={{ marginTop: 3 }}>{l.machineId}</div>}
                   </td>
+                  <td className="num nowrap">
+                    {(() => { const t = salesOfLicense(l.id); return t.reporting ? <><b>{fmtSales(t.today)}</b><div className="small faint">{fmtSales(t.month)}</div></> : <span className="faint">—</span>; })()}
+                  </td>
                   <td style={{ textTransform: 'capitalize' }}>{String(l.plan).replace('_', ' ')}</td>
                   <td className="nowrap">{l.expiresAt ? fmtDate(l.expiresAt) : 'Lifetime'}</td>
                   <td className="num">{l.maxUsers || '∞'}</td>
                   <td className="num">{l.price ? money(l.price) : '—'}{l.price > 0 && !l.paid && <div><Badge color="red">Unpaid</Badge></div>}</td>
                   <td><Badge color={st.color}>{st.label}</Badge></td>
                   <td className="right nowrap">
+                    <Button size="sm" variant="ghost" icon={KeyRound} title="Reset the POS password of this restaurant" onClick={() => setPwFor(l)} />
                     <Button size="sm" variant="ghost" icon={Eye} title="Show key" onClick={() => setResult(l)} />
                     <Button size="sm" variant="ghost" icon={Copy} title="Copy key" onClick={async () => { try { navigator.clipboard.writeText(l.code || (await ensureCode(l))); toast('License key copied'); } catch (e) { toastError(e); } }} />
                     {l.status !== 'revoked' && <Button size="sm" variant="ghost" icon={RefreshCw} title="Renew / extend" onClick={() => setForm({ mode: 'renew', license: l })} />}
@@ -102,6 +110,7 @@ export default function LicenseTable({ licenses, showClient = true }) {
       )}
       {result && <KeyResult license={result} onClose={() => setResult(null)} />}
       {manage && <DevicesModal license={manage} onClose={() => setManage(null)} />}
+      {pwFor && <ResetPasswordModal license={pwFor} onClose={() => setPwFor(null)} />}
     </>
   );
 }

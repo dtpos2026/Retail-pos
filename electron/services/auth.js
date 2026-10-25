@@ -12,9 +12,20 @@ function hashSecret(secret) {
   return `scrypt$${salt.toString('hex')}$${hash.toString('hex')}`;
 }
 
+const PBKDF2_RE = /^pbkdf2\$(\d{4,7})\$([0-9a-f]{16,64})\$([0-9a-f]{64})$/;
+
 function verifySecret(secret, stored) {
   if (!stored || typeof stored !== 'string') return false;
-  const [algo, saltHex, hashHex] = stored.split('$');
+  const parts = stored.split('$');
+  if (parts[0] === 'pbkdf2') {
+    // Hash created by the provider's Super Admin panel (WebCrypto) for a remote password reset.
+    const m = PBKDF2_RE.exec(stored);
+    if (!m) return false;
+    const expected = Buffer.from(m[3], 'hex');
+    const actual = crypto.pbkdf2Sync(String(secret), Buffer.from(m[2], 'hex'), Number(m[1]), expected.length, 'sha256');
+    return crypto.timingSafeEqual(expected, actual);
+  }
+  const [algo, saltHex, hashHex] = parts;
   if (algo !== 'scrypt' || !saltHex || !hashHex) return false;
   const expected = Buffer.from(hashHex, 'hex');
   const actual = crypto.scryptSync(String(secret), Buffer.from(saltHex, 'hex'), expected.length);
@@ -65,6 +76,7 @@ function login({ username, password }) {
   }
   if (!u.active) throw new AppError('This user account is disabled. Contact your admin.');
   failures.delete(key);
+  if (String(u.password_hash).startsWith('pbkdf2$')) ctx.db.run('UPDATE users SET password_hash = ? WHERE id = ?', [hashSecret(password), u.id]);
   return startSession(u);
 }
 
@@ -79,6 +91,7 @@ function loginPin({ userId, pin }) {
   }
   if (!u.active) throw new AppError('This user account is disabled. Contact your admin.');
   failures.delete(key);
+  if (String(u.pin_hash).startsWith('pbkdf2$')) ctx.db.run('UPDATE users SET pin_hash = ? WHERE id = ?', [hashSecret(pin), u.id]);
   return startSession(u);
 }
 
@@ -115,4 +128,26 @@ function changeOwnPassword({ currentPassword, newPassword }) {
   return true;
 }
 
-module.exports = { hashSecret, verifySecret, publicUser, login, loginPin, logout, current, loginUsers, changeOwnPassword };
+/**
+ * Password reset sent by the provider (Super Admin panel). The panel never sends a readable password, only
+ * PBKDF2 hashes; this stores them so the user can sign in with the new password / PIN straight away.
+ * @returns {{ ok: boolean, username: string, message: string }}
+ */
+function applyRemoteReset({ username, passwordHash, pinHash, removePin }) {
+  const key = String(username || '').trim().toLowerCase();
+  if (!key) return { ok: false, username: key, message: 'No user name in the reset.' };
+  const u = ctx.db.get('SELECT * FROM users WHERE username = ? COLLATE NOCASE', [key]);
+  if (!u) return { ok: false, username: key, message: `No user "${key}" on this computer.` };
+  if (!PBKDF2_RE.test(String(passwordHash || ''))) return { ok: false, username: key, message: 'The reset has no valid password.' };
+  if (pinHash && !PBKDF2_RE.test(String(pinHash))) return { ok: false, username: key, message: 'The reset has an invalid PIN.' };
+  ctx.db.transaction(() => {
+    ctx.db.run('UPDATE users SET password_hash = ? WHERE id = ?', [passwordHash, u.id]);
+    if (pinHash) ctx.db.run('UPDATE users SET pin_hash = ? WHERE id = ?', [pinHash, u.id]);
+    else if (removePin) ctx.db.run('UPDATE users SET pin_hash = NULL WHERE id = ?', [u.id]);
+  });
+  failures.delete(u.username.toLowerCase());
+  failures.delete(`pin:${u.id}`);
+  return { ok: true, username: u.username, message: `Password of "${u.username}" was reset by your provider.` };
+}
+
+module.exports = { applyRemoteReset, hashSecret, verifySecret, publicUser, login, loginPin, logout, current, loginUsers, changeOwnPassword };

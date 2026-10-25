@@ -21,31 +21,53 @@ globalThis.fetch = async (url, opts = {}) => {
 };
 test.after(() => { globalThis.fetch = realFetch; });
 
-const extra = { hostname: 'PC', ownerName: 'Ali', gpsLat: 31.5, gpsLng: 74.3, gpsAcc: 20, gpsStatus: 'ok', publicIp: '1.2.3.4', city: 'Lahore' };
+const extra = { hostname: 'PC', ownerName: 'Ali', gpsLat: 31.5, gpsLng: 74.3, gpsAcc: 20, gpsStatus: 'ok', publicIp: '1.2.3.4', city: 'Lahore', salesToday: 12500.5, salesMonth: 340000, salesDate: '2026-10-25', salesDays: '10-24:9000,10-25:12500.5', posUsers: 'admin|Administrator|admin', logoThumb: 'data:image/png;base64,AAAA' };
 const base = ['name', 'os', 'appVersion'];
 
 test('current rules: everything goes in one request', async () => {
-  allowed = new Set([...base, 'hostname', 'ownerName', 'gpsLat', 'gpsLng', 'gpsAcc', 'gpsStatus', 'publicIp', 'city']);
+  allowed = new Set([...base, 'hostname', 'ownerName', 'gpsLat', 'gpsLng', 'gpsAcc', 'gpsStatus', 'publicIp', 'city', 'salesToday', 'salesMonth', 'salesDate', 'salesDays', 'posUsers', 'logoThumb']);
   bodies.length = 0;
   assert.equal(await cloud.heartbeat({ lid: 'L', machineId: 'M', version: '1', extra }), 0);
   assert.equal(bodies.length, 1);
 });
 
-test('rules without gpsStatus: second try works (tier 1)', async () => {
-  allowed = new Set([...base, 'hostname', 'ownerName', 'gpsLat', 'gpsLng', 'gpsAcc', 'publicIp', 'city']);
+test('rules of v1.8.1 (no sales / users / logo yet): tier 1 keeps location and gpsStatus', async () => {
+  allowed = new Set([...base, 'hostname', 'ownerName', 'gpsLat', 'gpsLng', 'gpsAcc', 'gpsStatus', 'publicIp', 'city']);
   bodies.length = 0;
   assert.equal(await cloud.heartbeat({ lid: 'L', machineId: 'M', version: '1', extra }), 1);
-  assert.ok(bodies[1].includes('gpsLat') && !bodies[1].includes('gpsStatus'));
+  assert.ok(bodies[1].includes('gpsStatus') && !bodies[1].includes('salesToday') && !bodies[1].includes('logoThumb'));
 });
 
-test('old rules without gps/owner: still reports IP location (tier 2)', async () => {
-  allowed = new Set([...base, 'hostname', 'publicIp', 'city']);
+test('rules without gpsStatus: tier 2 works', async () => {
+  allowed = new Set([...base, 'hostname', 'ownerName', 'gpsLat', 'gpsLng', 'gpsAcc', 'publicIp', 'city']);
+  bodies.length = 0;
   assert.equal(await cloud.heartbeat({ lid: 'L', machineId: 'M', version: '1', extra }), 2);
+  assert.ok(bodies[2].includes('gpsLat') && !bodies[2].includes('gpsStatus'));
 });
 
-test('very old rules: only name / os / version, but the heartbeat still lands (tier 3)', async () => {
-  allowed = new Set(base);
+test('old rules without gps/owner: still reports IP location (tier 3)', async () => {
+  allowed = new Set([...base, 'hostname', 'publicIp', 'city']);
   assert.equal(await cloud.heartbeat({ lid: 'L', machineId: 'M', version: '1', extra }), 3);
+});
+
+test('very old rules: only name / os / version, but the heartbeat still lands (tier 4)', async () => {
+  allowed = new Set(base);
+  assert.equal(await cloud.heartbeat({ lid: 'L', machineId: 'M', version: '1', extra }), 4);
+});
+
+test('long values (logo thumbnail, 14-day sales) are not cut at 120 characters', async () => {
+  allowed = new Set([...base, 'logoThumb', 'salesDays']);
+  const bodiesBefore = bodies.length;
+  const logo = 'data:image/png;base64,' + 'A'.repeat(20000);
+  const days = Array.from({ length: 14 }, (_, i) => `10-${10 + i}:${1000 + i}`).join(',');
+  let sent = null;
+  const f = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => { sent = JSON.parse(opts.body).writes[0].update.fields; return { ok: true, status: 200, json: async () => ({}) }; };
+  await cloud.heartbeat({ lid: 'L', machineId: 'M', version: '1', extra: { logoThumb: logo, salesDays: days } });
+  globalThis.fetch = f;
+  assert.equal(sent.logoThumb.stringValue.length, logo.length);
+  assert.equal(sent.salesDays.stringValue, days);
+  assert.equal(bodies.length, bodiesBefore);
 });
 
 test('network down is not retried with fewer fields', async () => {

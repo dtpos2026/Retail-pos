@@ -14,6 +14,13 @@ Retail-pos/                  ← POS software (Windows, offline). Run npm comman
 ```
 
 
+## What's new in v1.9.0
+
+- **Forgot password?** The POS is offline, so the provider resets it: Super Admin → Devices / Licenses → key button → new password. The POS applies it automatically (or via *Forgot password or PIN? → Check for new password* on the login screen). Only a PBKDF2 hash travels, the old password stops working. → [docs/SUPER_ADMIN_SETUP.md](docs/SUPER_ADMIN_SETUP.md)
+- **Restaurants' sales in the Super Admin:** today's and this month's total sale per restaurant (totals only, never single orders) on the Dashboard, Licenses, Clients, Devices and the map. Updated shortly after every sale.
+- **Map pins show the restaurant's logo, name and today's sales.**
+- **Re-deploy the Firestore rules** after updating: `cd superadmin && npx firebase-tools deploy`.
+
 ## What's new in v1.8.0
 
 - **Menu variants** (Small / Medium / Large with their own prices, chosen on tap), **recipe management** (ingredient stock is deducted, cost comes from the recipe) and **weighed items** (kg) with a right-side number pad — by weight or by amount.

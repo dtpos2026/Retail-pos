@@ -1,6 +1,6 @@
 # DT Retail POS — System Details (Mukammal Tafseel)
 
-**Version 1.8.1 · Developed by Digital Target · digitaltarget.digital@gmail.com**
+**Version 1.9.0 · Developed by Digital Target · digitaltarget.digital@gmail.com**
 
 Yeh document **DT Retail POS** system ki poori tafseel hai: yeh kya hai, kya kya kar sakta hai, kaise kaam karta hai, license aur security ka nizam, technical dhancha, kya test hua aur kya abhi baqi hai. Is ko owner, investor, ya technical team — sab padh sakte hain. Roz ke istemaal ka tareeqa alag document **User Guide** (`DT_RETAIL_POS_USER_GUIDE.pdf`) mein hai.
 
@@ -54,7 +54,7 @@ Yeh document **DT Retail POS** system ki poori tafseel hai: yeh kya hai, kya kya
 
 | Module | Tafseel |
 |---|---|
-| **Login** | 4 ankon ka **PIN** (tile par click) ya username / password. Har sale par cashier, tareekh, waqt. 5 ghalat koshishon ke baad 30 second ka lock. |
+| **Login** | 4 ankon ka **PIN** (tile par click) ya username / password. Har sale par cashier, tareekh, waqt. 5 ghalat koshishon ke baad 30 second ka lock. **Forgot password or PIN?** — provider se reset (8.6). |
 | **Dashboard** | Aaj ki sale, orders, profit, cash / card / bank, udhaar, dine-in / takeaway / delivery ka hissa, pending orders, bhari tables, low stock, top items, 7 din aur ghanton ke charts. |
 | **POS / New Sale** | Search + barcode (F2), categories (**top line + "⋯ +n"** ya **left rail**), product cards tasveer ke saath, cart (qty, item discount, note), bill discount (Rs. / %), Open Item, tax, delivery charges, round-off, hold / resume, tez payment, udhaar sales, auto print. |
 | **Sale types** | **Dine-In** (table, waiter, running bill, KOT, bill print, settle), **Takeaway** (token), **Delivery** (customer naam / mobile / address, rider, charges). |
@@ -191,8 +191,27 @@ POS online ho to har **60 second** (lock ho to 30 second) license aur device ki 
 ### 8.4 Halaat (states)
 `active`, `needs_key` (public key abhi download nahi hui), `unlicensed` (key nahi), `pending` / `approval` (intezar), `suspended`, `blocked`, `revoked`, `expired`, `rejected`, `clock` (Windows date peeche ki gayi). License ki halat `%APPDATA%\Retail POS\license.json` mein alag file mein rehti hai, isliye backup restore karne se license nahi hatta.
 
-### 8.5 Device ki maloomat aur location
-Registered computer provider ko bhejta hai (taake support aur tahaffuz ho): computer ka naam, Windows version, model, CPU, RAM, local / public IP, shehar / mulk (IP se), aur — agar Windows Location on ho — **sahi (exact) jagah**. Yeh login par aur har kuch minute baad update hoti hai. Settings → License mein shop ko saaf dikhta hai ke kya bheja ja raha hai, aur **Send my location now** ka button hai.
+### 8.5 Provider ko kya bheja jata hai (jab POS online ho)
+| Kya | Tafseel |
+|---|---|
+| **Computer ki maloomat** | naam, Windows, model, CPU, RAM, local / public IP, shehar / mulk (IP se) |
+| **Jagah** | agar Windows Location on ho to **sahi (exact) jagah**, warna IP ka andaza |
+| **Sale ke totals** | **aaj ki sale**, **is mahine ki sale**, aur pichle **14 din ka roz ka total** — sirf completed bills ka total (cancel / refund nahi). **Koi alag order, item ya customer nahi.** |
+| **Users ke naam** | `username`, naam, role (taake provider password reset ke liye user chun sake) — password nahi |
+| **Logo** | restaurant ka chhota (taqreeban 96 px) thumbnail, map ke pin ke liye; sirf logo badalne par dobara |
+| **Owner** | owner ka naam aur mobile (pehli activation par likha hua) |
+
+Yeh pehli dafa login par, har chand minute baad, aur **har sale / cancel / refund ke taqreeban 20 second baad** (jhund mein ek hi dafa) update hota hai. Settings → License mein shop ko saaf dikhta hai ke jagah kya bheji ja rahi hai aur **Send my location now** ka button hai.
+
+### 8.6 Password reset (provider ke zariye)
+POS offline software hai, isliye bhoola hua password software ke andar reset nahi ho sakta. Hal:
+
+1. Provider panel mein **Devices** (ya **Licenses**) → restaurant ke saamne **chabi ka button** → user, naya password (aur chahe to PIN) → **Reset password**.
+2. Panel browser mein password ka **PBKDF2-SHA256 hash** (210,000 iterations) banata hai aur sirf hash `passwordResets/{licenseId}_{machineId}` mein likhta hai. **Asal password kahin save nahi hota**; woh sirf provider ko ek dafa dikhta hai taake client ko bata sake.
+3. Restaurant ka POS jab online ho (har minute ke check mein, ya login screen par **Forgot password or PIN? → Check for new password**) reset ko lagata hai: us user ka password (aur PIN) badal jata hai, ghalat-koshish ka lock khul jata hai, aur server par `status = applied` likh kar **hash mita deta hai**.
+4. Reset sirf **usi computer** ke liye hota hai (license + machine id milte hain), **7 din** mein expire, aur **ek hi dafa** lagta hai. Pehle login par hash khud scrypt mein badal jata hai. Har reset provider ke **Activity Log** mein.
+
+**Hifazat ka note:** reset ka document sirf us computer ki (na-qabil-e-andaza) id se paya ja sakta hai, aur lagne ke baad hash mita diya jata hai; sirf admins naya reset bana ya hata sakte hain (Firestore rules).
 
 ---
 
@@ -200,11 +219,11 @@ Registered computer provider ko bhejta hai (taake support aur tahaffuz ho): comp
 
 | Page | Kaam |
 |---|---|
-| **Dashboard** | Clients, active / expiring / expired licenses, devices online, revenue (6 mahine), renewals, support inbox, device approval alerts |
-| **Clients** | Business, owner, phone / WhatsApp, email, city, address, type, notes, status; backup, CSV export / import |
-| **Licenses** | Generate (**+ New restaurant** ek form mein), plan, expiry, max users, **max devices**, qeemat / paid, **WhatsApp ka tayyar paigham**, renew, transfer, suspend, revoke, reactivate, **Show key** (chhoti + lambi) |
-| **Devices** | Har computer: online nishan, last seen, versions; Block / Unblock / Suspend / Activate / Remove; ⓘ poori detail; approval requests |
-| **Device map** | Sab computers ki live jagah (exact ya IP ka andaza); khud pin kar sakte hain |
+| **Dashboard** | Clients, active / expiring / expired licenses, devices online, revenue (6 mahine), renewals, support inbox, device approval alerts, **Restaurants' sales** (sab ki aaj / mahane ki sale) |
+| **Clients** | **Sales today / month** (list aur profile, logo ke saath), Business, owner, phone / WhatsApp, email, city, address, type, notes, status; backup, CSV export / import |
+| **Licenses** | **Sales today / month** column, **Reset password**, Generate (**+ New restaurant** ek form mein), plan, expiry, max users, **max devices**, qeemat / paid, **WhatsApp ka tayyar paigham**, renew, transfer, suspend, revoke, reactivate, **Show key** (chhoti + lambi) |
+| **Devices** | Har computer: online nishan, last seen, versions, **aaj / mahane ki sale**; Block / Unblock / Suspend / Activate / Remove; **Reset password**; ⓘ poori detail (14 din ki sale, POS users); approval requests |
+| **Device map** | Sab computers ki live jagah — **pin ke andar restaurant ka logo**, saath naam aur aaj ki sale; exact ya IP ka andaza; khud pin kar sakte hain |
 | **Billing** | Invoices (design ke mutabiq), preview, A4 print, **verify QR / code** — public page par invoice asli hone ki tasdeeq |
 | **Support** | Clients ke saath chat, unread badge |
 | **Verify key** | Kisi bhi key ki jaanch |
@@ -267,8 +286,8 @@ Retail-pos/
 | Cheez | Tafseel |
 |---|---|
 | **Zaroorat** | Windows 10 / 11 (64-bit), 4 GB RAM, 500 MB jagah, optional thermal printer |
-| **Installer** | `RetailPOS-Setup-1.8.1.exe` (NSIS): install folder chunna, desktop aur Start-menu shortcut "DT Retail POS", uninstall par data mehfooz |
-| **Portable** | `RetailPOS-Portable-1.8.1.exe` (bina install) |
+| **Installer** | `RetailPOS-Setup-1.9.0.exe` (NSIS): install folder chunna, desktop aur Start-menu shortcut "DT Retail POS", uninstall par data mehfooz |
+| **Portable** | `RetailPOS-Portable-1.9.0.exe` (bina install) |
 | **Build** | Windows par `npm run dist`, ya GitHub Actions workflow "Build Windows installer" |
 | **Panel deploy** | `cd superadmin && npx firebase-tools deploy` (hosting + rules) — har version ke baad rules dobara deploy |
 
@@ -278,11 +297,11 @@ Retail-pos/
 
 | Test | Natija |
 |---|---|
-| **Unit tests** (`npm test`) | **67 pass** — sales, tables, tokens, inventory, reports, backup / restore, permissions, templates, license, heartbeat, bulk import, variants / recipes, Excel / JSON export-import, margins, staff |
+| **Unit tests** (`npm test`) | **75 pass** — sales, tables, tokens, inventory, reports, backup / restore, permissions, templates, license, heartbeat, bulk import, variants / recipes, Excel / JSON export-import, margins, staff, **remote password reset, sales totals** |
 | **UI end-to-end** (asal Electron app, Playwright) | **36 qadam pass**, koi console error nahi — login, sales, dine-in, delivery, tables, variants, kg number pad, deals, categories, bulk import, waiters, bank, margins, reports, themes, printer settings, cashier restrictions, Excel / JSON export-import |
-| **License e2e** | Pehli activation, chhoti key, device approval, suspend lock screen + chat, reactivate — nakli Firestore ke saath |
+| **License e2e** | Pehli activation, chhoti key, device approval, **sales totals + users + logo provider tak, Forgot password → reset lagna → naya password se login (purana band)**, suspend lock screen + chat, reactivate — nakli Firestore ke saath |
 | **Firestore rules (emulator)** | Device limit race, approval, status ki hifazat, support, invoices, public verify, audit log — sab pass |
-| **Panel smoke** | Billing, invoice verify, support, device info, map, approval, short code — pass |
+| **Panel smoke** | Billing, invoice verify, support, device info, **sales board, licenses sales column, logo pins, password reset (browser ka hash Node mein bilkul wesa verify hota hai jaise POS karta hai)**, approval, short code — pass |
 | **Windows build** | Windows ka package (wine mein) start hota hai aur purana v1.1.0 database upgrade hota hai |
 
 **Jo yahan test nahi ho saka (asal hardware / live service chahiye):**
@@ -294,6 +313,7 @@ Retail-pos/
 
 ## 14. Maloom hudood (limitations)
 
+- **Password reset ke liye internet:** reset provider ke server se aata hai, is liye restaurant ke computer ko ek dafa internet chahiye (reset 7 din valid).
 - **Live control ke liye internet:** Block / suspend / revoke POS tak tab pohanchta hai jab woh online ho; hamesha offline computer license ki expiry tak chalta rahega — plans muddat wale rakhein.
 - **Bluetooth printer:** pehle Windows mein pair + driver install; software apna Bluetooth stack nahi rakhta.
 - **Installer** Windows par (ya GitHub Actions se) banta hai.
@@ -317,6 +337,7 @@ Retail-pos/
 | **1.7** | Chhoti license key, pehli launch par business / owner / mobile, device approval, exact Windows location |
 | **1.8** | Variants (sizes), recipes, kg number pad; categories (top "⋯" / left rail); **Excel + JSON export / import**; device location fix |
 | **1.8.1** | POS table picker mein floors; token slip par waiter / rider |
+| **1.9.0** | **Provider se password reset** (Forgot password screen, hash-only), **restaurants ki roz / mahane ki sale** panel mein (Dashboard, Licenses, Clients, Devices, Map), **map par logo + naam + sale wale pins**, POS users ki list provider ko |
 
 ---
 

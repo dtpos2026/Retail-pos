@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Zap, WifiOff, Printer, Ticket, ShieldCheck, BarChart3, Delete, KeyRound, LogIn, Grid3x3 } from 'lucide-react';
+import { Zap, WifiOff, Printer, Ticket, ShieldCheck, BarChart3, Delete, KeyRound, LogIn, Grid3x3, LifeBuoy, RefreshCw, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { api } from '../lib/api';
 import { useApp } from '../context/AppContext';
 import { initials } from '../lib/format';
-import { Button, Field, Input } from '../components/ui';
+import { Button, Field, Input, Modal } from '../components/ui';
 import { BRAND } from '@shared/brand.mjs';
 import { DtMark, DT_LOCKUP_WHITE, DT_LOCKUP_PURPLE } from '../components/Brand';
 
@@ -16,6 +16,7 @@ export default function Login() {
   const [form, setForm] = useState({ username: '', password: '' });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [forgot, setForgot] = useState(false);
 
   useEffect(() => {
     api('auth.loginUsers')
@@ -88,6 +89,7 @@ export default function Login() {
   const shop = pub?.business;
   const shopName = shop?.name && shop.name !== 'My Business' ? shop.name : null;
   return (
+    <>
     <div className="auth">
       <div className="auth-brand">
         <Floaters />
@@ -210,6 +212,10 @@ export default function Login() {
             )}
           </div>
 
+          <div className="row" style={{ justifyContent: 'center', marginTop: 4 }}>
+            <Button variant="ghost" size="sm" icon={LifeBuoy} onClick={() => setForgot(true)}>Forgot password or PIN?</Button>
+          </div>
+
           {info?.defaultAdmin && (
             <div className="card card-pad mt small" style={{ background: 'var(--info-50)', borderColor: 'transparent', color: 'var(--info)' }}>
               <b>First login:</b> username <b>admin</b>, password <b>admin123</b> (PIN <b>1234</b>). Please change it after signing in.
@@ -222,6 +228,59 @@ export default function Login() {
         </div>
       </div>
     </div>
+    {forgot && <ForgotModal license={license} onClose={() => setForgot(false)} onApplied={(u) => { setForgot(false); setMode('password'); setForm({ username: u || '', password: '' }); setError(''); }} />}
+    </>
+  );
+}
+
+/** No password reset inside the (offline) software: the provider sets a new one in the Super Admin and it arrives here. */
+function ForgotModal({ license, onClose, onApplied }) {
+  const [busy, setBusy] = useState(false);
+  const [res, setRes] = useState(null);
+  const check = async () => {
+    setBusy(true);
+    try {
+      setRes(await api('auth.checkReset'));
+    } catch (e) {
+      setRes({ state: 'failed', message: e.message });
+    } finally {
+      setBusy(false);
+    }
+  };
+  const ok = res?.state === 'applied';
+  return (
+    <Modal
+      title="Forgot your password or PIN?"
+      icon={LifeBuoy}
+      size="md"
+      onClose={onClose}
+      footer={
+        <>
+          <Button onClick={onClose}>Close</Button>
+          {ok ? <Button variant="primary" icon={LogIn} onClick={() => onApplied(res.username)}>Sign in now</Button> : <Button variant="primary" icon={RefreshCw} loading={busy} onClick={check}>Check for new password</Button>}
+        </>
+      }
+    >
+      <div className="col" style={{ gap: 12 }}>
+        <div>This software works offline, so only your provider can reset a forgotten password.</div>
+        <ol style={{ margin: 0, paddingLeft: 20, lineHeight: 1.7 }}>
+          <li>Call or message <b>{license?.vendor?.name || 'your provider'}</b>{license?.vendor?.email ? ` (${license.vendor.email})` : ''} and tell them:
+            <div className="card card-pad small" style={{ marginTop: 6 }}>
+              Business: <b><bdi>{license?.businessName || '—'}</bdi></b><br />
+              Computer ID: <b className="mono">{license?.machineId || '—'}</b>
+            </div>
+          </li>
+          <li>They set a <b>new password</b> for your user and give it to you.</li>
+          <li>Connect this computer to the <b>internet</b> and press <b>Check for new password</b>.</li>
+          <li>Sign in with the new password (then change it in <b>Users</b>).</li>
+        </ol>
+        {res && (
+          <div className={`badge ${ok ? 'green' : res.state === 'none' ? 'amber' : 'red'}`} style={{ display: 'flex', gap: 8, padding: '10px 12px', borderRadius: 10, whiteSpace: 'normal', alignItems: 'flex-start' }}>
+            {ok ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}<span>{res.message}</span>
+          </div>
+        )}
+      </div>
+    </Modal>
   );
 }
 

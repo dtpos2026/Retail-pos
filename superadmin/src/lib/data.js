@@ -248,6 +248,47 @@ export async function clearDeviceLocation(device) {
   await updateDoc(doc(db, 'devices', device.id), { lat: null, lng: null, locationLabel: '' });
 }
 
+// ------------------------------------------------------------------ password reset (POS is offline: the provider resets it)
+const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+
+/** PBKDF2-SHA256 hash in the format the POS verifies: pbkdf2$iterations$saltHex$hashHex (the password itself is never stored). */
+export async function pbkdf2Hash(secret, iterations = 210000) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(String(secret)), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt, iterations }, key, 256);
+  return `pbkdf2$${iterations}$${hex(salt)}$${hex(bits)}`;
+}
+
+/** Prepare a reset for ONE computer; it is applied the next time that POS is online (within about a minute). */
+export async function createPasswordReset(device, { username, password, pin, removePin, days = 7 }) {
+  const user = String(username || '').trim().toLowerCase();
+  if (!user) throw new Error('Choose or type the user name.');
+  if (String(password || '').length < 4) throw new Error('The new password needs at least 4 characters.');
+  if (pin && !/^\d{4}$/.test(String(pin))) throw new Error('The PIN must be exactly 4 digits.');
+  const data = {
+    licenseId: device.licenseId,
+    machineId: device.machineId,
+    businessName: device.businessName || '',
+    username: user,
+    passwordHash: await pbkdf2Hash(password),
+    pinHash: pin ? await pbkdf2Hash(pin) : '',
+    removePin: !!removePin && !pin,
+    status: 'pending',
+    note: '',
+    createdBy: me(),
+    createdAt: serverTimestamp(),
+    expiresAt: Timestamp.fromMillis(Date.now() + days * 86400000),
+    appliedAt: null,
+  };
+  await setDoc(doc(db, 'passwordResets', device.id), data);
+  await logActivity('device.password_reset', `Password reset for "${user}" prepared for ${device.name || device.machineId} (${device.businessName})`, { licenseId: device.licenseId });
+}
+
+export async function cancelPasswordReset(device) {
+  await deleteDoc(doc(db, 'passwordResets', device.id));
+  await logActivity('device.password_reset_cancel', `Password reset cancelled for ${device.name || device.machineId} (${device.businessName})`, { licenseId: device.licenseId });
+}
+
 // ------------------------------------------------------------------ backup / export / import
 export async function loadRegistry() {
   const [c, l] = await Promise.all([getDocs(collection(db, 'clients')), getDocs(collection(db, 'licenses'))]);

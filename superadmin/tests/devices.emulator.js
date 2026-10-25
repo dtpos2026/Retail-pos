@@ -101,6 +101,35 @@ async function main() {
   const dv2 = await (await fetch(`${base}/devices/L1_AAAA-AAAA-AAAA-AAAA`)).json();
   assert.equal(dv2.fields.gpsLat.doubleValue, 31.5204); assert.equal(dv2.fields.gpsStatus.stringValue, 'ok'); assert.equal(dv2.fields.ownerName.stringValue, 'Ali');
   console.log('OK   heartbeat carries the exact (GPS) location + status');
+  // v1.9: sales totals, user list and logo thumbnail travel with the heartbeat
+  const t9 = await cloud.heartbeat({ lid: 'L1', machineId: 'AAAA-AAAA-AAAA-AAAA', version: '1.9.0', extra: { salesToday: 12500.5, salesMonth: 340000, salesDate: '2026-10-25', salesDays: '10-24:9000,10-25:12500.5', posUsers: 'admin|Administrator|admin;ali|Ali|cashier', logoThumb: 'data:image/png;base64,' + 'A'.repeat(2000) } });
+  assert.equal(t9, 0, 'current rules accept sales / users / logo');
+  const dv4 = await (await fetch(`${base}/devices/L1_AAAA-AAAA-AAAA-AAAA`)).json();
+  assert.equal(dv4.fields.salesToday.doubleValue, 12500.5); assert.equal(dv4.fields.salesMonth.doubleValue, 340000);
+  assert.equal(dv4.fields.salesDate.stringValue, '2026-10-25'); assert.match(dv4.fields.posUsers.stringValue, /ali\|Ali\|cashier/);
+  const DOC = 'projects/retail-pos-db7c6/databases/(default)/documents';
+  const rawCommit = (name, fields, transforms = []) => fetch(`${base}:commit`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ writes: [{ update: { name: `${DOC}/${name}`, fields }, updateMask: { fieldPaths: Object.keys(fields) }, updateTransforms: transforms }] }) });
+  const bigLogo = await rawCommit('devices/L1_AAAA-AAAA-AAAA-AAAA', { logoThumb: S('A'.repeat(50000)) }, [{ fieldPath: 'lastSeen', setToServerValue: 'REQUEST_TIME' }]);
+  assert.notEqual(bigLogo.status, 200, 'an oversized logo is refused');
+  console.log('OK   heartbeat carries sales totals, users and the logo thumbnail (oversized logo refused)');
+
+  // v1.9: password reset prepared by the provider, applied by the offline POS
+  const rid = 'L1_AAAA-AAAA-AAAA-AAAA';
+  const hash = `pbkdf2$210000$${'ab'.repeat(16)}$${'cd'.repeat(32)}`;
+  const anonMk = await fetch(`${base}/passwordResets/${rid}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ fields: { status: S('pending'), username: S('admin'), passwordHash: S(hash) } }) });
+  assert.notEqual(anonMk.status, 200, 'a computer cannot create its own reset');
+  assert.equal((await admin.set(`passwordResets/${rid}`, { licenseId: S('L1'), machineId: S('AAAA-AAAA-AAAA-AAAA'), username: S('admin'), passwordHash: S(hash), pinHash: S(''), status: S('pending'), expiresAt: { timestampValue: new Date(Date.now() + 7 * 864e5).toISOString() } })).status, 200, 'admin prepares a reset');
+  const pr = await cloud.getPasswordReset('L1', 'AAAA-AAAA-AAAA-AAAA');
+  assert.equal(pr.username, 'admin'); assert.equal(pr.status, 'pending'); assert.equal(pr.passwordHash, hash);
+  assert.notEqual((await fetch(`${base}/passwordResets`)).status, 200, 'resets cannot be listed without sign-in');
+  assert.notEqual((await rawCommit(`passwordResets/${rid}`, { username: S('someone-else') })).status, 200, 'a computer cannot edit the reset');
+  assert.notEqual((await rawCommit(`passwordResets/${rid}`, { status: S('applied'), passwordHash: S('evil'), pinHash: S('') }, [{ fieldPath: 'appliedAt', setToServerValue: 'REQUEST_TIME' }])).status, 200, 'secrets must be wiped when reporting');
+  await cloud.finishPasswordReset('L1', 'AAAA-AAAA-AAAA-AAAA', 'applied', 'Applied on the computer');
+  const pr2 = await cloud.getPasswordReset('L1', 'AAAA-AAAA-AAAA-AAAA');
+  assert.equal(pr2.status, 'applied'); assert.equal(pr2.passwordHash, ''); assert.ok(pr2.appliedAt);
+  await assert.rejects(() => cloud.finishPasswordReset('L1', 'AAAA-AAAA-AAAA-AAAA', 'applied', 'again'), 'only a pending reset can be reported');
+  assert.equal((await admin.del(`passwordResets/${rid}`)).status, 200, 'admin removes the reset');
+  console.log('OK   password reset: admin prepares, POS reads + reports + wipes the hash, nobody else can touch it');
   const evil = await fetch(`${base}/devices/L1_AAAA-AAAA-AAAA-AAAA?updateMask.fieldPaths=lat`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ fields: { lat: { doubleValue: 1 } } }) });
   assert.notEqual(evil.status, 200); console.log('OK   POS cannot set the admin-pinned location');
   assert.equal((await admin.set('activity/A1', { action: S('x.y'), by: S('digitaltarget.digital@gmail.com') })).status, 200);

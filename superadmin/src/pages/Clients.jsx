@@ -6,6 +6,9 @@ import { useAdmin } from '../context';
 import { fmtDate, licenseState, tsToDate } from '../lib/format';
 import { PageHead, Button, SearchBox, Loading, Empty, Modal, Field, Input, Select, Badge } from '../components/ui';
 import LicenseTable from '../components/LicenseTable';
+import { Logo } from '../components/SalesBoard';
+import { sumSales, fmtSales } from '../lib/sales';
+import { isOnline } from '../lib/devices';
 import { LicenseForm, KeyResult } from '../components/LicenseModals';
 
 function download(name, type, content) {
@@ -62,7 +65,7 @@ function ClientForm({ client, onClose, onSaved }) {
 }
 
 function ClientDetail({ client, onBack }) {
-  const { toast, toastError, confirm } = useAdmin();
+  const { toast, toastError, confirm, devices } = useAdmin();
   const [licenses, setLicenses] = useState(null);
   const [edit, setEdit] = useState(false);
   const [gen, setGen] = useState(false);
@@ -89,6 +92,22 @@ function ClientDetail({ client, onBack }) {
         <Button variant="danger-ghost" icon={Trash2} onClick={remove}>Delete</Button>
         <Button variant="primary" icon={KeyRound} onClick={() => setGen(true)}>Generate license</Button>
       </PageHead>
+      {(() => {
+        const mine = (devices || []).filter((d) => (licenses || []).some((l) => l.id === d.licenseId));
+        const t = sumSales(mine);
+        const logo = mine.find((d) => d.logoThumb)?.logoThumb;
+        return (
+          <div className="card card-pad row wrap" style={{ gap: 18 }}>
+            <Logo src={logo} name={client.businessName} size={56} />
+            <div className="grow" style={{ minWidth: 160 }}>
+              <div className="b" style={{ fontSize: 17 }}><bdi>{client.businessName}</bdi></div>
+              <div className="small muted">{mine.length} computer(s) · {mine.filter((d) => isOnline(d)).length} online now</div>
+            </div>
+            <div><div className="small muted">Sales today</div><div style={{ fontSize: 22, fontWeight: 800 }}>{t.reporting ? fmtSales(t.today) : '—'}</div></div>
+            <div><div className="small muted">This month</div><div style={{ fontSize: 22, fontWeight: 800 }}>{t.reporting ? fmtSales(t.month) : '—'}</div></div>
+          </div>
+        );
+      })()}
       <div className="card card-pad grid grid-3">
         <div className="col" style={{ gap: 6 }}>
           <div className="row"><Phone size={16} className="faint" /> {client.phone || '—'}</div>
@@ -116,7 +135,7 @@ function ClientDetail({ client, onBack }) {
 }
 
 export default function Clients() {
-  const { toastError, toast } = useAdmin();
+  const { toastError, toast, devices } = useAdmin();
   const { id } = useParams();
   const [params, setParams] = useSearchParams();
   const nav = useNavigate();
@@ -181,11 +200,12 @@ export default function Clients() {
         ) : (
           <div className="table-wrap">
             <table className="table">
-              <thead><tr><th>Business</th><th>Phone</th><th className="hide-sm">City</th><th>Licenses</th><th className="hide-sm">Latest expiry</th><th>Status</th></tr></thead>
+              <thead><tr><th>Business</th><th>Phone</th><th className="hide-sm">City</th><th>Licenses</th><th className="num">Sales today</th><th className="num hide-sm">This month</th><th className="hide-sm">Latest expiry</th><th>Status</th></tr></thead>
               <tbody>
                 {list.map((c) => {
                   const ls = byClient[c.id] || [];
                   const active = ls.filter((l) => ['active', 'expiring'].includes(licenseState(l).key));
+                  const rowSales = sumSales((devices || []).filter((d) => ls.some((l) => l.id === d.licenseId)));
                   const latest = ls.filter((l) => l.status === 'active').sort((a, b) => String(b.expiresAt || '9999').localeCompare(String(a.expiresAt || '9999')))[0];
                   return (
                     <tr key={c.id} className="clickable" onClick={() => nav(`/clients/${c.id}`)}>
@@ -193,6 +213,8 @@ export default function Clients() {
                       <td>{c.phone}</td>
                       <td className="hide-sm">{c.city || '—'}</td>
                       <td>{ls.length ? <Badge color={active.length ? 'green' : 'red'}>{active.length} active / {ls.length}</Badge> : <Badge>None</Badge>}</td>
+                      <td className="num">{rowSales.reporting ? <b>{fmtSales(rowSales.today)}</b> : <span className="faint">—</span>}</td>
+                      <td className="num hide-sm">{rowSales.reporting ? fmtSales(rowSales.month) : <span className="faint">—</span>}</td>
                       <td className="hide-sm">{latest ? (latest.expiresAt ? fmtDate(latest.expiresAt) : 'Lifetime') : '—'}</td>
                       <td><Badge color={c.status === 'inactive' ? 'red' : 'green'}>{c.status === 'inactive' ? 'Inactive' : 'Active'}</Badge></td>
                     </tr>

@@ -6,9 +6,32 @@ import { useAdmin } from '../context';
 import { setDeviceLocation, clearDeviceLocation } from '../lib/data';
 import { isOnline, ago } from '../lib/devices';
 import { PageHead, Loading, Button, Badge, Empty } from '../components/ui';
-import { fmtDateTime } from '../lib/format';
+import { fmtDateTime, initials } from '../lib/format';
+import { salesOf, fmtSales } from '../lib/sales';
+import { Logo } from '../components/SalesBoard';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+// Approximate (IP) positions of several restaurants in one city would sit on top of each other: spread them a little.
+const spread = (id) => {
+  let h = 0;
+  for (const ch of String(id)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return [((h % 1000) / 1000 - 0.5) * 0.04, (((h >>> 10) % 1000) / 1000 - 0.5) * 0.04];
+};
+
+function pinIcon(d) {
+  const sale = salesOf(d);
+  const c = colorOf(d);
+  const inner = d.logoThumb ? `<img src="${esc(d.logoThumb)}" alt="">` : esc(initials(d.businessName));
+  const today = sale.reported ? `<span>${esc(fmtSales(sale.today))} today</span><i>${esc(fmtSales(sale.month))} this month</i>` : '';
+  return L.divIcon({
+    className: 'rpin-wrap',
+    html: `<div class="rpin ${d._pos.src === 'ip' ? 'dashed' : ''}" style="--c:${c}"><div class="rpin-badge">${inner}</div><div class="rpin-tip"></div><div class="rpin-label"><b>${esc(d.businessName)}</b>${today}</div></div>`,
+    iconSize: [46, 58],
+    iconAnchor: [23, 58],
+    popupAnchor: [0, -52],
+  });
+}
+
 const colorOf = (d) => (d.status === 'blocked' ? '#dc2626' : d.status === 'suspended' ? '#d97706' : isOnline(d) ? '#16a34a' : '#64748b');
 
 export default function DeviceMap() {
@@ -26,7 +49,7 @@ export default function DeviceMap() {
 
   useEffect(() => {
     if (!el.current || map.current) return undefined;
-    map.current = L.map(el.current, { zoomControl: true }).setView([30.1575, 71.5249], 6); // Pakistan
+    map.current = L.map(el.current, { zoomControl: true, zoomAnimation: false, markerZoomAnimation: false, fadeAnimation: false }).setView([30.1575, 71.5249], 6); // Pakistan
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '© OpenStreetMap contributors' }).addTo(map.current);
     layer.current = L.layerGroup().addTo(map.current);
     map.current.on('click', async (e) => {
@@ -41,8 +64,13 @@ export default function DeviceMap() {
       setPlace(null);
     });
     return () => {
-      map.current?.remove();
+      if (map.current) {
+        map.current.stop();
+        map.current.off();
+        map.current.remove();
+      }
       map.current = null;
+      layer.current = null;
     };
   }, [toast, toastError]);
 
@@ -50,18 +78,19 @@ export default function DeviceMap() {
     if (!layer.current) return;
     layer.current.clearLayers();
     located.forEach((d) => {
-      L.circleMarker([d._pos.lat, d._pos.lng], { radius: 9, dashArray: d._pos.src === 'ip' ? '3 3' : undefined, color: '#fff', weight: 2, fillColor: colorOf(d), fillOpacity: 0.95 })
-        .bindPopup(`<b>${esc(d.businessName)}</b><br>${esc(d.name || '')}<br>${isOnline(d) ? 'Online now' : `Last seen ${esc(fmtDateTime(d.lastSeen))}`}<br>Status: ${esc(d.status)}${d.publicIp ? `<br>IP ${esc(d.publicIp)}` : ''}${d.city ? `<br>${esc([d.city, d.country].filter(Boolean).join(', '))}` : ''}<br><i>${d._pos.src === 'ip' ? 'Approximate (from IP address)' : d._pos.src === 'gps' ? `Exact (computer location${d.gpsAcc ? `, ±${d.gpsAcc} m` : ''})` : 'Pinned by you'}</i>`)
-        .bindTooltip(`${esc(d.businessName)} — ${isOnline(d) ? 'online' : `last seen ${esc(ago(d.lastSeen))}`}`, { direction: 'top', offset: [0, -8] })
+      const [dLat, dLng] = d._pos.src === 'ip' ? spread(d.id) : [0, 0];
+      const sale = salesOf(d);
+      L.marker([d._pos.lat + dLat, d._pos.lng + dLng], { icon: pinIcon(d), riseOnHover: true })
+        .bindPopup(`<b>${esc(d.businessName)}</b><br>${esc(d.name || '')}<br>${isOnline(d) ? 'Online now' : `Last seen ${esc(fmtDateTime(d.lastSeen))}`}<br>Status: ${esc(d.status)}${sale.reported ? `<br><b>Sales today ${esc(fmtSales(sale.today))}</b> · this month ${esc(fmtSales(sale.month))}` : ''}${d.publicIp ? `<br>IP ${esc(d.publicIp)}` : ''}${d.city ? `<br>${esc([d.city, d.country].filter(Boolean).join(', '))}` : ''}<br><i>${d._pos.src === 'ip' ? 'Approximate (from IP address)' : d._pos.src === 'gps' ? `Exact (computer location${d.gpsAcc ? `, ±${d.gpsAcc} m` : ''})` : 'Pinned by you'}</i>`)
         .addTo(layer.current);
     });
-    if (located.length && map.current) map.current.fitBounds(L.latLngBounds(located.map((d) => [d._pos.lat, d._pos.lng])).pad(0.3), { maxZoom: 12 });
+    if (located.length && map.current) map.current.fitBounds(L.latLngBounds(located.map((d) => [d._pos.lat, d._pos.lng])).pad(0.3), { maxZoom: 12, animate: false });
   }, [located]);
 
   if (!devices) return <Loading />;
   return (
     <div className="col" style={{ gap: 16 }}>
-      <PageHead title="Device map" sub="Live positions of your clients' computers: approximate from their internet connection, or pinned exactly by you (Place → click the map). Updates in real time." />
+      <PageHead title="Device map" sub="Live positions of your clients' computers with each restaurant's logo, name and today's sales. Exact when the computer shares its location, otherwise approximate (dashed pin) — or pin it yourself (Place → click the map). Updates in real time." />
       {place && <div className="banner info" style={{ borderRadius: 12 }}><Crosshair size={16} /> Click on the map to place <b>{place.businessName}</b> ({place.name}). <Button size="sm" onClick={() => setPlace(null)}>Cancel</Button></div>}
       <div className="grid" style={{ gridTemplateColumns: '1fr 320px', alignItems: 'start' }}>
         <div className="card" style={{ padding: 6 }}><div ref={el} style={{ height: 'calc(100vh - 260px)', minHeight: 380, borderRadius: 12 }} /></div>
@@ -79,8 +108,11 @@ export default function DeviceMap() {
               <div className="card-head"><h3>On the map ({located.length})</h3></div>
               {located.map((d) => (
                 <div key={d.id} className="list-item">
-                  <span className="dot" style={{ background: colorOf(d) }} />
-                  <div className="grow" style={{ minWidth: 0 }}><div className="b ellipsis"><bdi>{d.businessName}</bdi></div><div className="small faint ellipsis">{d.name}</div></div>
+                  <Logo src={d.logoThumb} name={d.businessName} size={32} ring={colorOf(d)} />
+                  <div className="grow" style={{ minWidth: 0 }}>
+                    <div className="b ellipsis"><bdi>{d.businessName}</bdi></div>
+                    <div className="small faint ellipsis">{salesOf(d).reported ? <span>Today <b style={{ color: '#16a34a' }}>{fmtSales(salesOf(d).today)}</b> · month {fmtSales(salesOf(d).month)}</span> : d.name}</div>
+                  </div>
                   <Badge color={isOnline(d) ? 'green' : undefined}>{isOnline(d) ? 'online' : 'offline'}</Badge>
                   <Button size="sm" variant="ghost" icon={XCircle} title="Remove pin" onClick={() => clearDeviceLocation(d).catch(toastError)} />
                 </div>

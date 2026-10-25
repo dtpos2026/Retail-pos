@@ -1,6 +1,6 @@
 # DT Retail POS — User Guide (Istemaal ki Rehnumai)
 
-**Version 1.8.1 · Digital Target · digitaltarget.digital@gmail.com**
+**Version 1.9.0 · Digital Target · digitaltarget.digital@gmail.com**
 
 Yeh guide restaurant / dukaan ke **owner, manager, cashier aur waiter** ke liye hai. Is mein software install karne se le kar rozana billing, reports, backup aur masail ke hal tak sab kuch **qadam ba qadam** likha hai. Screen par jo naam likhe hain (jaise **Settings → Printers**) bilkul wohi button / tab ke naam hain jo software mein nazar aate hain.
 
@@ -16,7 +16,7 @@ Aakhir mein (Appendix A) **Super Admin panel** ki guide bhi hai — yeh sirf sof
 - Internet **sirf pehli activation** ke liye chahiye (ek dafa). Uske baad poora software internet ke baghair chalta hai.
 
 ### 1.2 Install karna
-1. Provider se mila hua **RetailPOS-Setup-1.8.1.exe** double-click karein (ya bina install wali file **RetailPOS-Portable-1.8.1.exe**).
+1. Provider se mila hua **RetailPOS-Setup-1.9.0.exe** double-click karein (ya bina install wali file **RetailPOS-Portable-1.9.0.exe**).
 2. Install folder chunein, **Install** dabayein. Desktop par **DT Retail POS** ka shortcut ban jata hai.
 3. Aap ka saara data `C:\Users\<aap ka naam>\AppData\Roaming\Retail POS\` mein rehta hai. Software uninstall karne se data **delete nahi hota**.
 
@@ -63,6 +63,20 @@ Software khulte hi **Welcome back** screen aati hai. Apne naam ki tile par click
 **Sab se pehle yeh badlein:** **Users → Edit** (apne admin account par) mein naya password aur naya PIN. Jab tak default password hai, screen ke upar laal pattii yaad dilati rehti hai.
 
 5 ghalat koshishon ke baad us username par **30 second** ke liye lock lag jata hai (hifazat ke liye).
+
+### 2.1 Password ya PIN bhool gaye? (Forgot password)
+Software offline chalta hai, isliye password software ke andar se reset nahi ho sakta — **provider (Digital Target) reset karta hai** aur naya password khud aap ke computer par lag jata hai:
+
+1. Login screen par neeche **Forgot password or PIN?** dabayein. Window mein aap ka **Business name** aur **Computer ID** likha hota hai.
+2. Provider ko call / WhatsApp karein aur yeh dono bata dein. Woh Super Admin panel se aap ke user ka **naya password** tay kar ke aap ko bata dete hain.
+3. Computer ko **internet** se jorein aur **Check for new password** dabayein.
+4. "The password of … was reset" aaye to **Sign in now** dabayein, naya password likhein. Phir **Users → Edit** mein apna pasandida password laga lein.
+
+![Forgot password — provider se reset ke baad "Check for new password"](guide-images/forgot-password.jpg)
+
+![Reset lag gaya — ab naye password se sign in](guide-images/reset-applied.jpg)
+
+**Dhyan dein:** reset 7 din tak chalta hai; ek dafa lag jaye to dobara istemaal nahi hota (purana password band ho jata hai). Agar software internet par pehle se khula hai to reset takreeban ek minute mein khud lag jata hai — button dabana lazmi nahi.
 
 ---
 
@@ -468,6 +482,8 @@ Data folder dekhne ke liye: **Settings → General → Open data folder** (log f
 
 **Settings → Support**: provider (Digital Target) ko seedha paigham likhein, jawab usi mein aata hai — sidebar / tab par "✉ new message" ka nishaan. Internet chahiye.
 
+**Provider ko kya jata hai (pardadari):** software internet par hone par provider ko sirf yeh bhejta hai — kul **sale ka total** (aaj ka, is mahine ka, aur pichle 14 din ka roz ka total), user ke **naam** (taake password reset ho sake), restaurant ka chhota **logo**, aur computer ki details (naam, Windows, IP, jagah). **Koi alag order, item, customer ya bill nahi jata.** Naya sale hone ke thori der baad total update ho jata hai.
+
 **Device location:** **Settings → License** mein "Device location" ka card hai — provider apni map mein aap ki computer ki jagah dekh sakta hai (support aur tahaffuz ke liye). Har login par khud bhej diya jata hai; **Send my location now** se abhi bhi bhej sakte hain. Sahi (exact) jagah ke liye Windows mein **Settings → Privacy → Location** on aur "Let desktop apps access your location" on hona chahiye; warna sirf internet se andaza hoga.
 
 ---
@@ -508,7 +524,7 @@ Data folder dekhne ke liye: **Settings → General → Open data folder** (log f
 | Credit sale nahi ho rahi | Customer ka naam likhein aur **Settings → Sales & Tax → Allow credit** on karein. |
 | Excel import mein "Old .xls" ka paigham | Excel mein **Save As → .xlsx** ya CSV. |
 | Cashier ko menu nazar nahi aate | Admin **Users → Edit** mein role / ijazatein badal sakta hai. |
-| Password bhool gaye | Doosra Admin **Users → Edit** se naya password de. Agar sab Admin bhool gaye to Digital Target support se rabta karein. |
+| Password / PIN bhool gaye | Login screen par **Forgot password or PIN?** → provider ko Business name aur Computer ID batayein → woh naya password tay karein → internet se jor kar **Check for new password** (Section 2.1). Doosra Admin bhi **Users → Edit** se naya password de sakta hai. |
 | Screen safed / ruk gayi | Software band kar ke dobara kholein. Dobara ho to **Settings → General → Open logs** ka folder provider ko bhej dein. |
 | Sab kuch ghalat ho gaya | **Restore from file…** se pichla backup (restore se pehle safety copy khud ban jati hai). |
 
@@ -518,7 +534,7 @@ Data folder dekhne ke liye: **Settings → General → Open data folder** (log f
 
 **Kya internet ke baghair chalta hai?** Haan — billing, printing, reports sab. Internet sirf pehli activation, provider ke paigham aur license ke online check ke liye.
 
-**Kya data kisi aur ko jata hai?** Nahi. Menu, sales, customers sirf aap ke computer par hain. Provider ko sirf license / computer ki maloomat (naam, Windows, IP, jagah) jati hain.
+**Kya data kisi aur ko jata hai?** Aap ka menu, orders, bills aur customers sirf aap ke computer par hain. Provider ko sirf license / computer ki maloomat (naam, Windows, IP, jagah), kul sale ka total (aaj / mahina), user ke naam aur logo jata hai — koi alag order ya customer nahi.
 
 **Ek license par kitne computer?** Jitne provider ne license mein tay kiye (3 ya 5 wagaira). Zyada ke liye provider se approval.
 
@@ -561,11 +577,36 @@ Tafseel: `docs/SUPER_ADMIN_SETUP.md`.
 ![Naye computer ki approval](guide-images/admin-approval.jpg)
 
 ### A.4 Device map
-**Device map**: sab computers ki jagah. **Exact** (computer ki Windows location) pehle, warna **dashed pin** IP se andaza. **Place** → map par click kar ke aap khud bhi sahi jagah laga sakte hain.
+**Device map**: har restaurant ka **pin** — pin ke andar uska **logo**, saath mein **naam** aur **aaj ki sale** (aur is mahine ki). Hara ring = online, grey = offline, laal = blocked, peela = suspended. **Exact** (computer ki Windows location) pehle, warna **dashed pin** IP se andaza. **Place** → map par click kar ke aap khud bhi sahi jagah laga sakte hain. Side list mein bhi har restaurant ki sale nazar aati hai.
 
-![Device map](guide-images/admin-map.jpg)
+![Device map — logo, naam aur aaj ki sale ke saath pins](guide-images/admin-map-pins.jpg)
 
-### A.5 Support, Billing, Verify
+### A.5 Restaurants ki sale (roz aur mahana)
+POS har sale ke thori der baad (aur har chand minute mein) sirf **total** bhejta hai — koi alag order nahi. Panel mein:
+- **Dashboard → Restaurants' sales**: sab restaurants ki aaj ki aur is mahine ki kul sale, aur har restaurant ki alag (sab se zyada sale wala upar).
+- **Licenses** (column *Sales today / month*), **Clients** (list aur profile), **Devices** (har computer ke neeche) aur **Device map**.
+- Device ke **ⓘ** mein pichle 14 din ki roz ki sale.
+- Agar computer aaj internet par nahi aaya to aaj ki sale "—" dikhti hai (0 nahi) — matlab abhi maloom nahi.
+
+![Dashboard — Restaurants' sales](guide-images/admin-sales-board.jpg)
+
+![Licenses — Sales today / month column](guide-images/admin-licenses-sales.jpg)
+
+![Client ka profile: logo aur sale](guide-images/admin-client.jpg)
+
+### A.6 Client ka password reset karna
+Client password bhool jaye to (POS offline hai isliye wahan se reset nahi ho sakta):
+1. **Devices** (ya **Licenses**) mein us restaurant ke saamne **chabi (key) wala button** dabayein.
+2. **User** chunein (POS apne users ki list khud bhejta hai), **New password** likhein ya **Generate** dabayein; chahein to **New PIN** bhi (ya **Remove PIN login**). **Reset password** dabayein.
+3. Password **sirf isi window mein ek dafa** nazar aata hai (server par sirf PBKDF2 hash jata hai, asal password kahin save nahi hota). **Copy message for the client** se WhatsApp ka tayyar paigham copy karein aur client ko bhej dein.
+4. Client ka POS online ho to ek minute mein khud lag jata hai; ya client login screen par **Forgot password or PIN? → Check for new password** dabaye. Device ki row par **Reset waiting for the POS** → lagne ke baad **Password reset done** dikhta hai. Purana password band ho jata hai.
+5. Reset 7 din tak valid hai; **Cancel** se rok sakte hain. Har reset **Activity Log** mein darj hota hai.
+
+![Reset password window](guide-images/admin-reset-modal.jpg)
+
+![Reset tayyar — password sirf yahin dikhta hai](guide-images/admin-reset-done.jpg)
+
+### A.7 Support, Billing, Verify
 - **Support**: client ke paigham ek inbox mein (dashboard aur sidebar par badge); jawab likhein.
 - **Billing**: invoices banayein, preview, A4 print; har invoice par **verify QR / code** — koi bhi public page par dekh sakta hai ke invoice asli hai.
 - **Verify key**: koi key paste kar ke dekhein asli / expiry kya hai.
@@ -578,7 +619,7 @@ Tafseel: `docs/SUPER_ADMIN_SETUP.md`.
 
 ![Invoice (A4)](guide-images/admin-invoice.jpg)
 
-### A.6 Dhyan dein
+### A.8 Dhyan dein
 - License ki tabdeeli (block / suspend / renew) POS tak **internet par** hi pohanchti hai; hamesha offline computer license ki expiry tak chalta rahega — isi liye plans muddat wale (jaise saalana) rakhein.
 - Hamesha private signing key ka backup (Settings) mehfooz rakhein.
 

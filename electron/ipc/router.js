@@ -97,6 +97,7 @@ const routes = {
   'support.send': { open: true, fn: (a) => license.sendSupport(a) },
   'license.refresh': { open: true, fn: async () => (await license.onlineCheck()) || license.status() },
   'license.remove': { perm: 'settings', fn: () => license.removeLicense() },
+  'auth.checkReset': { open: true, fn: () => license.checkPasswordReset() },
   'license.location': { perm: 'settings', fn: () => license.locationInfo() },
   'license.shareLocation': { perm: 'settings', fn: () => license.shareLocation() },
 
@@ -171,12 +172,12 @@ const routes = {
   'tables.history': { any: ['tables', 'orders', 'reports'], fn: (a) => tableOps.history(a) },
 
   // ---- orders / tokens -----------------------------------------------------
-  'orders.save': { perm: 'pos', fn: (a) => orders.save(a) },
+  'orders.save': { perm: 'pos', fn: (a) => { const o = orders.save(a); if (o && o.status === 'completed') license.salesChanged(); return o; } },
   'orders.get': { any: ['orders', 'pos', 'tables'], fn: (a) => orders.get(a) },
   'orders.list': { any: ['orders', 'reports'], fn: (a) => orders.list(a) },
   'orders.pending': { any: ['orders', 'pos', 'tables'], fn: (a) => orders.pending(a) },
-  'orders.cancel': { any: ['pos', 'refund'], fn: (a) => orders.cancel(a) },
-  'orders.refund': { perm: 'refund', fn: (a) => orders.refund(a) },
+  'orders.cancel': { any: ['pos', 'refund'], fn: (a) => { const o = orders.cancel(a); license.salesChanged(); return o; } },
+  'orders.refund': { perm: 'refund', fn: (a) => { const o = orders.refund(a); license.salesChanged(); return o; } },
   'orders.receivePayment': { any: ['orders', 'pos'], fn: (a) => orders.receivePayment(a) },
   'orders.addToken': { any: ['orders', 'pos', 'tokens'], fn: (a) => orders.addToken(a) },
   'tokens.list': { any: ['tokens', 'orders'], fn: (a) => tokens.list(a) },
@@ -343,7 +344,7 @@ async function saveXlsx(buffer, defaultName) {
   return { file: r.filePath };
 }
 
-const LICENSE_FREE = new Set(['app.info', 'app.relaunch', 'license.status', 'license.activate', 'license.registerDevice', 'license.refresh', 'support.list', 'support.send', 'auth.current', 'auth.logout']);
+const LICENSE_FREE = new Set(['app.info', 'app.relaunch', 'license.status', 'license.activate', 'license.registerDevice', 'license.refresh', 'auth.checkReset', 'support.list', 'support.send', 'auth.current', 'auth.logout']);
 
 async function handle(method, args) {
   const route = routes[method];
