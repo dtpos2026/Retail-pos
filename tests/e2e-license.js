@@ -56,7 +56,7 @@ const server = http.createServer((req, res) => {
 });
 
 let failed = false;
-const step = async (name, fn) => { try { await fn(); console.log('OK  ', name); } catch (e) { failed = true; console.log('FAIL', name, String(e.message).split('\n')[0]); } };
+const step = async (name, fn) => { try { await fn(); console.log('OK  ', name); } catch (e) { failed = true; console.log('FAIL', name, String(e.message).split('\n')[0]); try { await globalThis.__page.screenshot({ path: path.join(SHOTS, 'fail-lic-' + name.replace(/\W+/g, '_').slice(0, 40) + '.png') }); } catch { /* ignore */ } } };
 
 (async () => {
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
@@ -70,6 +70,7 @@ const step = async (name, fn) => { try { await fn(); console.log('OK  ', name); 
     page.on('pageerror', (e) => errors.push('pageerror: ' + e.message + ' ' + String(e.stack).split('\n').slice(0, 4).join(' | ')));
     page.on('console', (m) => m.type() === 'error' && errors.push('console: ' + m.text()));
     await page.setViewportSize({ width: 1366, height: 768 });
+    globalThis.__page = page;
     return { page, errors };
   };
   const blank = async (page) => (await page.evaluate(() => document.body.innerText.trim().length)) === 0;
@@ -133,13 +134,13 @@ const step = async (name, fn) => { try { await fn(); console.log('OK  ', name); 
     const mid = dk.split('_')[1];
     const salt = crypto.randomBytes(16);
     const hash = `pbkdf2$210000$${salt.toString('hex')}$${crypto.pbkdf2Sync('Fresh#2026', salt, 210000, 32, 'sha256').toString('hex')}`;
-    db.set(`passwordResets/LIC1_${mid}`, { licenseId: str('LIC1'), machineId: str(mid), username: str('admin'), passwordHash: str(hash), pinHash: str(''), removePin: { booleanValue: false }, status: str('pending'), note: str(''), expiresAt: { timestampValue: new Date(Date.now() + 7 * 864e5).toISOString() } });
     await page.click('button:has-text("Forgot password or PIN?")');
     await page.waitForSelector('.modal:has-text("Forgot your password or PIN?")');
     await page.waitForTimeout(900);
     await page.screenshot({ path: path.join(SHOTS, '72-forgot-password.png') });
-    await page.click('.modal button:has-text("Check for new password")');
-    await page.waitForSelector('.modal:has-text("was reset")', { timeout: 20000 });
+    // the provider sets the new password NOW; the open window must pick it up by itself (no button press)
+    db.set(`passwordResets/LIC1_${mid}`, { licenseId: str('LIC1'), machineId: str(mid), username: str('admin'), passwordHash: str(hash), pinHash: str(''), removePin: { booleanValue: false }, status: str('pending'), note: str(''), expiresAt: { timestampValue: new Date(Date.now() + 7 * 864e5).toISOString() } });
+    await page.waitForSelector('.modal:has-text("was reset")', { timeout: 40000 });
     await page.screenshot({ path: path.join(SHOTS, '73-reset-applied.png') });
     await page.click('.modal button:has-text("Sign in now")');
     await page.fill('input[type=password]', 'Fresh#2026');

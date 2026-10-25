@@ -450,6 +450,7 @@ function sendHeartbeat(lid, mid) {
 
 /** Called at login: send the device details and a fresh location right away. */
 function touch() {
+  lastReset = null; // somebody signed in: the reset notice has done its job
   const s = load();
   const p = keyPayload();
   if (!p || !s.device || s.device.regMid !== machineId()) return;
@@ -459,6 +460,11 @@ function touch() {
 }
 
 let resetBusy = false;
+let lastReset = null; // { username, at } — a reset that was applied recently, so the login screen can still announce it
+const RESET_NOTICE_MS = 30 * 60 * 1000;
+const resetNotice = () => (lastReset && Date.now() - lastReset.at < RESET_NOTICE_MS
+  ? { state: 'applied', username: lastReset.username, message: `The password of "${lastReset.username}" was reset. Sign in with the new password your provider gave you.` }
+  : null);
 /**
  * Apply a password reset prepared by the provider in the Super Admin panel (needs internet; also runs with every
  * online check). Resolves to { state: 'applied' | 'none' | 'failed' | 'expired' | 'offline', username, message }.
@@ -478,7 +484,7 @@ async function checkPasswordReset() {
       if (err instanceof cloud.CloudError && err.offline) return { state: 'offline', message: 'No internet connection. Connect to the internet and try again.' };
       return { state: 'none', message: 'Could not reach the provider right now. Try again in a minute.' };
     }
-    if (!doc || doc.status !== 'pending' || doc.licenseId !== p.lid || doc.machineId !== mid) return { state: 'none', message: 'No password reset is waiting for this computer. Ask your provider to reset it, then press the button again.' };
+    if (!doc || doc.status !== 'pending' || doc.licenseId !== p.lid || doc.machineId !== mid) return resetNotice() || { state: 'none', message: 'No password reset is waiting for this computer. Ask your provider to reset it, then press the button again.' };
     if (!doc.expiresAt || !(new Date(doc.expiresAt).getTime() > Date.now())) {
       await cloud.finishPasswordReset(p.lid, mid, 'expired', 'Not applied in time').catch(() => {});
       return { state: 'expired', username: doc.username, message: 'This reset has expired. Ask your provider to send a new one.' };
@@ -486,6 +492,7 @@ async function checkPasswordReset() {
     const r = require('../services/auth').applyRemoteReset({ username: doc.username, passwordHash: doc.passwordHash, pinHash: doc.pinHash, removePin: doc.removePin === true });
     await cloud.finishPasswordReset(p.lid, mid, r.ok ? 'applied' : 'failed', r.ok ? 'Applied on the computer' : r.message).catch((err) => logger.warn('Could not report the password reset', err.message));
     logger[r.ok ? 'info' : 'warn']('Remote password reset', doc.username, r.ok ? 'applied' : r.message);
+    if (r.ok) lastReset = { username: r.username, at: Date.now() };
     return { state: r.ok ? 'applied' : 'failed', username: r.username, message: r.ok ? `The password of "${r.username}" was reset. Sign in with the new password your provider gave you.` : r.message };
   } finally {
     resetBusy = false;

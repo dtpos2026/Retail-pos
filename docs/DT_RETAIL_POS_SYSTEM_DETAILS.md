@@ -1,6 +1,6 @@
 # DT Retail POS — System Details (Mukammal Tafseel)
 
-**Version 1.9.0 · Developed by Digital Target · digitaltarget.digital@gmail.com**
+**Version 1.9.1 · Developed by Digital Target · digitaltarget.digital@gmail.com**
 
 Yeh document **DT Retail POS** system ki poori tafseel hai: yeh kya hai, kya kya kar sakta hai, kaise kaam karta hai, license aur security ka nizam, technical dhancha, kya test hua aur kya abhi baqi hai. Is ko owner, investor, ya technical team — sab padh sakte hain. Roz ke istemaal ka tareeqa alag document **User Guide** (`DT_RETAIL_POS_USER_GUIDE.pdf`) mein hai.
 
@@ -208,7 +208,7 @@ POS offline software hai, isliye bhoola hua password software ke andar reset nah
 
 1. Provider panel mein **Devices** (ya **Licenses**) → restaurant ke saamne **chabi ka button** → user, naya password (aur chahe to PIN) → **Reset password**.
 2. Panel browser mein password ka **PBKDF2-SHA256 hash** (210,000 iterations) banata hai aur sirf hash `passwordResets/{licenseId}_{machineId}` mein likhta hai. **Asal password kahin save nahi hota**; woh sirf provider ko ek dafa dikhta hai taake client ko bata sake.
-3. Restaurant ka POS jab online ho (har minute ke check mein, ya login screen par **Forgot password or PIN? → Check for new password**) reset ko lagata hai: us user ka password (aur PIN) badal jata hai, ghalat-koshish ka lock khul jata hai, aur server par `status = applied` likh kar **hash mita deta hai**.
+3. Restaurant ka POS jab online ho reset ko lagata hai — har minute ke check mein, aur agar login screen par **Forgot password or PIN?** window khuli ho to **har 8 second mein khud** (button dabana zaroori nahi): us user ka password (aur PIN) badal jata hai, ghalat-koshish ka lock khul jata hai, aur server par `status = applied` likh kar **hash mita deta hai**.
 4. Reset sirf **usi computer** ke liye hota hai (license + machine id milte hain), **7 din** mein expire, aur **ek hi dafa** lagta hai. Pehle login par hash khud scrypt mein badal jata hai. Har reset provider ke **Activity Log** mein.
 
 **Hifazat ka note:** reset ka document sirf us computer ki (na-qabil-e-andaza) id se paya ja sakta hai, aur lagne ke baad hash mita diya jata hai; sirf admins naya reset bana ya hata sakte hain (Firestore rules).
@@ -286,8 +286,8 @@ Retail-pos/
 | Cheez | Tafseel |
 |---|---|
 | **Zaroorat** | Windows 10 / 11 (64-bit), 4 GB RAM, 500 MB jagah, optional thermal printer |
-| **Installer** | `RetailPOS-Setup-1.9.0.exe` (NSIS): install folder chunna, desktop aur Start-menu shortcut "DT Retail POS", uninstall par data mehfooz |
-| **Portable** | `RetailPOS-Portable-1.9.0.exe` (bina install) |
+| **Installer** | `RetailPOS-Setup-1.9.1.exe` (NSIS): install folder chunna, desktop aur Start-menu shortcut "DT Retail POS", uninstall par data mehfooz |
+| **Portable** | `RetailPOS-Portable-1.9.1.exe` (bina install) |
 | **Build** | Windows par `npm run dist`, ya GitHub Actions workflow "Build Windows installer" |
 | **Panel deploy** | `cd superadmin && npx firebase-tools deploy` (hosting + rules) — har version ke baad rules dobara deploy |
 
@@ -337,6 +337,7 @@ Retail-pos/
 | **1.7** | Chhoti license key, pehli launch par business / owner / mobile, device approval, exact Windows location |
 | **1.8** | Variants (sizes), recipes, kg number pad; categories (top "⋯" / left rail); **Excel + JSON export / import**; device location fix |
 | **1.8.1** | POS table picker mein floors; token slip par waiter / rider |
+| **1.9.1** | Forgot-password window reset ko **khud (8 second mein)** utha leti hai; version label sab jagah theek |
 | **1.9.0** | **Provider se password reset** (Forgot password screen, hash-only), **restaurants ki roz / mahane ki sale** panel mein (Dashboard, Licenses, Clients, Devices, Map), **map par logo + naam + sale wale pins**, POS users ki list provider ko |
 
 ---

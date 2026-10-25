@@ -1,6 +1,6 @@
 # DT Retail POS — User Guide (Istemaal ki Rehnumai)
 
-**Version 1.9.0 · Digital Target · digitaltarget.digital@gmail.com**
+**Version 1.9.1 · Digital Target · digitaltarget.digital@gmail.com**
 
 Yeh guide restaurant / dukaan ke **owner, manager, cashier aur waiter** ke liye hai. Is mein software install karne se le kar rozana billing, reports, backup aur masail ke hal tak sab kuch **qadam ba qadam** likha hai. Screen par jo naam likhe hain (jaise **Settings → Printers**) bilkul wohi button / tab ke naam hain jo software mein nazar aate hain.
 
@@ -16,7 +16,7 @@ Aakhir mein (Appendix A) **Super Admin panel** ki guide bhi hai — yeh sirf sof
 - Internet **sirf pehli activation** ke liye chahiye (ek dafa). Uske baad poora software internet ke baghair chalta hai.
 
 ### 1.2 Install karna
-1. Provider se mila hua **RetailPOS-Setup-1.9.0.exe** double-click karein (ya bina install wali file **RetailPOS-Portable-1.9.0.exe**).
+1. Provider se mila hua **RetailPOS-Setup-1.9.1.exe** double-click karein (ya bina install wali file **RetailPOS-Portable-1.9.1.exe**).
 2. Install folder chunein, **Install** dabayein. Desktop par **DT Retail POS** ka shortcut ban jata hai.
 3. Aap ka saara data `C:\Users\<aap ka naam>\AppData\Roaming\Retail POS\` mein rehta hai. Software uninstall karne se data **delete nahi hota**.
 
@@ -69,14 +69,14 @@ Software offline chalta hai, isliye password software ke andar se reset nahi ho 
 
 1. Login screen par neeche **Forgot password or PIN?** dabayein. Window mein aap ka **Business name** aur **Computer ID** likha hota hai.
 2. Provider ko call / WhatsApp karein aur yeh dono bata dein. Woh Super Admin panel se aap ke user ka **naya password** tay kar ke aap ko bata dete hain.
-3. Computer ko **internet** se jorein aur **Check for new password** dabayein.
+3. Computer ko **internet** se jorein aur yeh window khuli rakhein — provider jaise hi reset kare, software **khud (takreeban 8 second mein)** naya password utha leta hai. Chahein to **Check for new password** bhi dabayein.
 4. "The password of … was reset" aaye to **Sign in now** dabayein, naya password likhein. Phir **Users → Edit** mein apna pasandida password laga lein.
 
 ![Forgot password — provider se reset ke baad "Check for new password"](guide-images/forgot-password.jpg)
 
 ![Reset lag gaya — ab naye password se sign in](guide-images/reset-applied.jpg)
 
-**Dhyan dein:** reset 7 din tak chalta hai; ek dafa lag jaye to dobara istemaal nahi hota (purana password band ho jata hai). Agar software internet par pehle se khula hai to reset takreeban ek minute mein khud lag jata hai — button dabana lazmi nahi.
+**Dhyan dein:** reset 7 din tak chalta hai; ek dafa lag jaye to dobara istemaal nahi hota (purana password band ho jata hai). Agar window band bhi ho aur software internet par ho to reset takreeban ek minute mein khud lag jata hai — button dabana lazmi nahi.
 
 ---
 

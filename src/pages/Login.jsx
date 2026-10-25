@@ -237,17 +237,30 @@ export default function Login() {
 function ForgotModal({ license, onClose, onApplied }) {
   const [busy, setBusy] = useState(false);
   const [res, setRes] = useState(null);
-  const check = async () => {
-    setBusy(true);
+  const check = async (quiet = false) => {
+    if (!quiet) setBusy(true);
     try {
-      setRes(await api('auth.checkReset'));
+      const r = await api('auth.checkReset');
+      // while waiting, only a real result replaces the screen ("nothing yet" stays silent)
+      if (!quiet || r.state === 'applied' || r.state === 'failed' || r.state === 'expired') setRes(r);
     } catch (e) {
-      setRes({ state: 'failed', message: e.message });
+      if (!quiet) setRes({ state: 'failed', message: e.message });
     } finally {
-      setBusy(false);
+      if (!quiet) setBusy(false);
     }
   };
   const ok = res?.state === 'applied';
+
+  // The provider's reset shows up by itself: look every 8 seconds while this window is open.
+  useEffect(() => {
+    if (ok) return undefined;
+    const t = setInterval(() => {
+      check(true);
+    }, 8000);
+    return () => {
+      clearInterval(t);
+    };
+  }, [ok]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <Modal
       title="Forgot your password or PIN?"
@@ -257,7 +270,7 @@ function ForgotModal({ license, onClose, onApplied }) {
       footer={
         <>
           <Button onClick={onClose}>Close</Button>
-          {ok ? <Button variant="primary" icon={LogIn} onClick={() => onApplied(res.username)}>Sign in now</Button> : <Button variant="primary" icon={RefreshCw} loading={busy} onClick={check}>Check for new password</Button>}
+          {ok ? <Button variant="primary" icon={LogIn} onClick={() => onApplied(res.username)}>Sign in now</Button> : <Button variant="primary" icon={RefreshCw} loading={busy} onClick={() => check(false)}>Check for new password</Button>}
         </>
       }
     >
@@ -271,7 +284,7 @@ function ForgotModal({ license, onClose, onApplied }) {
             </div>
           </li>
           <li>They set a <b>new password</b> for your user and give it to you.</li>
-          <li>Connect this computer to the <b>internet</b> and press <b>Check for new password</b>.</li>
+          <li>Keep this computer on the <b>internet</b> and this window open — the new password is picked up <b>automatically</b> within seconds (or press <b>Check for new password</b>).</li>
           <li>Sign in with the new password (then change it in <b>Users</b>).</li>
         </ol>
         {res && (
