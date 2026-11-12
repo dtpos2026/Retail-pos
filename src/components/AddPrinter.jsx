@@ -141,10 +141,10 @@ function BluetoothPane({ onUse, current, onChanged }) {
                 {d.likelyPrinter && <Badge color="blue">Printer</Badge>}
                 {d.paired && <Badge color="green">Paired</Badge>}
                 {p && !result ? <UseButtons name={p.name} onUse={onUse} current={current} /> : null}
-                {!d.paired || !p ? (
+                {!p ? (
                   <Button size="sm" variant={d.likelyPrinter ? 'primary' : undefined} icon={Link2} loading={busy === d.address} disabled={!!busy && busy !== d.address} onClick={() => pair(d)}>Pair</Button>
                 ) : null}
-                {d.paired && <Button size="sm" variant="ghost" icon={Unlink} title="Forget (unpair)" disabled={!!busy} onClick={() => forget(d)} />}
+                {(d.paired || p) && <Button size="sm" variant="ghost" icon={Unlink} title="Forget (unpair)" disabled={!!busy} onClick={() => forget(d)} />}
               </div>
             );
           })}

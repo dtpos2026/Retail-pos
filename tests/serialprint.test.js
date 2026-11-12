@@ -62,3 +62,29 @@ test('simulated Bluetooth printer: search, wrong PIN, pair with 1234 -> COM port
   pairing.setFake(null);
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test('COM helper errors become messages a cashier can act on (busy / missing / not answering / not connected)', () => {
+  const m = (r) => serial.explainHelper(r, 'COM4').message;
+  assert.match(m({ type: 'UnauthorizedAccessException', error: 'Access to the port COM4 is denied.' }), /being used by another program/);
+  assert.match(m({ type: 'FileNotFoundException', error: 'x' }), /does not exist/);
+  assert.match(m({ type: 'TimeoutException', error: 'The write timed out.' }), /did not answer/);
+  assert.match(m({ type: 'IOException', error: 'The semaphore timeout period has expired.' }), /did not answer|not connected/);
+  assert.match(m({ type: 'IOException', error: 'The device is not ready.' }), /not connected/);
+  assert.match(m({ type: 'Weird', error: 'boom' }), /Printing on COM4 failed \(boom\)/);
+});
+
+test('jobs on one COM port run one at a time (no "port busy" between Test print and Verify)', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rpos-q-'));
+  fs.writeFileSync(path.join(dir, 'ports.json'), JSON.stringify([{ port: 'COM4', kind: 'bluetooth', address: 'AABBCCDDEEFF', deviceName: 'PT-210' }]));
+  serial.setFake(dir);
+  const order = [];
+  const a = serial.send('COM4', Buffer.alloc(3000, 1), { speed: 'safe' }).then(() => order.push('a'));
+  const b = serial.send('COM4', Buffer.alloc(10, 2)).then(() => order.push('b'));
+  const c = serial.probe('COM4').then(() => order.push('c'));
+  await Promise.all([a, b, c]);
+  assert.deepEqual(order, ['a', 'b', 'c']);
+  const bin = fs.readFileSync(path.join(dir, 'COM4.bin'));
+  assert.equal(bin.length, 3010); assert.equal(bin[0], 1); assert.equal(bin[3009], 2, 'the two jobs are not interleaved');
+  serial.setFake(null);
+  fs.rmSync(dir, { recursive: true, force: true });
+});

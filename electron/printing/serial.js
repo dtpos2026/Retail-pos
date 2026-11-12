@@ -9,6 +9,7 @@
  */
 
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { execFile } = require('child_process');
 const { AppError } = require('../core/errors');
@@ -111,69 +112,126 @@ async function listPorts({ fresh = false } = {}) {
   return listing;
 }
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-function withTimeout(promise, ms, message) {
-  let t;
-  return Promise.race([promise, new Promise((_, rej) => (t = setTimeout(() => rej(new AppError(message)), ms)))]).finally(() => clearTimeout(t));
+/*
+ * Real COM access goes through .NET's SerialPort (PowerShell). Node's own fs.open on "\\.\COMn" fails on Windows
+ * with "UNKNOWN", and two jobs on one port at once fail with "busy" — so every job on a port runs one at a time.
+ */
+const WRITE_SCRIPT = [
+  'param([string]$Port, [string]$File, [int]$Baud = 9600, [int]$Chunk = 1024, [int]$Gap = 25, [int]$Probe = 0, [int]$Timeout = 15000)',
+  "$ErrorActionPreference = 'Stop'",
+  'function Done($o) { [Console]::Out.WriteLine((ConvertTo-Json -InputObject $o -Compress)); exit 0 }',
+  '$sp = $null',
+  'try {',
+  "  $sp = New-Object System.IO.Ports.SerialPort $Port, $Baud, ([System.IO.Ports.Parity]::None), 8, ([System.IO.Ports.StopBits]::One)",
+  "  $sp.Handshake = [System.IO.Ports.Handshake]::None",
+  '  $sp.WriteTimeout = $Timeout; $sp.ReadTimeout = 1000; $sp.DtrEnable = $true; $sp.RtsEnable = $true',
+  '  $sp.Open()',
+  '  if (-not $Probe) {',
+  '    $bytes = [System.IO.File]::ReadAllBytes($File)',
+  '    for ($i = 0; $i -lt $bytes.Length; $i += $Chunk) {',
+  '      $n = [Math]::Min($Chunk, $bytes.Length - $i)',
+  '      $sp.Write($bytes, $i, $n)',
+  '      if ($Gap -gt 0) { Start-Sleep -Milliseconds $Gap }',
+  '    }',
+  '    $t = 0; while ($sp.BytesToWrite -gt 0 -and $t -lt $Timeout) { Start-Sleep -Milliseconds 50; $t += 50 }',
+  '    Start-Sleep -Milliseconds 300',
+  '  }',
+  '  $sp.Close()',
+  '  Done @{ ok = $true }',
+  '} catch {',
+  '  if ($sp) { try { $sp.Close() } catch {} }',
+  '  Done @{ ok = $false; type = $_.Exception.GetType().Name; error = $_.Exception.Message }',
+  '}',
+].join('\r\n');
+
+let scriptFile = null;
+function writeScript() {
+  if (scriptFile && fs.existsSync(scriptFile)) return scriptFile;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dtpos-com-'));
+  scriptFile = path.join(dir, 'com.ps1');
+  fs.writeFileSync(scriptFile, WRITE_SCRIPT, 'utf8');
+  return scriptFile;
 }
 
-/** Baud rate etc. for wired serial / USB-serial printers (a Bluetooth link ignores these). */
-function configure(port, baud) {
-  return new Promise((resolve) => {
-    const b = BAUDS.includes(Number(baud)) ? Number(baud) : 9600;
-    execFile('cmd.exe', ['/c', 'mode', port, `BAUD=${b}`, 'PARITY=N', 'DATA=8', 'STOP=1', 'to=off', 'xon=off', 'dtr=on', 'rts=on'], { windowsHide: true, timeout: 8000 }, () => resolve());
+/** Turn what the helper reported into a message a cashier can act on. Exported for tests. */
+function explainHelper(r, port) {
+  const type = String((r && r.type) || '');
+  const msg = String((r && r.error) || '');
+  if (/UnauthorizedAccess/i.test(type) || /denied|in use|being used/i.test(msg)) return new AppError(`${port} is being used by another program (or another print is still running). Close it and try again.`);
+  if (/FileNotFound|ArgumentException/i.test(type) || /does not exist|could not find|not exist/i.test(msg)) return new AppError(`${port} does not exist on this computer. Pair the Bluetooth printer again or check its cable, then press Detect again.`);
+  if (/Timeout/i.test(type) || /timeout|timed out|semaphore/i.test(msg)) return new AppError(`The printer on ${port} did not answer. Switch it on, bring it closer (Bluetooth) and try again.`);
+  if (/IOException/i.test(type)) return new AppError(`The printer on ${port} is not connected. Switch it on, keep it close, and make sure no phone is connected to it, then try again.`);
+  return new AppError(`Printing on ${port} failed (${msg || type || 'unknown error'}).`);
+}
+
+function runHelper(port, extra, killAfter) {
+  return new Promise((resolve, reject) => {
+    const args = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', writeScript(), '-Port', port, ...extra];
+    execFile('powershell.exe', args, { windowsHide: true, timeout: killAfter, maxBuffer: 1024 * 1024 }, (err, out) => {
+      if (err && err.killed) return reject(new AppError(`The printer on ${port} did not answer. Switch it on, bring it closer (Bluetooth) and try again.`));
+      let r = null;
+      try {
+        r = JSON.parse(String(out || '').trim().split(/\r?\n/).pop());
+      } catch {
+        r = null;
+      }
+      if (!r) return reject(new AppError(`Printing on ${port} failed (${(err && err.message) || 'no answer from Windows'}).`));
+      if (!r.ok) return reject(explainHelper(r, port));
+      resolve(r);
+    });
   });
 }
 
-function explain(err, port) {
-  if (err instanceof AppError) return err;
-  const code = err && err.code;
-  if (code === 'ENOENT') return new AppError(`${port} does not exist on this computer. Pair the Bluetooth printer again or check its cable, then press Detect again.`);
-  if (code === 'EBUSY' || code === 'EACCES' || code === 'EPERM') return new AppError(`${port} is being used by another program (or another print is still running). Close it and try again.`);
-  if (code === 'ETIMEDOUT' || code === 'EIO') return new AppError(`The printer on ${port} did not answer. Switch it on, bring it closer (Bluetooth) and try again.`);
-  return new AppError(`Printing on ${port} failed (${code || (err && err.message) || 'unknown error'}).`);
+// one job at a time per port (a second open of the same COM port is refused by Windows)
+const queues = new Map();
+function exclusive(port, job) {
+  const prev = queues.get(port) || Promise.resolve();
+  const run = prev.catch(() => {}).then(job);
+  const tail = run.catch(() => {});
+  queues.set(port, tail);
+  tail.then(() => queues.get(port) === tail && queues.delete(port));
+  return run;
 }
 
 /** Write an ESC/POS job to a COM port in small pieces. */
-async function send(port, bytes, { baud = 9600, speed = 'normal', kind } = {}) {
+async function send(port, bytes, { baud = 9600, speed = 'normal' } = {}) {
   const { chunk, gap } = SPEEDS[speed] || SPEEDS.normal;
   const data = Buffer.from(bytes);
   if (fakeDir) {
-    const file = path.join(fakeDir, `${port}.bin`);
-    if (!fs.existsSync(path.join(fakeDir, 'ports.json')) || !(await listPorts({ fresh: true })).some((p) => p.port === port)) throw explain({ code: 'ENOENT' }, port);
-    for (let i = 0; i < data.length; i += chunk) fs.appendFileSync(file, data.subarray(i, i + chunk));
-    return { port, bytes: data.length };
+    return exclusive(port, async () => {
+      const file = path.join(fakeDir, `${port}.bin`);
+      if (!fs.existsSync(path.join(fakeDir, 'ports.json')) || !(await listPorts({ fresh: true })).some((p) => p.port === port)) throw explainHelper({ type: 'FileNotFoundException' }, port);
+      for (let i = 0; i < data.length; i += chunk) fs.appendFileSync(file, data.subarray(i, i + chunk));
+      return { port, bytes: data.length };
+    });
   }
   if (process.platform !== 'win32') throw new AppError('COM / Bluetooth printers work on Windows only.');
-  if (kind !== 'bluetooth') await configure(port, baud);
-  let fh;
-  try {
-    fh = await withTimeout(fs.promises.open(`\\\\.\\${port}`, 'r+'), 20000, `The printer on ${port} did not answer. Switch it on, bring it closer (Bluetooth) and try again.`);
-    for (let i = 0; i < data.length; i += chunk) {
-      await withTimeout(fh.write(data.subarray(i, i + chunk)), 20000, `The printer on ${port} stopped answering in the middle of the job.`);
-      if (gap) await sleep(gap);
+  return exclusive(port, async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dtpos-job-'));
+    const file = path.join(dir, 'job.bin');
+    fs.writeFileSync(file, data);
+    const b = BAUDS.includes(Number(baud)) ? Number(baud) : 9600;
+    // time allowed: connecting (Bluetooth can take a while) + the bytes at the chosen pace
+    const budget = 30000 + Math.ceil(data.length / chunk) * (gap + 20);
+    try {
+      await runHelper(port, ['-File', file, '-Baud', String(b), '-Chunk', String(chunk), '-Gap', String(gap)], budget);
+    } finally {
+      fs.rm(dir, { recursive: true, force: true }, () => {});
     }
-  } catch (err) {
-    throw explain(err, port);
-  } finally {
-    if (fh) await fh.close().catch(() => {});
-  }
-  return { port, bytes: data.length };
+    return { port, bytes: data.length };
+  });
 }
 
 /** "Verify": open the port for a moment (for Bluetooth this makes Windows connect to the printer). */
 async function probe(port) {
-  if (fakeDir) return (await listPorts({ fresh: true })).some((p) => p.port === port) ? { ok: true } : { ok: false, message: `${port} does not exist.` };
+  if (fakeDir) return exclusive(port, async () => ((await listPorts({ fresh: true })).some((p) => p.port === port) ? { ok: true } : { ok: false, message: `${port} does not exist.` }));
   if (process.platform !== 'win32') return { ok: false, message: 'Windows only.' };
-  let fh;
   try {
-    fh = await withTimeout(fs.promises.open(`\\\\.\\${port}`, 'r+'), 15000, `No answer on ${port}.`);
+    await exclusive(port, () => runHelper(port, ['-Probe', '1', '-Timeout', '12000'], 25000));
     return { ok: true };
   } catch (err) {
-    return { ok: false, message: explain(err, port).message };
-  } finally {
-    if (fh) await fh.close().catch(() => {});
+    return { ok: false, message: err.message };
   }
 }
 
-module.exports = { PREFIX, SPEEDS, BAUDS, setFake, isSerialName, portOf, nameFor, parsePorts, listPorts, send, probe };
+module.exports = { PREFIX, SPEEDS, BAUDS, setFake, isSerialName, portOf, nameFor, parsePorts, listPorts, send, probe, explainHelper };

@@ -14,6 +14,10 @@ Retail-pos/                  ← POS software (Windows, offline). Run npm comman
 ```
 
 
+## What's new in v1.10.1
+
+- **Fix:** printing on a paired Bluetooth / COM printer failed with *"UNKNOWN"* (seen on a real MediaLink PT-210). The COM port is now opened through Windows' SerialPort, jobs on one port run one at a time (Test print and Verify no longer collide), and errors say what to do.
+
 ## What's new in v1.10.0
 
 - **Add a printer, inside the software** (Settings → Printers → *Add a printer*): **Bluetooth** search + pairing (PIN 0000 / 1234 tried automatically) for 58 mm mini printers (MediaLink, SpeedX, Xprinter…), the **COM port** they create (prints straight to it — **no driver**), and **USB without a driver** (installs Windows' built-in generic driver). COM / Bluetooth printers appear in the receipt and kitchen printer lists. → [docs/PRINTER_SETUP.md](docs/PRINTER_SETUP.md)

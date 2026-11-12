@@ -1,6 +1,6 @@
 # DT Retail POS — System Details (Mukammal Tafseel)
 
-**Version 1.10.0 · Developed by Digital Target · digitaltarget.digital@gmail.com**
+**Version 1.10.1 · Developed by Digital Target · digitaltarget.digital@gmail.com**
 
 Yeh document **DT Retail POS** system ki poori tafseel hai: yeh kya hai, kya kya kar sakta hai, kaise kaam karta hai, license aur security ka nizam, technical dhancha, kya test hua aur kya abhi baqi hai. Is ko owner, investor, ya technical team — sab padh sakte hain. Roz ke istemaal ka tareeqa alag document **User Guide** (`DT_RETAIL_POS_USER_GUIDE.pdf`) mein hai.
 
@@ -300,8 +300,8 @@ Retail-pos/
 | Cheez | Tafseel |
 |---|---|
 | **Zaroorat** | Windows 10 / 11 (64-bit), 4 GB RAM, 500 MB jagah, optional thermal printer |
-| **Installer** | `RetailPOS-Setup-1.10.0.exe` (NSIS): install folder chunna, desktop aur Start-menu shortcut "DT Retail POS", uninstall par data mehfooz |
-| **Portable** | `RetailPOS-Portable-1.10.0.exe` (bina install) |
+| **Installer** | `RetailPOS-Setup-1.10.1.exe` (NSIS): install folder chunna, desktop aur Start-menu shortcut "DT Retail POS", uninstall par data mehfooz |
+| **Portable** | `RetailPOS-Portable-1.10.1.exe` (bina install) |
 | **Build** | Windows par `npm run dist`, ya GitHub Actions workflow "Build Windows installer" |
 | **Panel deploy** | `cd superadmin && npx firebase-tools deploy` (hosting + rules) — har version ke baad rules dobara deploy |
 
@@ -353,6 +353,7 @@ Retail-pos/
 | **1.8** | Variants (sizes), recipes, kg number pad; categories (top "⋯" / left rail); **Excel + JSON export / import**; device location fix |
 | **1.8.1** | POS table picker mein floors; token slip par waiter / rider |
 | **1.9.1** | Forgot-password window reset ko **khud (8 second mein)** utha leti hai; version label sab jagah theek |
+| **1.10.1** | Bluetooth / COM printer par print **"UNKNOWN" error theek** (asal MediaLink PT-210 par dekha gaya): COM port ab Windows ke SerialPort se khulta hai, har port par ek waqt mein ek hi kaam (Test print aur Verify takrate nahi), saaf error paigham |
 | **1.10.0** | **Printer jorna (Bluetooth pairing / COM bina driver / USB driver)**, **Inventory Retail ya Restaurant (lock)** + khaam maal + recipe, **rider lazmi / haath se naam**, **khula sauda**, **token items** (roti) + KOT jab token band, **per head + service charge**, **Urdu + English help guide** |
 | **1.9.0** | **Provider se password reset** (Forgot password screen, hash-only), **restaurants ki roz / mahane ki sale** panel mein (Dashboard, Licenses, Clients, Devices, Map), **map par logo + naam + sale wale pins**, POS users ki list provider ko |
 
