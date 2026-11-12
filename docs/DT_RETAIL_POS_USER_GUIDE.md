@@ -1,6 +1,6 @@
 # DT Retail POS — User Guide (Istemaal ki Rehnumai)
 
-**Version 1.9.1 · Digital Target · digitaltarget.digital@gmail.com**
+**Version 1.10.0 · Digital Target · digitaltarget.digital@gmail.com**
 
 Yeh guide restaurant / dukaan ke **owner, manager, cashier aur waiter** ke liye hai. Is mein software install karne se le kar rozana billing, reports, backup aur masail ke hal tak sab kuch **qadam ba qadam** likha hai. Screen par jo naam likhe hain (jaise **Settings → Printers**) bilkul wohi button / tab ke naam hain jo software mein nazar aate hain.
 
@@ -16,7 +16,7 @@ Aakhir mein (Appendix A) **Super Admin panel** ki guide bhi hai — yeh sirf sof
 - Internet **sirf pehli activation** ke liye chahiye (ek dafa). Uske baad poora software internet ke baghair chalta hai.
 
 ### 1.2 Install karna
-1. Provider se mila hua **RetailPOS-Setup-1.9.1.exe** double-click karein (ya bina install wali file **RetailPOS-Portable-1.9.1.exe**).
+1. Provider se mila hua **RetailPOS-Setup-1.10.0.exe** double-click karein (ya bina install wali file **RetailPOS-Portable-1.10.0.exe**).
 2. Install folder chunein, **Install** dabayein. Desktop par **DT Retail POS** ka shortcut ban jata hai.
 3. Aap ka saara data `C:\Users\<aap ka naam>\AppData\Roaming\Retail POS\` mein rehta hai. Software uninstall karne se data **delete nahi hota**.
 
@@ -167,6 +167,16 @@ Kuch designs ka namoona:
 - **Settings → General**: **Show product images on POS**, **POS product size** (Small / Medium / Large), **Categories on POS** (Top / Left — Section 5.2), **Currency symbol**, **Change my password**.
 
 ![Appearance — themes](guide-images/appearance.jpg)
+
+---
+
+### Printer software ke andar se jorna (v1.10)
+**Settings → Printers → Add a printer**:
+1. **Bluetooth** — printer on karein → *Search for Bluetooth printers* → apna printer chun kar **Pair** (PIN 0000 / 1234 khud aazmaye jate hain) → **Test print** → **Use for receipts**. Driver ki zaroorat nahi; software seedha COM port par chhapta hai. 58 mm mini, MediaLink, SpeedX, Xprinter sab ke liye.
+2. **COM port** — saare COM ports ki list; aadha bill ya ajeeb harf aayein to *Sending speed* **Safe** karein.
+3. **USB (no driver)** — USB printer ka driver na ho to **Install** dabayein; Windows ek baar ijazat mangta hai.
+
+> Asal Bluetooth / USB hardware par pehli dafa shop ke computer par **Test print** zaroor karein.
 
 ---
 
@@ -325,6 +335,18 @@ Hara nishaan aur token number dikhta hai. Yahan se **Print receipt**, **Print to
 
 ---
 
+### Naye tareeqe (v1.10)
+
+**Khula sauda ("do sau ki daal")** — Products → Add Product: naam (Daal Sabzi) aur aam rate likhein, **Rate at sale (khula sauda)** on karein, unit (portion / plate / bowl / roti / naan…) chunein. POS par us item par tap → raqam ka pad → **200** → bill par *Daal Sabzi … Rs 200*. Bill ki kisi bhi line par tap kar ke **Rate / amount** badal sakte hain (muqarrar rate kam karna discount hai, us ke liye ijazat chahiye). Jo cheez menu mein hai hi nahi uske liye **Open Item**.
+
+**Token items (roti / naan)** — Settings → Tokens → *Token items*: on karein, order types chunein (maslan sirf Takeaway) aur categories / items par nishan lagayein. POS par aise item par tap karte hi miqdar poochta hai; **Print token** dabate hi sale mukammal hoti hai aur **qeemat wala ek token** chhapta hai — receipt aur KOT nahi. Token system band ho to takeaway / delivery par **KOT** chhapta hai (*Kitchen ticket (KOT) instead*). Bade bill mein daalna ho to *Add to the bill instead*.
+
+**Delivery rider** — Settings → Sales & Tax → *Rider is required for delivery*: bina rider ke bill save / pay nahi hota. List se chunein ya **✎ Type a name…** se naam khud likhein.
+
+**Per head aur Service charge (dine-in)** — Settings → Sales & Tax: **Per head charge** on kar ke rate likhein; **Service charge** on kar ke (% ya Rs) tajweez likhein. Dine-in bill par **Per head** dabayein, afrad likhein (maslan 3) → *Apply*: `afrad × rate` bill mein jud jata hai (is bill ke liye rate bhi badal sakte hain). **Service** dabayein, % (maslan 10%) ya Rs chunein → *Apply*; *Remove* se hat jata hai. Dono delivery charges ki tarah tax ke baad judte hain aur receipt par apne naam se chhapte hain.
+
+---
+
 ## 6. Hold / Running, Orders, Tables, Tokens, Customers
 
 ### 6.1 Hold / Running
@@ -390,6 +412,12 @@ Sidebar ka **Hold / Running**: jo bills **Hold** kiye (takeaway) aur jin dine-in
    - **Adjust** — ginti ke baad asal miqdar likhna.
 4. **Stock History** tab: har tabdeeli ka record.
 5. Upar ke dabbe: Tracked products, **Stock value**, **Low stock**, **Out of stock**. Low stock ki had har product mein **Low stock alert at** se.
+
+### Retail ya Restaurant? (v1.10)
+Pehli baar **Inventory** (ya Settings → Inventory) kholein to software poochta hai ke aap ka karobar kaisa hai. **Ek baar chun kar lock ho jata hai** — dobara nahi badalta (sirf *Factory reset* se). Inventory on / off phir bhi kar sakte hain.
+
+- **Retail / Store** — har product khud stock hai (kapde, grocery). Pehle ki tarah **In / Out / Adjust**.
+- **Restaurant / Kitchen** — menu ki dishes stock nahi rakhtin. **Inventory → Add inventory item** se khaam maal daalein (ghee, gosht, daal, chicken, atta…), unit ke saath (kg, litre, pcs). Phir **Products** mein dish kholein → **Recipe management** → chunein ke ek plate mein kaun sa maal kitna lagta hai. Har sale par woh maal khud stock se nikalta hai; maal ki kharidari **In**, zaya hona **Out**, ginti ki durusti **Adjust** se.
 
 ![Inventory](guide-images/inventory.jpg)
 
@@ -485,6 +513,11 @@ Data folder dekhne ke liye: **Settings → General → Open data folder** (log f
 **Provider ko kya jata hai (pardadari):** software internet par hone par provider ko sirf yeh bhejta hai — kul **sale ka total** (aaj ka, is mahine ka, aur pichle 14 din ka roz ka total), user ke **naam** (taake password reset ho sake), restaurant ka chhota **logo**, aur computer ki details (naam, Windows, IP, jagah). **Koi alag order, item, customer ya bill nahi jata.** Naya sale hone ke thori der baad total update ho jata hai.
 
 **Device location:** **Settings → License** mein "Device location" ka card hai — provider apni map mein aap ki computer ki jagah dekh sakta hai (support aur tahaffuz ke liye). Har login par khud bhej diya jata hai; **Send my location now** se abhi bhi bhej sakte hain. Sahi (exact) jagah ke liye Windows mein **Settings → Privacy → Location** on aur "Let desktop apps access your location" on hona chahiye; warna sirf internet se andaza hoga.
+
+---
+
+### Help guide (v1.10)
+**Settings → Support → Help guide**: poore software ke sawal-jawab aur tareeqe, **English aur اردو (Nastaliq)** mein, search ke saath, har topic mein *kahan milega* aur qadam-ba-qadam. Provider ko likhne ke liye **Message provider**.
 
 ---
 

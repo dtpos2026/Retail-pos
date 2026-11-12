@@ -259,6 +259,25 @@ ALTER TABLE order_items ADD COLUMN variant_name TEXT;
 ALTER TABLE order_items ADD COLUMN recipe_factor REAL NOT NULL DEFAULT 1;
 `,
   },
+  {
+    // v1.10: "khula sauda" — items whose amount is typed at the sale (Daal Rs 200)
+    version: 6,
+    sql: `
+ALTER TABLE products ADD COLUMN open_price INTEGER NOT NULL DEFAULT 0;
+`,
+  },
+  {
+    // v1.10: dine-in "per head" (cover) charge and a manual service charge on the bill
+    version: 7,
+    sql: `
+ALTER TABLE orders ADD COLUMN covers INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE orders ADD COLUMN cover_rate REAL NOT NULL DEFAULT 0;
+ALTER TABLE orders ADD COLUMN cover_charge REAL NOT NULL DEFAULT 0;
+ALTER TABLE orders ADD COLUMN service_mode TEXT NOT NULL DEFAULT 'percent';
+ALTER TABLE orders ADD COLUMN service_value REAL NOT NULL DEFAULT 0;
+ALTER TABLE orders ADD COLUMN service_charge REAL NOT NULL DEFAULT 0;
+`,
+  },
 ];
 
 module.exports = { migrations };

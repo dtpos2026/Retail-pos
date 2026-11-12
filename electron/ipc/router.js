@@ -188,6 +188,9 @@ const routes = {
   // ---- inventory -----------------------------------------------------------
   'inventory.summary': { any: ['inventory', 'products'], fn: () => inventory.summary() },
   'inventory.adjust': { perm: 'inventory', fn: (a) => inventory.adjust(a) },
+  'inventory.setMode': { perm: 'settings', fn: (a) => inventory.setMode(a) },
+  'inventory.saveItem': { perm: 'inventory', fn: (a) => inventory.saveItem(a) },
+  'inventory.removeItem': { perm: 'inventory', fn: (a) => inventory.removeItem(a) },
   'inventory.movements': { any: ['inventory', 'products'], fn: (a) => inventory.movements(a) },
 
   // ---- dashboard / reports -------------------------------------------------
@@ -230,6 +233,14 @@ const routes = {
 
   // ---- printing ------------------------------------------------------------
   'print.printers': { fn: (a) => printService.listPrinters(a) },
+  // attaching printers: COM / Bluetooth ports, Bluetooth search + pairing, USB driver install
+  'printers.ports': { fn: (a) => require('../printing/serial').listPorts(a) },
+  'printers.btScan': { perm: 'settings', fn: (a) => require('../printing/pairing').btScan(a) },
+  'printers.btPair': { perm: 'settings', fn: (a) => require('../printing/pairing').btPair(a) },
+  'printers.btForget': { perm: 'settings', fn: (a) => require('../printing/pairing').btForget(a) },
+  'printers.usbPorts': { perm: 'settings', fn: () => require('../printing/pairing').usbPorts() },
+  'printers.installUsb': { perm: 'settings', fn: (a) => require('../printing/pairing').installGeneric(a) },
+  'printers.openBtSettings': { perm: 'settings', fn: () => shell.openExternal('ms-settings:bluetooth') },
   'print.verify': { fn: () => printService.verifyPrinters() },
   'print.status': { fn: (a) => printService.printerStatus(a) },
   'print.templates': { fn: () => printService.TEMPLATES },
@@ -250,6 +261,7 @@ const routes = {
   'print.receipt': { any: ['pos', 'orders', 'tables'], fn: (a) => printService.printReceipt(a) },
   'print.tokens': { any: ['pos', 'orders', 'tokens'], fn: (a) => printService.printTokens(a) },
   'print.afterSale': { perm: 'pos', fn: (a) => printService.printAfterSale(a) },
+  'orders.quickToken': { perm: 'pos', fn: async (a) => { const r = await printService.quickTokenSale(a); license.salesChanged(); return r; } },
   'print.test': { fn: (a) => printService.testPrint(a) },
 
   // ---- backup / data -------------------------------------------------------

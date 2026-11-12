@@ -157,6 +157,7 @@ const step = async (name, fn) => { try { await fn(); console.log('OK  ', name); 
   await step('support: message the provider from Settings', async () => {
     await page.click('a[href="#/settings"]');
     await page.click('.tabs button:has-text("Support")');
+    await page.click('.seg button:has-text("Message provider")'); // Support opens on the Help guide first
     await page.fill('textarea[placeholder="Write a message…"]', 'Hello provider, printer question');
     await page.click('button:has-text("Send")');
     await page.waitForSelector('text=Hello provider, printer question');

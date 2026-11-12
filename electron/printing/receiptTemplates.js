@@ -78,6 +78,8 @@ function totalsRows(d) {
   if (!c.showDiscount && tt.discount > 0) rows.push(['Discount', -tt.discount]);
   if (tt.tax > 0) rows.push([tt.taxLabel, tt.tax]);
   if (tt.delivery > 0) rows.push(['Delivery Charges', tt.delivery]);
+  if (tt.cover > 0) rows.push([tt.coverLabel, tt.cover]);
+  if (tt.service > 0) rows.push([tt.serviceLabel, tt.service]);
   if (tt.roundOff) rows.push(['Round Off', tt.roundOff]);
   return rows;
 }
@@ -327,7 +329,7 @@ function compact(d) {
       (i) => `<tr><td style="padding:.2mm 0">${t(i.name)}${c.showItemNotes && i.notes ? ` <i>(${t(i.notes)})</i>` : ''}</td><td class="r nowrap" style="padding:.2mm 1mm">${formatQty(i.qty)}</td><td class="r nowrap" style="padding:.2mm 0">${n(i.total)}</td></tr>`
     )
     .join('');
-  const totals = totalsRows(d).filter(([k]) => k !== 'Subtotal' || d.totals.discount > 0 || d.totals.tax > 0 || d.totals.delivery > 0);
+  const totals = totalsRows(d).filter(([k]) => k !== 'Subtotal' || d.totals.discount > 0 || d.totals.tax > 0 || d.totals.delivery > 0 || d.totals.cover > 0 || d.totals.service > 0);
   const pays = paymentRows(d);
   return `
     <style>body{font-size:${Math.max(8, c.fontSize - 1.5)}px;line-height:1.18}</style>
@@ -441,6 +443,8 @@ function tax(d) {
   rows.push(['Value excl. tax', taxable]);
   if (d.totals.tax > 0) rows.push([d.totals.taxLabel, d.totals.tax]);
   if (d.totals.delivery > 0) rows.push(['Delivery Charges', d.totals.delivery]);
+  if (d.totals.cover > 0) rows.push([d.totals.coverLabel, d.totals.cover]);
+  if (d.totals.service > 0) rows.push([d.totals.serviceLabel, d.totals.service]);
   if (d.totals.roundOff) rows.push(['Round Off', d.totals.roundOff]);
   const totals = rows.map(([k, v]) => `<tr><td style="${cell}">${k}</td><td style="${cell}" class="r">${n(v)}</td></tr>`).join('');
   const pays = paymentRows(d).map(([k, v, txt]) => `<tr><td style="${cell}">${k}</td><td style="${cell}" class="r">${txt ? esc(v) : n(v)}</td></tr>`).join('');

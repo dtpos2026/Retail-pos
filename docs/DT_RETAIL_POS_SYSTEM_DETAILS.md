@@ -1,6 +1,6 @@
 # DT Retail POS — System Details (Mukammal Tafseel)
 
-**Version 1.9.1 · Developed by Digital Target · digitaltarget.digital@gmail.com**
+**Version 1.10.0 · Developed by Digital Target · digitaltarget.digital@gmail.com**
 
 Yeh document **DT Retail POS** system ki poori tafseel hai: yeh kya hai, kya kya kar sakta hai, kaise kaam karta hai, license aur security ka nizam, technical dhancha, kya test hua aur kya abhi baqi hai. Is ko owner, investor, ya technical team — sab padh sakte hain. Roz ke istemaal ka tareeqa alag document **User Guide** (`DT_RETAIL_POS_USER_GUIDE.pdf`) mein hai.
 
@@ -107,6 +107,19 @@ Total         = Taxable + Tax + Delivery    (Round-off on ho to poore rupay)
 
 ---
 
+### 4A. Naye hisaab ke qaide (v1.10)
+
+| Cheez | Tafseel |
+|---|---|
+| **Khula sauda** | Product par **Rate at sale** on ho to POS par tap karte hi raqam poochta hai (Daal Sabzi Rs 200). Bill par wohi raqam chhapti hai. Bill ki kisi bhi line ka rate badal sakte hain; muqarrar rate kam karna **discount** hai (ijazat chahiye). |
+| **Per head (dine-in)** | `covers × rate` — Settings → Sales & Tax mein on karein, POS par **Per head** se afrad likhein (rate bill ke liye badal sakte hain). Sirf dine-in. |
+| **Service charge (dine-in)** | Haath se lagta hai: bill (discount ke baad) ka **%** ya muqarrar **Rs**. Per head aur service charge, delivery charges ki tarah **tax ke baad** judte hain. Database: `orders.covers, cover_rate, cover_charge, service_mode, service_value, service_charge` (migration v7). |
+| **Rider** | Settings → Sales & Tax → *Rider is required*: list se chunna ya naam khud likhna lazmi. |
+| **Token items** | Chuni hui items / categories aur order types par tap karte hi miqdar poochta hai, phir **ek qeemat wala token** — na receipt na KOT; sale usi waqt paid takeaway ke taur par mukammal. Token band ho to KOT chhapta hai. |
+| **Inventory mode** | **Retail** (har product ka apna stock) ya **Restaurant** (khaam maal alag, dishes recipe se kaat-ti hain). Ek baar chunne par **lock**; server hi mana karta hai, sirf factory reset kholta hai. |
+
+---
+
 ## 5. Printing ka nizam
 
 | Cheez | Tafseel |
@@ -118,6 +131,7 @@ Total         = Taxable + Tax + Delivery    (Round-off on ho to poore rupay)
 | **Token designs (5)** | Classic, Boxed, Bold Number, Minimal, Ticket. |
 | **KOT** | Kitchen slip: sirf items (qeemat nahi), table, waiter / rider, note. |
 | **Margins** | Top / bottom, **left = right hamesha barabar**, aur printer ka **Side balance** (dots) + **Margin test**. |
+| **Printer jorna (v1.10)** | **Settings → Printers → Add a printer**: Bluetooth search + pairing (PIN 0000 / 1234 khud), COM port se **bina driver** seedha print (`serial:COM5`), USB printer ka built-in *Generic / Text Only* driver install. Sending speed (Safe / Normal / Fast) aur baud. |
 | **Extras** | Logo, QR (website / JazzCash), amount in words, bank account details, NTN / STRN, Urdu font, copies, cash drawer kick. |
 | **Reports** | 58 / 80 mm thermal par chhota print, ya PNG; A4 par PDF. |
 
@@ -286,8 +300,8 @@ Retail-pos/
 | Cheez | Tafseel |
 |---|---|
 | **Zaroorat** | Windows 10 / 11 (64-bit), 4 GB RAM, 500 MB jagah, optional thermal printer |
-| **Installer** | `RetailPOS-Setup-1.9.1.exe` (NSIS): install folder chunna, desktop aur Start-menu shortcut "DT Retail POS", uninstall par data mehfooz |
-| **Portable** | `RetailPOS-Portable-1.9.1.exe` (bina install) |
+| **Installer** | `RetailPOS-Setup-1.10.0.exe` (NSIS): install folder chunna, desktop aur Start-menu shortcut "DT Retail POS", uninstall par data mehfooz |
+| **Portable** | `RetailPOS-Portable-1.10.0.exe` (bina install) |
 | **Build** | Windows par `npm run dist`, ya GitHub Actions workflow "Build Windows installer" |
 | **Panel deploy** | `cd superadmin && npx firebase-tools deploy` (hosting + rules) — har version ke baad rules dobara deploy |
 
@@ -297,8 +311,9 @@ Retail-pos/
 
 | Test | Natija |
 |---|---|
-| **Unit tests** (`npm test`) | **75 pass** — sales, tables, tokens, inventory, reports, backup / restore, permissions, templates, license, heartbeat, bulk import, variants / recipes, Excel / JSON export-import, margins, staff, **remote password reset, sales totals** |
+| **Unit tests** (`npm test`) | **86 pass** — sales, tables, tokens, inventory, reports, backup / restore, permissions, templates, license, heartbeat, bulk import, variants / recipes, Excel / JSON export-import, margins, staff, **remote password reset, sales totals** |
 | **UI end-to-end** (asal Electron app, Playwright) | **36 qadam pass**, koi console error nahi — login, sales, dine-in, delivery, tables, variants, kg number pad, deals, categories, bulk import, waiters, bank, margins, reports, themes, printer settings, cashier restrictions, Excel / JSON export-import |
+| **v1.10 e2e** (`tests/e2e-v110.js`) | 11 qadam pass — nakli Bluetooth printer se search → pair → test print COM port tak, USB driver install, help guide (English / Urdu font / search), Restaurant mode lock, khula sauda, token item (sirf **1** parchi), per head + service charge, rider haath se |
 | **License e2e** | Pehli activation, chhoti key, device approval, **sales totals + users + logo provider tak, Forgot password → reset lagna → naya password se login (purana band)**, suspend lock screen + chat, reactivate — nakli Firestore ke saath |
 | **Firestore rules (emulator)** | Device limit race, approval, status ki hifazat, support, invoices, public verify, audit log — sab pass |
 | **Panel smoke** | Billing, invoice verify, support, device info, **sales board, licenses sales column, logo pins, password reset (browser ka hash Node mein bilkul wesa verify hota hai jaise POS karta hai)**, approval, short code — pass |
@@ -315,7 +330,7 @@ Retail-pos/
 
 - **Password reset ke liye internet:** reset provider ke server se aata hai, is liye restaurant ke computer ko ek dafa internet chahiye (reset 7 din valid).
 - **Live control ke liye internet:** Block / suspend / revoke POS tak tab pohanchta hai jab woh online ho; hamesha offline computer license ki expiry tak chalta rahega — plans muddat wale rakhein.
-- **Bluetooth printer:** pehle Windows mein pair + driver install; software apna Bluetooth stack nahi rakhta.
+- **Bluetooth / COM printer (v1.10):** pairing aur seedha COM print Windows ke Bluetooth API par chalte hain aur printer model / Bluetooth adapter par munhasir hain. Asal hardware par test nahi hua (sirf nakli printer se) — shop ke computer par pehle **Test print** karein. Bluetooth sirf Windows par.
 - **Installer** Windows par (ya GitHub Actions se) banta hai.
 - **Shamil nahi:** cloud sync, multi-branch, web ordering, mobile app (dhancha taiyar hai).
 - Bill par **Urdu + English dono zabanon ke labels** (bilingual receipt) abhi shamil nahi — naam / items Urdu mein poori tarah chalte hain.
@@ -338,6 +353,7 @@ Retail-pos/
 | **1.8** | Variants (sizes), recipes, kg number pad; categories (top "⋯" / left rail); **Excel + JSON export / import**; device location fix |
 | **1.8.1** | POS table picker mein floors; token slip par waiter / rider |
 | **1.9.1** | Forgot-password window reset ko **khud (8 second mein)** utha leti hai; version label sab jagah theek |
+| **1.10.0** | **Printer jorna (Bluetooth pairing / COM bina driver / USB driver)**, **Inventory Retail ya Restaurant (lock)** + khaam maal + recipe, **rider lazmi / haath se naam**, **khula sauda**, **token items** (roti) + KOT jab token band, **per head + service charge**, **Urdu + English help guide** |
 | **1.9.0** | **Provider se password reset** (Forgot password screen, hash-only), **restaurants ki roz / mahane ki sale** panel mein (Dashboard, Licenses, Clients, Devices, Map), **map par logo + naam + sale wale pins**, POS users ki list provider ko |
 
 ---

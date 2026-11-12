@@ -116,6 +116,8 @@ export default function OrderDetail({ id, onClose, onChanged }) {
             {o.item_discount + o.order_discount > 0 && <div className="tline"><span>Discount</span><span>− {m(o.item_discount + o.order_discount)}</span></div>}
             {o.tax_amount > 0 && <div className="tline"><span>Tax ({o.tax_rate}%)</span><span>{m(o.tax_amount)}</span></div>}
             {o.delivery_charges > 0 && <div className="tline"><span>Delivery</span><span>{m(o.delivery_charges)}</span></div>}
+            {o.cover_charge > 0 && <div className="tline"><span>Per head ({o.covers} × {o.cover_rate})</span><span>{m(o.cover_charge)}</span></div>}
+            {o.service_charge > 0 && <div className="tline"><span>Service charge{o.service_mode === 'percent' ? ` (${o.service_value}%)` : ''}</span><span>{m(o.service_charge)}</span></div>}
             {o.round_off !== 0 && <div className="tline"><span>Round off</span><span>{o.round_off}</span></div>}
             <div className="tline total" style={{ fontSize: 19 }}><span>Total</span><span>{m(o.total)}</span></div>
             {o.status !== 'pending' && (

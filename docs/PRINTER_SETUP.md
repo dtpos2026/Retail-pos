@@ -27,10 +27,25 @@ Leave *Receipt printer* on **Auto-detect thermal printer**. DT Retail POS recogn
 2. In Retail POS → **Settings → Printers**, choose the **Receipt printer** (optionally a separate **Token / kitchen printer**).
 3. Click **Test receipt**. Then choose a design in **Settings → Receipt** (11 designs, 58 mm and 80 mm, live preview).
 
-## Bluetooth thermal printer
-1. Windows **Settings → Bluetooth & devices → Add device** (PIN usually `0000` or `1234`).
-2. Install the printer driver and select the Bluetooth COM port it creates.
-3. It then appears in **Settings → Printers**. Select it and press **Test receipt**.
+## Add a printer inside the software (Bluetooth, COM port, USB without driver)
+**Settings → Printers → Add a printer** has three tabs. Windows only; the software needs no driver for COM / Bluetooth printers because it sends the ESC/POS bytes straight to the port.
+
+**Bluetooth** (58 mm mini printers, MediaLink, SpeedX, Xprinter, MPT-II, XP-P300, RPP02…)
+1. Switch the printer on and keep it within 1–2 m. Disconnect it from any phone.
+2. **Search for Bluetooth printers** (about 10 s). Likely printers are listed first and marked *Printer*.
+3. **Pair**. The PIN is tried automatically (`0000`, then `1234`); type another PIN in the box if your printer uses one (see its self-test page).
+4. Windows creates a COM port (e.g. COM5). Press **Test print**, then **Use for receipts** (and/or **Use for kitchen / tokens**).
+5. **Forget** (the unlink button) removes the pairing. *Windows Bluetooth settings* opens Windows' own page if you prefer pairing there (then use the **COM port** tab).
+
+**COM port** — lists every COM port (Bluetooth, USB-to-serial, old serial printers) with *Test print* / *Use for…*. Two settings:
+- **Speed (baud)** — only for a serial *cable* (9600 is usual; try 115200 if the print is garbage). Bluetooth ignores it.
+- **Sending speed** — *Safe* for cheap Bluetooth printers that print half a bill or stop in the middle, *Normal* (default), *Fast*.
+
+**USB (no driver)** — a USB thermal printer without its driver only shows up as a port such as `USB001`. Press **Install**: Windows asks permission once and the built-in *Generic / Text Only* driver is installed on that port. The printer then appears in the normal printer list.
+
+A COM / Bluetooth printer is saved as `serial:COM5`. If the port disappears (printer off / unpaired) the Printers page and the top bar say so, and **Verify printers** really opens the port to check that the printer answers.
+
+> **Please test once on the shop's computer.** Pairing and direct COM printing depend on the printer model and the Bluetooth adapter; they were verified here only with a simulated printer (no real Bluetooth / USB hardware).
 
 ## Network / Wi-Fi printers
 Add the printer in Windows first (by IP address), then select it in Retail POS.

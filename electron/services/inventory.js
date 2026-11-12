@@ -41,6 +41,50 @@ function isEnabled() {
   return settings.get('inventory').enabled;
 }
 
+const MODES = ['retail', 'restaurant'];
+const mode = () => settings.get('inventory').mode || '';
+const isRestaurant = () => mode() === 'restaurant';
+
+/**
+ * Choose how stock works — once. Retail: every product is its own stock. Restaurant: stock lives in raw
+ * "inventory items" (ghee, chicken, daal…) and menu dishes use them through their recipes, so dishes stop
+ * carrying stock of their own. The choice is locked afterwards (only a factory reset clears it).
+ */
+function setMode({ mode: next }) {
+  assert(MODES.includes(next), 'Choose Retail or Restaurant.');
+  const cur = settings.get('inventory');
+  if (cur.modeLocked) throw new AppError(`The inventory type is already set to "${cur.mode}" and cannot be changed.`);
+  return ctx.db.transaction(() => {
+    if (next === 'restaurant') ctx.db.run('UPDATE products SET track_stock = 0 WHERE is_ingredient = 0');
+    return settings.set('inventory', { mode: next, modeLocked: true }, { internal: true });
+  });
+}
+
+/** Restaurant mode: add / edit a raw inventory item (hidden from the POS, used in recipes). */
+function saveItem(input) {
+  const products = require('./products');
+  const name = cleanStr(input.name, 120);
+  assert(name, 'Item name is required.');
+  const id = input.id ? Number(input.id) : null;
+  if (id) {
+    const p = ctx.db.get('SELECT id, is_ingredient FROM products WHERE id = ?', [id]);
+    assert(p && p.is_ingredient, 'Inventory item not found.');
+  }
+  return products.save({
+    id: id || undefined,
+    name,
+    unit: cleanStr(input.unit || 'kg', 20) || 'kg',
+    sale_price: 0,
+    cost_price: round2(toNumber(input.cost_price)),
+    low_stock: round3(toNumber(input.low_stock)),
+    stock_qty: id ? undefined : round3(toNumber(input.stock_qty)),
+    track_stock: true,
+    is_ingredient: true,
+    category_id: null,
+    active: input.active !== false,
+  });
+}
+
 function move(productId, type, qty, { note, orderId, unitCost } = {}) {
   const p = ctx.db.get('SELECT id, name, stock_qty FROM products WHERE id = ?', [productId]);
   if (!p) return;
@@ -93,7 +137,7 @@ function reverseSale(orderId) {
 function adjust({ productId, type, qty, unitCost, note }) {
   const p = ctx.db.get('SELECT * FROM products WHERE id = ?', [Number(productId)]);
   assert(p, 'Product not found.');
-  qty = round2(toNumber(qty));
+  qty = round3(toNumber(qty));
   note = cleanStr(note, 200);
   return ctx.db.transaction(() => {
     if (type === 'in') {
@@ -113,7 +157,7 @@ function adjust({ productId, type, qty, unitCost, note }) {
     }
     if (type === 'adjust') {
       assert(qty >= 0, 'Counted quantity cannot be negative.');
-      const diff = round2(qty - p.stock_qty);
+      const diff = round3(qty - p.stock_qty);
       if (diff === 0) return p.stock_qty;
       return move(p.id, 'adjust', diff, { note: note || 'Stock count adjustment' });
     }
@@ -145,11 +189,13 @@ function movements({ productId, from, to, limit } = {}) {
 }
 
 function summary() {
+  const restaurant = isRestaurant();
   const products = ctx.db.all(
-    `SELECT p.id, p.name, p.sku, p.unit, p.stock_qty, p.low_stock, p.cost_price, p.sale_price, p.track_stock, p.active,
-       c.name AS category_name
+    `SELECT p.id, p.name, p.sku, p.unit, p.stock_qty, p.low_stock, p.cost_price, p.sale_price, p.track_stock, p.active, p.is_ingredient,
+       c.name AS category_name,
+       (SELECT COUNT(DISTINCT r.product_id) FROM recipe_items r WHERE r.ingredient_id = p.id) AS used_in
      FROM products p LEFT JOIN categories c ON c.id = p.category_id
-     WHERE p.track_stock = 1 ORDER BY p.name`
+     WHERE ${restaurant ? 'p.is_ingredient = 1' : 'p.track_stock = 1'} ORDER BY p.name`
   );
   let stockValue = 0;
   let saleValue = 0;
@@ -165,9 +211,17 @@ function summary() {
   }
   return {
     enabled: isEnabled(),
+    mode: mode(),
     products,
     totals: { items: products.length, stockValue: round2(stockValue), saleValue: round2(saleValue), low, out },
   };
 }
 
-module.exports = { isEnabled, applySale, reverseSale, adjust, movements, summary };
+/** Restaurant mode: delete a raw item (kept but switched off when recipes or history still use it). */
+function removeItem({ id }) {
+  const p = ctx.db.get('SELECT id, is_ingredient FROM products WHERE id = ?', [Number(id)]);
+  assert(p && p.is_ingredient, 'Inventory item not found.');
+  return require('./products').remove({ id: p.id });
+}
+
+module.exports = { isEnabled, isRestaurant, mode, setMode, saveItem, removeItem, applySale, reverseSale, adjust, movements, summary };

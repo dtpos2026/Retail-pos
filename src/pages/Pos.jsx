@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   UtensilsCrossed, ShoppingBag, Bike, Armchair, UserRound, PauseCircle, Percent, Plus, Minus, Trash2, FilePlus2,
-  CreditCard, Printer, Save, X, ScanBarcode, PlusSquare, StickyNote, ShoppingCart, CheckCircle2, PanelLeft, PanelTop,
+  CreditCard, Printer, Save, X, ScanBarcode, PlusSquare, StickyNote, ShoppingCart, CheckCircle2, PanelLeft, PanelTop, Users,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { useApp } from '../context/AppContext';
@@ -12,7 +12,7 @@ import { Button, Seg, Empty, NumberInput, Loading } from '../components/ui';
 import { PromoBanner } from '../components/Banner';
 import { CategoryBar, CategoryRail } from '../components/pos/CategoryNav';
 import PaymentModal from '../components/pos/PaymentModal';
-import { ItemModal, DiscountModal, CustomerModal, TableModal, HeldOrdersModal, CustomItemModal, VariantModal, WeightPad } from '../components/pos/PosModals';
+import { ItemModal, DiscountModal, CustomerModal, TableModal, HeldOrdersModal, CustomItemModal, VariantModal, WeightPad, PricePad, QuickTokenPad, PerHeadModal, ServiceModal } from '../components/pos/PosModals';
 
 const TYPE_OPTIONS = [
   { value: 'dine_in', label: 'Dine-In', icon: UtensilsCrossed, key: 'enableDineIn' },
@@ -39,6 +39,7 @@ export default function Pos() {
   }, []);
   const waiters = staffList.filter((s) => s.role === 'waiter');
   const riders = staffList.filter((s) => s.role === 'rider');
+  const [riderTyping, setRiderTyping] = useState(false);
   const [modal, setModal] = useState(null);
   const [busy, setBusy] = useState(false);
   const [lastSale, setLastSale] = useState(null);
@@ -58,7 +59,7 @@ export default function Pos() {
     const c = cartFromOrder(o);
     c.items = c.items.map((i) => {
       const p = productsRef.current.find((x) => x.id === i.productId);
-      return p ? { ...i, weighed: !!p.weighed, unit: p.unit, color: p.category_color || i.color } : i;
+      return p ? { ...i, weighed: !!p.weighed, openPrice: !!p.open_price, unit: p.unit, color: p.category_color || i.color } : i;
     });
     return c;
   };
@@ -81,6 +82,7 @@ export default function Pos() {
     (orderType) => {
       const t = orderType || (types.some((x) => x.value === sales.defaultOrderType) ? sales.defaultOrderType : types[0]?.value);
       dispatch({ type: 'reset', orderType: t, deliveryCharges: t === 'delivery' ? sales.defaultDeliveryCharges : 0 });
+      setRiderTyping(false);
       setTimeout(() => searchRef.current?.focus(), 0);
     },
     [dispatch, sales, types]
@@ -119,6 +121,7 @@ export default function Pos() {
   }, [loc.state]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---- totals -------------------------------------------------------------
+  const dineExtras = cart.orderType === 'dine_in';
   const itemsNet = useMemo(() => round2(cart.items.reduce((s, i) => s + i.qty * (i.unitPrice - Math.min(i.unitPrice, i.unitDiscount || 0)), 0)), [cart.items]);
   const orderDiscount = cart.discountMode === 'percent' ? round2((itemsNet * (Number(cart.discountValue) || 0)) / 100) : cart.orderDiscount;
   const totals = useMemo(
@@ -127,11 +130,15 @@ export default function Pos() {
         items: cart.items,
         orderDiscount,
         deliveryCharges: cart.orderType === 'delivery' ? cart.deliveryCharges : 0,
+        covers: dineExtras && sales.perHeadEnabled ? cart.covers : 0,
+        coverRate: cart.coverRate,
+        serviceMode: cart.serviceMode,
+        serviceValue: dineExtras && sales.serviceEnabled ? cart.serviceValue : 0,
         taxEnabled: sales.taxEnabled,
         taxRate: sales.taxRate,
         roundTotal: sales.roundTotal,
       }),
-    [cart.items, orderDiscount, cart.orderType, cart.deliveryCharges, sales]
+    [cart.items, orderDiscount, cart.orderType, cart.deliveryCharges, cart.covers, cart.coverRate, cart.serviceMode, cart.serviceValue, dineExtras, sales]
   );
 
   // ---- products ---------------------------------------------------------------
@@ -155,19 +162,42 @@ export default function Pos() {
         return;
       }
       setLastSale(null);
-      dispatch({ type: 'add', product: p, variant: opts.variant || null, qty });
+      dispatch({ type: 'add', product: p, variant: opts.variant || null, qty, price: opts.price });
     },
     [dispatch, inv, qtyInCart, toast]
   );
 
-  /** Tap on a product: sizes first (Small / Medium / Large), then the weight pad for kg items, else add. */
+  /** Tap on a product: sizes first (Small / Medium / Large), the weight pad for kg items, the rate pad for "khula sauda" items, else add. */
+  const tok = settings.token;
+  const isTokenItem = useCallback(
+    (p) => !!tok.quickEnabled && !p.is_deal && !p.weighed && !p.open_price && !(p.variants && p.variants.length) && (tok.quickOrderTypes || []).includes(cart.orderType) && ((tok.quickProductIds || []).includes(p.id) || (!!p.category_id && (tok.quickCategoryIds || []).includes(p.category_id))),
+    [tok, cart.orderType]
+  );
+  const [tokenBusy, setTokenBusy] = useState(false);
+  const sellTokenItem = async (p, qty) => {
+    setTokenBusy(true);
+    try {
+      const r = await api('orders.quickToken', { productId: p.id, qty, orderType: cart.orderType });
+      setModal(null);
+      toast(`Token #${r.order.token_no} — ${qty} × ${p.name} = ${formatMoney(r.order.total, cur)}`);
+      if (r.error) toast(r.error, 'error', 7000);
+      if (inv.enabled) loadProducts();
+    } catch (e) {
+      toastError(e);
+    } finally {
+      setTokenBusy(false);
+    }
+  };
+
   const pick = useCallback(
     (p) => {
-      if (p.variants && p.variants.length) setModal({ variant: p });
+      if (isTokenItem(p)) setModal({ token: p });
+      else if (p.variants && p.variants.length) setModal({ variant: p });
       else if (p.weighed) setModal({ weigh: { product: p, variant: null } });
+      else if (p.open_price) setModal({ price: p });
       else addProduct(p);
     },
-    [addProduct]
+    [addProduct, isTokenItem]
   );
 
   const onSearchKey = async (e) => {
@@ -199,10 +229,15 @@ export default function Pos() {
     tableId: cart.table?.id,
     waiterId: cart.orderType === 'dine_in' ? cart.waiterId || undefined : undefined,
     riderId: cart.orderType === 'delivery' ? cart.riderId || undefined : undefined,
+    riderName: cart.orderType === 'delivery' && !cart.riderId ? cart.riderName || undefined : undefined,
     customer: cart.customer,
     items: cart.items.map((i) => ({ productId: i.productId, variantId: i.variantId || undefined, name: i.name, qty: i.qty, unitPrice: i.unitPrice, unitDiscount: i.unitDiscount, notes: i.notes })),
     orderDiscount,
     deliveryCharges: cart.deliveryCharges,
+    covers: cart.orderType === 'dine_in' ? cart.covers : undefined,
+    coverRate: cart.orderType === 'dine_in' ? cart.coverRate : undefined,
+    serviceMode: cart.serviceMode,
+    serviceValue: cart.orderType === 'dine_in' ? cart.serviceValue : undefined,
     notes: cart.notes,
     action,
     ...extra,
@@ -212,6 +247,7 @@ export default function Pos() {
     if (!cart.items.length) return toast('Cart is empty. Add items first.', 'warn'), false;
     if (cart.orderType === 'dine_in' && !cart.table) return setModal('table'), false;
     if (cart.orderType === 'delivery' && (!cart.customer.name || !cart.customer.mobile || !cart.customer.address)) return setModal('customer'), false;
+    if (cart.orderType === 'delivery' && sales.requireRider && !cart.riderId && !String(cart.riderName || '').trim()) return toast('Select the rider for this delivery (or type the rider\'s name).', 'warn'), false;
     return true;
   };
 
@@ -388,6 +424,8 @@ export default function Pos() {
                   </div>
                   {p.is_deal && <span className="deal-badge">DEAL</span>}
                   {!p.is_deal && p.variants && p.variants.length > 0 && <span className="var-badge">{p.variants.length} sizes</span>}
+                  {!p.is_deal && !(p.variants && p.variants.length) && p.open_price && <span className="var-badge">Open rate</span>}
+                  {isTokenItem(p) && <span className="var-badge token-badge">Token</span>}
                   {qtyInCart[p.id] > 0 && <span className="qty-badge">{formatQty(qtyInCart[p.id])}</span>}
                   {tracked && <span className={`stock ${out ? 'out' : low ? 'low' : ''}`}>{out ? 'Out' : formatQty(p.stock_qty)}</span>}
                   <div className="body">
@@ -415,15 +453,35 @@ export default function Pos() {
             <div className="grow" />
             <Button variant="ghost" size="sm" icon={FilePlus2} onClick={() => newOrder()} title="New order (F3)" />
           </div>
-          {(cart.orderType === 'dine_in' && waiters.length > 0) || (cart.orderType === 'delivery' && riders.length > 0) ? (
+          {cart.orderType === 'dine_in' && waiters.length > 0 && (
             <div className="row" style={{ gap: 8 }}>
-              <span className="small muted" style={{ minWidth: 52 }}>{cart.orderType === 'dine_in' ? 'Waiter' : 'Rider'}</span>
-              <select className="select" style={{ height: 34, flex: 1 }} value={cart.orderType === 'dine_in' ? cart.waiterId : cart.riderId} onChange={(e) => dispatch({ type: 'set', patch: cart.orderType === 'dine_in' ? { waiterId: e.target.value ? Number(e.target.value) : '' } : { riderId: e.target.value ? Number(e.target.value) : '' } })}>
-                <option value="">— {cart.orderType === 'dine_in' ? 'select waiter' : 'select rider'} —</option>
-                {(cart.orderType === 'dine_in' ? waiters : riders).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              <span className="small muted" style={{ minWidth: 52 }}>Waiter</span>
+              <select className="select" style={{ height: 34, flex: 1 }} value={cart.waiterId} onChange={(e) => dispatch({ type: 'set', patch: { waiterId: e.target.value ? Number(e.target.value) : '' } })}>
+                <option value="">— select waiter —</option>
+                {waiters.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
-          ) : null}
+          )}
+          {cart.orderType === 'delivery' && (riders.length > 0 || sales.requireRider || cart.riderName) && (
+            <div className="row rider-row" style={{ gap: 8 }}>
+              <span className="small muted" style={{ minWidth: 52 }}>Rider{sales.requireRider ? ' *' : ''}</span>
+              {riderTyping || (cart.riderName && !cart.riderId) ? (
+                <>
+                  <input className="input" style={{ height: 34, flex: 1 }} autoFocus={riderTyping} placeholder="Type the rider's name" value={cart.riderName} onChange={(e) => dispatch({ type: 'set', patch: { riderName: e.target.value, riderId: '' } })} />
+                  {riders.length > 0 && <Button size="sm" variant="ghost" onClick={() => { setRiderTyping(false); dispatch({ type: 'set', patch: { riderName: '' } }); }}>List</Button>}
+                </>
+              ) : (
+                <select className="select" style={{ height: 34, flex: 1 }} value={cart.riderId} onChange={(e) => {
+                  if (e.target.value === '__type') { setRiderTyping(true); dispatch({ type: 'set', patch: { riderId: '' } }); return; }
+                  dispatch({ type: 'set', patch: { riderId: e.target.value ? Number(e.target.value) : '', riderName: '' } });
+                }}>
+                  <option value="">— select rider —</option>
+                  {riders.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  <option value="__type">✎ Type a name…</option>
+                </select>
+              )}
+            </div>
+          )}
           <div className="row">
             {cart.orderType === 'dine_in' && (
               <Button size="sm" variant={cart.table ? 'soft' : undefined} icon={Armchair} onClick={() => setModal('table')}>
@@ -508,6 +566,12 @@ export default function Pos() {
             </div>
           )}
           {totals.tax > 0 && <div className="tline"><span>{sales.taxLabel} ({sales.taxRate}%)</span><span>{formatMoney(totals.tax, cur)}</span></div>}
+          {totals.coverCharge > 0 && (
+            <div className="tline"><span>{sales.perHeadLabel || 'Per head'} ({cart.covers} × {cart.coverRate})</span><span>{formatMoney(totals.coverCharge, cur)}</span></div>
+          )}
+          {totals.serviceCharge > 0 && (
+            <div className="tline"><span>{sales.serviceLabel || 'Service charge'}{cart.serviceMode === 'percent' ? ` (${cart.serviceValue}%)` : ''}</span><span>{formatMoney(totals.serviceCharge, cur)}</span></div>
+          )}
           {cart.orderType === 'delivery' && (
             <div className="tline" style={{ alignItems: 'center' }}>
               <span>Delivery charges</span>
@@ -516,8 +580,14 @@ export default function Pos() {
           )}
           {totals.roundOff !== 0 && <div className="tline small"><span>Round off</span><span>{totals.roundOff > 0 ? '+' : ''}{totals.roundOff}</span></div>}
           <div className="tline total"><span>Total</span><span>{formatMoney(totals.total, cur)}</span></div>
-          <div className="row" style={{ marginTop: 8, gap: 6 }}>
+          <div className="row" style={{ marginTop: 8, gap: 6, flexWrap: 'wrap' }}>
             {can('discount') && <Button size="sm" icon={Percent} onClick={() => setModal('discount')} disabled={!cart.items.length}>Discount <kbd>F6</kbd></Button>}
+            {dineExtras && sales.perHeadEnabled && (
+              <Button size="sm" variant={cart.covers > 0 ? 'soft' : undefined} icon={Users} onClick={() => setModal('perhead')} title="Charge per person (cover)">{cart.covers > 0 ? `${sales.perHeadLabel || 'Per head'} ✓` : sales.perHeadLabel || 'Per head'}</Button>
+            )}
+            {dineExtras && sales.serviceEnabled && (
+              <Button size="sm" variant={cart.serviceValue > 0 ? 'soft' : undefined} icon={Percent} onClick={() => setModal('service')} disabled={!cart.items.length} title="Add a service charge">{cart.serviceValue > 0 ? 'Service ✓' : 'Service'}</Button>
+            )}
             <Button size="sm" icon={StickyNote} onClick={async () => {
               const n = await confirm({ title: 'Order note', input: 'e.g. Pack separately', confirmText: 'Save' });
               if (n !== false) dispatch({ type: 'set', patch: { notes: n } });
@@ -551,6 +621,12 @@ export default function Pos() {
           onRemove={() => { dispatch({ type: 'remove', key: selectedItem.key }); setModal(null); }}
           onSave={(patch) => { dispatch({ type: 'update', key: selectedItem.key, patch }); setModal(null); }}
         />
+      )}
+      {modal === 'perhead' && (
+        <PerHeadModal covers={cart.covers} rate={cart.coverRate || sales.perHeadRate} defaultRate={sales.perHeadRate} label={sales.perHeadLabel || 'Per head'} onClose={() => setModal(null)} onSave={(patch) => { dispatch({ type: 'set', patch }); setModal(null); }} />
+      )}
+      {modal === 'service' && (
+        <ServiceModal mode={cart.serviceValue > 0 ? cart.serviceMode : sales.serviceMode} value={cart.serviceValue || sales.serviceValue} base={itemsNet - orderDiscount} label={sales.serviceLabel || 'Service charge'} onClose={() => setModal(null)} onSave={(patch) => { dispatch({ type: 'set', patch }); setModal(null); }} />
       )}
       {modal === 'discount' && (
         <DiscountModal cart={cart} subtotal={itemsNet} onClose={() => setModal(null)} onSave={(patch) => { dispatch({ type: 'set', patch }); setModal(null); }} />
@@ -609,6 +685,28 @@ export default function Pos() {
           />
         );
       })()}
+      {modal?.token && (
+        <QuickTokenPad
+          product={modal.token}
+          busy={tokenBusy}
+          onClose={() => setModal(null)}
+          onSell={(qty) => sellTokenItem(modal.token, qty)}
+          onAddToBill={(qty) => {
+            addProduct(modal.token, { qty });
+            setModal(null);
+          }}
+        />
+      )}
+      {modal?.price && (
+        <PricePad
+          product={modal.price}
+          onClose={() => setModal(null)}
+          onSave={(amount) => {
+            addProduct(modal.price, { price: amount });
+            setModal(null);
+          }}
+        />
+      )}
       {modal === 'custom' && (
         <CustomItemModal onClose={() => setModal(null)} onAdd={(it) => { dispatch({ type: 'addCustom', ...it }); setModal(null); }} />
       )}

@@ -61,6 +61,8 @@ const DEFAULTS = {
     autoDetect: true, // pick the thermal printer automatically when none is chosen
     compatCut: false, // older printers without "feed and cut"
     openDrawer: false, // kick the cash drawer (connected to the receipt printer) when a receipt prints
+    serialBaud: 9600, // COM printers on a cable (USB-serial / RS-232); Bluetooth ignores it
+    serialSpeed: 'normal', // safe | normal | fast — how quickly a job is pushed into a COM / Bluetooth printer
   },
   token: {
     enabled: true,
@@ -79,6 +81,12 @@ const DEFAULTS = {
     design: 'classic', // classic | boxed | bold | minimal | ticket
     footer: 'Please wait for your number to be called.',
     orderTypes: ['takeaway', 'delivery'],
+    // Token items (roti, naan…): tapping one asks the quantity and sells it at once with a priced token — no bill, no KOT
+    quickEnabled: false,
+    quickCategoryIds: [],
+    quickProductIds: [],
+    quickOrderTypes: ['takeaway'], // POS modes in which tapping such an item makes the instant token sale
+    kotWhenOff: true, // token system switched off: print a kitchen ticket (KOT) after each paid takeaway / delivery order
   },
   sales: {
     enableDineIn: true,
@@ -89,14 +97,24 @@ const DEFAULTS = {
     taxRate: 0,
     taxLabel: 'GST',
     defaultDeliveryCharges: 0,
+    perHeadEnabled: false, // dine-in: charge per person (cover / "per head"); the cashier types how many persons
+    perHeadRate: 0,
+    perHeadLabel: 'Per head',
+    serviceEnabled: false, // dine-in: manual service charge (% of the bill or a fixed amount); these are the suggested values
+    serviceMode: 'percent', // percent | amount
+    serviceValue: 0,
+    serviceLabel: 'Service charge',
     roundTotal: true,
     allowCredit: true,
+    requireRider: false, // delivery orders must have a rider (chosen from the list or typed by hand)
     orderPrefix: 'ORD-',
     orderDigits: 6,
   },
   inventory: {
     enabled: false,
     allowNegative: true,
+    mode: '', // '' = not chosen yet | retail (products are the stock) | restaurant (raw items + recipes)
+    modeLocked: false, // set once by inventory.setMode; only a factory reset clears it
   },
   payment: {
     methods: [
@@ -207,9 +225,13 @@ function getAll() {
   return out;
 }
 
-function set(section, patch) {
+function set(section, patch, { internal = false } = {}) {
   if (!DEFAULTS[section]) throw new AppError('Unknown settings section.');
   const current = get(section);
+  if (section === 'inventory' && !internal) {
+    // The Retail / Restaurant choice is permanent: only inventory.setMode (and a factory reset) may write it.
+    patch = { ...(patch || {}), mode: current.mode, modeLocked: current.modeLocked };
+  }
   const value = merge(DEFAULTS[section], { ...current, ...(patch || {}) });
   if (section === 'receipt') value.marginLeft = value.marginRight = value.marginSide;
   validate(section, value);
@@ -249,6 +271,11 @@ function validate(section, v) {
     if (v.taxRate < 0 || v.taxRate > 100) throw new AppError('Tax rate must be between 0 and 100.');
     if (!v.enableDineIn && !v.enableTakeaway && !v.enableDelivery) throw new AppError('At least one sale type must be enabled.');
     if (v.orderDigits < 3 || v.orderDigits > 10) throw new AppError('Order number digits must be between 3 and 10.');
+    if (!(Number(v.perHeadRate) >= 0) || v.perHeadRate > 100000) throw new AppError('Per head rate is invalid.');
+    if (!['percent', 'amount'].includes(v.serviceMode)) throw new AppError('Service charge must be a percent or an amount.');
+    if (!(Number(v.serviceValue) >= 0) || (v.serviceMode === 'percent' && v.serviceValue > 100)) throw new AppError('Service charge value is invalid (a percent must be 0–100).');
+    v.perHeadLabel = String(v.perHeadLabel || 'Per head').trim().slice(0, 30) || 'Per head';
+    v.serviceLabel = String(v.serviceLabel || 'Service charge').trim().slice(0, 30) || 'Service charge';
   }
   if (section === 'payment') {
     if (!Array.isArray(v.methods) || !v.methods.some((m) => m.enabled)) throw new AppError('Enable at least one payment method.');

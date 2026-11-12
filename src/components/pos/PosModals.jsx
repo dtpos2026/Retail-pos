@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Scale, Delete as DeleteIcon, Ruler, Percent, UserRound, Armchair, PauseCircle, PencilLine, PlusSquare, Search, Trash2, PlayCircle } from 'lucide-react';
+import { Scale, Banknote, Ticket, Delete as DeleteIcon, Ruler, Percent, UserRound, Armchair, PauseCircle, PencilLine, PlusSquare, Search, Trash2, PlayCircle, Users } from 'lucide-react';
 import { Modal, Button, Field, Input, NumberInput, Seg, Empty, Money, StatusBadge, SearchBox } from '../ui';
 import { api } from '../../lib/api';
 import { useApp } from '../../context/AppContext';
@@ -13,7 +13,9 @@ export function ItemModal({ item, onClose, onSave, onRemove, canDiscount }) {
   const [disc, setDisc] = useState(item.unitDiscount || 0);
   const [notes, setNotes] = useState(item.notes || '');
   const unitDiscount = mode === 'percent' ? round2((Number(price) * (Number(disc) || 0)) / 100) : Number(disc) || 0;
-  const save = () => onSave({ qty: Math.max(0.01, Number(qty) || 1), unitPrice: item.productId ? item.unitPrice : Number(price) || 0, unitDiscount: Math.min(unitDiscount, Number(price)), notes });
+  // the rate can be typed for "khula sauda" items and open items; anyone with the discount permission may change any rate
+  const priceEditable = !item.productId || item.openPrice || canDiscount;
+  const save = () => onSave({ qty: Math.max(0.01, Number(qty) || 1), unitPrice: priceEditable ? Number(price) || 0 : item.unitPrice, unitDiscount: Math.min(unitDiscount, Number(price)), notes });
   return (
     <Modal
       title={item.name}
@@ -31,8 +33,8 @@ export function ItemModal({ item, onClose, onSave, onRemove, canDiscount }) {
         <Field label="Quantity">
           <NumberInput autoFocus selectOnFocus value={qty} onChange={setQty} />
         </Field>
-        <Field label="Unit Price" hint={item.productId ? 'Change prices in Products' : undefined}>
-          <NumberInput value={price} onChange={setPrice} disabled={!!item.productId} />
+        <Field label={item.openPrice ? 'Rate / amount (khula sauda)' : 'Unit Price'} hint={priceEditable ? (item.openPrice || !item.productId ? 'Type the amount for this item' : 'Changing the rate counts as a discount') : 'Change prices in Products'}>
+          <NumberInput value={price} onChange={setPrice} disabled={!priceEditable} />
         </Field>
         {canDiscount && (
           <>
@@ -47,6 +49,76 @@ export function ItemModal({ item, onClose, onSave, onRemove, canDiscount }) {
         <Field label="Note (e.g. less spicy, no onion)" className="full">
           <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional note printed on receipt / token" />
         </Field>
+      </div>
+    </Modal>
+  );
+}
+
+/** Dine-in "per head": how many persons, at which rate each (rate comes from Settings, editable per bill). */
+export function PerHeadModal({ covers, rate, defaultRate, label, onClose, onSave }) {
+  const [persons, setPersons] = useState(covers || '');
+  const [each, setEach] = useState(rate || '');
+  const total = round2((Math.floor(Number(persons)) || 0) * (Number(each) || 0));
+  const save = () => onSave({ covers: Math.max(0, Math.min(999, Math.floor(Number(persons)) || 0)), coverRate: Math.max(0, Number(each) || 0) });
+  return (
+    <Modal
+      title={`${label} (per person)`}
+      icon={Users}
+      size="sm"
+      onClose={onClose}
+      footer={
+        <>
+          <Button onClick={() => onSave({ covers: 0, coverRate: Number(defaultRate) || 0 })}>Remove</Button>
+          <Button variant="primary" onClick={save}>Apply</Button>
+        </>
+      }
+    >
+      <div className="col">
+        <Field label="How many persons?">
+          <NumberInput className="lg" autoFocus selectOnFocus value={persons} onChange={setPersons} onKeyDown={(e) => e.key === 'Enter' && save()} />
+        </Field>
+        <div className="row wrap">
+          {[1, 2, 3, 4, 5, 6, 8, 10, 12, 15].map((v) => (
+            <Button key={v} size="sm" variant={Number(persons) === v ? 'primary' : undefined} onClick={() => setPersons(v)}>{v}</Button>
+          ))}
+        </div>
+        <Field label="Rate per person (Rs.)" hint="From Settings → Sales & Tax. Change it here for this bill only.">
+          <NumberInput value={each} onChange={setEach} onKeyDown={(e) => e.key === 'Enter' && save()} />
+        </Field>
+        <div className="muted">{label}: <b><Money value={total} /></b></div>
+      </div>
+    </Modal>
+  );
+}
+
+/** Dine-in manual service charge: a percent of the bill (after discount) or a fixed amount. */
+export function ServiceModal({ mode: startMode, value: startValue, base, label, onClose, onSave }) {
+  const [mode, setMode] = useState(startMode || 'percent');
+  const [value, setValue] = useState(startValue || '');
+  const amount = mode === 'percent' ? round2((Math.max(0, base) * Math.min(100, Number(value) || 0)) / 100) : Number(value) || 0;
+  const save = () => onSave({ serviceMode: mode, serviceValue: Math.max(0, mode === 'percent' ? Math.min(100, Number(value) || 0) : Number(value) || 0) });
+  return (
+    <Modal
+      title={label}
+      icon={Percent}
+      size="sm"
+      onClose={onClose}
+      footer={
+        <>
+          <Button onClick={() => onSave({ serviceMode: mode, serviceValue: 0 })}>Remove</Button>
+          <Button variant="primary" onClick={save}>Apply</Button>
+        </>
+      }
+    >
+      <div className="col">
+        <Seg value={mode} onChange={setMode} options={[{ value: 'percent', label: 'Percent (%)' }, { value: 'amount', label: 'Amount (Rs.)' }]} />
+        <NumberInput className="lg" autoFocus selectOnFocus value={value} onChange={setValue} onKeyDown={(e) => e.key === 'Enter' && save()} />
+        <div className="row wrap">
+          {(mode === 'percent' ? [5, 10, 12.5, 15] : [50, 100, 200, 500]).map((v) => (
+            <Button key={v} size="sm" onClick={() => setValue(v)}>{mode === 'percent' ? `${v}%` : v}</Button>
+          ))}
+        </div>
+        <div className="muted">{label}: <b><Money value={amount} /></b></div>
       </div>
     </Modal>
   );
@@ -349,6 +421,137 @@ export function WeightPad({ product, variant, unitPrice, initial, onClose, onSav
           <div className="row"><span className="muted">Price</span><span className="grow" /><b style={{ fontSize: 22, color: 'var(--primary)' }}><Money value={amount} /></b></div>
         </div>
         <Button variant="primary" size="lg" onClick={save} disabled={!ok}>{initial ? 'Update' : 'Add to cart'} <kbd>Enter</kbd></Button>
+      </div>
+    </div>
+  );
+}
+
+/** "Khula sauda": the amount of this item is typed at the sale (Daal Rs 200). Right-side pad like the weight pad. */
+export function PricePad({ product, onClose, onSave }) {
+  const suggested = Number(product.sale_price) || 0;
+  const [text, setText] = useState(suggested ? String(suggested) : '');
+  const [fresh, setFresh] = useState(true); // first key replaces the suggested rate
+  const value = Math.round((Number(text) || 0) * 100) / 100;
+  const press = (k) => {
+    setText((t) => {
+      const cur = fresh ? '' : t;
+      if (k === 'back') return fresh ? '' : t.slice(0, -1);
+      if (k === 'clear') return '';
+      if (k === '.') return cur.includes('.') ? cur : (cur || '0') + '.';
+      const next = cur + k;
+      return /^\d{0,7}(\.\d{0,2})?$/.test(next) ? next.replace(/^0+(?=\d)/, '') : t;
+    });
+    setFresh(false);
+  };
+  const ok = value > 0;
+  const save = () => ok && onSave(value);
+  useEffect(() => {
+    const h = (e) => {
+      if (/^[0-9]$/.test(e.key) || e.key === '.') press(e.key);
+      else if (e.key === 'Backspace') press('back');
+      else if (e.key === 'Enter') save();
+      else if (e.key === 'Escape') onClose();
+      else return;
+      e.preventDefault();
+    };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }); // eslint-disable-line react-hooks/exhaustive-deps
+  const quick = [...new Set([50, 100, 150, 200, 250, 300, 500, suggested].filter((x) => x > 0))].sort((a, b) => a - b);
+  const keys = ['7', '8', '9', '4', '5', '6', '1', '2', '3', '.', '0', 'back'];
+  return (
+    <div className="overlay" style={{ placeItems: 'stretch end', padding: 0, background: 'rgba(15,23,42,.35)' }} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="weight-pad price-pad">
+        <div className="row" style={{ gap: 10 }}>
+          <Banknote size={20} color="var(--primary)" />
+          <div className="grow"><b style={{ fontSize: 17 }}><bdi>{product.name}</bdi></b><div className="small muted">Khula sauda — type the amount{suggested ? <> · usual rate <Money value={suggested} /></> : null}</div></div>
+          <Button size="sm" variant="ghost" onClick={onClose}>✕</Button>
+        </div>
+        <div className="wp-display">
+          <div className="small muted">Amount for this item</div>
+          <div className="wp-val">{text || '0'}<span> Rs.</span></div>
+        </div>
+        <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+          {quick.map((q) => (
+            <Button key={q} size="sm" onClick={() => { setText(String(q)); setFresh(false); }}>{q}</Button>
+          ))}
+        </div>
+        <div className="wp-keys">
+          {keys.map((k) => (
+            <button key={k} className={`wp-key ${k === 'back' ? 'alt' : ''}`} onClick={() => press(k)}>{k === 'back' ? <DeleteIcon size={22} /> : k}</button>
+          ))}
+        </div>
+        <div className="wp-total">
+          <div className="row"><span className="muted">On the bill</span><span className="grow" /><b><bdi>{product.name}</bdi></b></div>
+          <div className="row"><span className="muted">Price</span><span className="grow" /><b style={{ fontSize: 22, color: 'var(--primary)' }}><Money value={value} /></b></div>
+        </div>
+        <Button variant="primary" size="lg" onClick={save} disabled={!ok}>Add to cart <kbd>Enter</kbd></Button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Token item (roti, naan…): how many? Then it is sold at once with a priced token (no bill, no kitchen ticket).
+ * "Add to the bill" puts it in the cart instead, for a bigger order.
+ */
+export function QuickTokenPad({ product, busy, onClose, onSell, onAddToBill }) {
+  const price = Math.max(0, (Number(product.sale_price) || 0) - (Number(product.discount) || 0));
+  const [text, setText] = useState('1');
+  const [fresh, setFresh] = useState(true);
+  const qty = Math.min(9999, Math.round(Number(text) || 0));
+  const press = (k) => {
+    setText((t) => {
+      const cur = fresh ? '' : t;
+      if (k === 'back') return fresh ? '' : t.slice(0, -1);
+      const next = (cur + k).replace(/^0+(?=\d)/, '');
+      return /^\d{0,4}$/.test(next) ? next : t;
+    });
+    setFresh(false);
+  };
+  const ok = qty > 0 && !busy;
+  const sell = () => ok && onSell(qty);
+  useEffect(() => {
+    const h = (e) => {
+      if (/^[0-9]$/.test(e.key)) press(e.key);
+      else if (e.key === 'Backspace') press('back');
+      else if (e.key === 'Enter') sell();
+      else if (e.key === 'Escape') onClose();
+      else return;
+      e.preventDefault();
+    };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }); // eslint-disable-line react-hooks/exhaustive-deps
+  const keys = ['7', '8', '9', '4', '5', '6', '1', '2', '3', 'C', '0', 'back'];
+  return (
+    <div className="overlay" style={{ placeItems: 'stretch end', padding: 0, background: 'rgba(15,23,42,.35)' }} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="weight-pad quick-token-pad">
+        <div className="row" style={{ gap: 10 }}>
+          <Ticket size={20} color="var(--primary)" />
+          <div className="grow"><b style={{ fontSize: 17 }}><bdi>{product.name}</bdi></b><div className="small muted">Token item · <Money value={price} /> each</div></div>
+          <Button size="sm" variant="ghost" onClick={onClose}>✕</Button>
+        </div>
+        <div className="wp-display">
+          <div className="small muted">How many?</div>
+          <div className="wp-val">{text || '0'}<span> {product.unit && product.unit !== 'pcs' ? product.unit : 'pcs'}</span></div>
+        </div>
+        <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+          {[1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20].map((n) => (
+            <Button key={n} size="sm" onClick={() => { setText(String(n)); setFresh(false); }}>{n}</Button>
+          ))}
+        </div>
+        <div className="wp-keys">
+          {keys.map((k) => (
+            <button key={k} className={`wp-key ${k === 'back' || k === 'C' ? 'alt' : ''}`} onClick={() => (k === 'C' ? (setText(''), setFresh(false)) : press(k))}>{k === 'back' ? <DeleteIcon size={22} /> : k}</button>
+          ))}
+        </div>
+        <div className="wp-total">
+          <div className="row"><span className="muted">Quantity</span><span className="grow" /><b>{qty}</b></div>
+          <div className="row"><span className="muted">Price</span><span className="grow" /><b style={{ fontSize: 22, color: 'var(--primary)' }}><Money value={qty * price} /></b></div>
+        </div>
+        <Button variant="primary" size="lg" icon={Ticket} onClick={sell} disabled={!ok} loading={busy}>Print token <kbd>Enter</kbd></Button>
+        <Button onClick={() => qty > 0 && onAddToBill(qty)} disabled={!qty || busy}>Add to the bill instead</Button>
       </div>
     </div>
   );

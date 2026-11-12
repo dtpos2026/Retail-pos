@@ -14,8 +14,12 @@ export function round2(n) {
  * @param {boolean} [p.taxEnabled]
  * @param {number} [p.taxRate]         percent
  * @param {boolean} [p.roundTotal]     round grand total to whole rupees
+ * @param {number} [p.covers]          dine-in persons ("per head") and the rate per person
+ * @param {number} [p.coverRate]
+ * @param {'percent'|'amount'} [p.serviceMode]  manual service charge: % of the bill after discount, or a fixed amount
+ * @param {number} [p.serviceValue]
  */
-export function calcOrder({ items = [], orderDiscount = 0, deliveryCharges = 0, taxEnabled = false, taxRate = 0, roundTotal = false }) {
+export function calcOrder({ items = [], orderDiscount = 0, deliveryCharges = 0, taxEnabled = false, taxRate = 0, roundTotal = false, covers = 0, coverRate = 0, serviceMode = 'percent', serviceValue = 0 }) {
   let subtotal = 0;
   let itemDiscount = 0;
   const lines = items.map((it) => {
@@ -35,7 +39,11 @@ export function calcOrder({ items = [], orderDiscount = 0, deliveryCharges = 0, 
   const taxable = round2(net - ordDisc);
   const tax = taxEnabled ? round2((taxable * (Number(taxRate) || 0)) / 100) : 0;
   const delivery = round2(Math.max(0, Number(deliveryCharges) || 0));
-  let total = round2(taxable + tax + delivery);
+  const persons = Math.max(0, Math.floor(Number(covers) || 0));
+  const coverCharge = round2(persons * Math.max(0, Number(coverRate) || 0));
+  const sv = Math.max(0, Number(serviceValue) || 0);
+  const serviceCharge = round2(serviceMode === 'amount' ? sv : (taxable * Math.min(100, sv)) / 100);
+  let total = round2(taxable + tax + delivery + coverCharge + serviceCharge);
   let roundOff = 0;
   if (roundTotal) {
     const rounded = Math.round(total);
@@ -51,6 +59,8 @@ export function calcOrder({ items = [], orderDiscount = 0, deliveryCharges = 0, 
     taxable,
     tax,
     deliveryCharges: delivery,
+    coverCharge,
+    serviceCharge,
     roundOff,
     total,
   };

@@ -14,12 +14,17 @@ export function emptyCart(orderType = 'takeaway', deliveryCharges = 0) {
     table: null,
     waiterId: '',
     riderId: '',
+    riderName: '', // typed by hand when the rider is not in the list
     customer: { id: null, name: '', mobile: '', address: '' },
     items: [],
     orderDiscount: 0,
     discountMode: 'amount', // amount | percent
     discountValue: 0,
     deliveryCharges,
+    covers: 0, // dine-in: number of persons for the "per head" charge
+    coverRate: 0,
+    serviceMode: 'percent', // dine-in manual service charge: percent | amount
+    serviceValue: 0,
     notes: '',
     selected: null,
   };
@@ -38,7 +43,7 @@ function reducer(state, a) {
     case 'add': {
       const p = a.product;
       const v = a.variant || null;
-      const price = v ? v.price : p.sale_price;
+      const price = a.price !== undefined ? round2(a.price) : v ? v.price : p.sale_price; // a.price: amount typed for a "khula sauda" item
       const existing = state.items.find((i) => i.productId === p.id && !i.notes && i.unitPrice === price && (i.variantId || null) === (v ? v.id : null));
       if (existing) {
         return {
@@ -53,12 +58,13 @@ function reducer(state, a) {
         name: v ? `${p.name} (${v.name})` : p.name,
         variantId: v ? v.id : null,
         unitPrice: price,
-        unitDiscount: v ? 0 : p.discount || 0,
+        unitDiscount: v || a.price !== undefined ? 0 : p.discount || 0,
         qty: a.qty || 1,
         notes: '',
         color: p.category_color,
         unit: p.unit,
         weighed: !!p.weighed,
+        openPrice: !!p.open_price,
       };
       return { ...state, selected: item.key, items: [...state.items, item] };
     }
@@ -107,6 +113,11 @@ export function cartFromOrder(o) {
     table: o.table_id ? { id: o.table_id, name: o.table_name } : null,
     waiterId: o.waiter_id || '',
     riderId: o.rider_id || '',
+    riderName: !o.rider_id && o.rider_name ? o.rider_name : '',
+    covers: o.covers || 0,
+    coverRate: o.cover_rate || 0,
+    serviceMode: o.service_mode || 'percent',
+    serviceValue: o.service_value || 0,
     customer: { id: o.customer_id, name: o.customer_name || '', mobile: o.customer_mobile || '', address: o.customer_address || '' },
     items: o.items.map((i) => ({
       key: newKey(),

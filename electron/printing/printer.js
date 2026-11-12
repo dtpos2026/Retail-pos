@@ -11,6 +11,7 @@ const escpos = require('./escpos');
 const rasterize = require('./rasterize');
 const rawPrint = require('./rawPrint');
 const detect = require('./detect');
+const serial = require('./serial');
 
 const MICRONS_PER_PX = 25400 / 96;
 let queue = Promise.resolve();
@@ -18,6 +19,11 @@ const inFlight = new Set();
 
 /** Developer / test hook: write the ESC/POS job to a folder instead of a printer. */
 const dumpDir = () => (!app.isPackaged && process.env.RPOS_PRINT_DUMP) || null;
+/** Developer / test hook: simulated COM / Bluetooth / USB printers (see serial.js, pairing.js). */
+if (!app.isPackaged && process.env.RPOS_FAKE_PRINTERS) {
+  serial.setFake(process.env.RPOS_FAKE_PRINTERS);
+  require('./pairing').setFake(process.env.RPOS_FAKE_PRINTERS);
+}
 
 // ---------------------------------------------------------------------------------------
 // Printer discovery: cached list, background refresh, automatic choice of the thermal printer
@@ -67,6 +73,15 @@ function autoName(list) {
 }
 
 async function resolvePrinter(name) {
+  if (serial.isSerialName(name)) {
+    // COM / Bluetooth printer: no Windows printer behind it, the port just has to exist
+    const port = serial.portOf(name);
+    if (!port) throw new AppError(`"${name}" is not a valid COM printer. Choose the printer again in Settings → Printers.`);
+    let ports = await serial.listPorts();
+    if (!ports.some((p) => p.port === port)) ports = await serial.listPorts({ fresh: true });
+    if (!ports.some((p) => p.port === port)) throw new AppError(`${port} was not found. Pair the Bluetooth printer again (Settings → Printers → Add a printer) or check its cable.`);
+    return name;
+  }
   let printers = await listPrinters();
   if (!printers.length) printers = await listPrinters({ fresh: true });
   if (!printers.length) throw new AppError('No printer is installed on this computer. Install your printer driver in Windows first.');
@@ -80,6 +95,23 @@ async function resolvePrinter(name) {
     if (!printers.some((p) => p.name === name)) throw new AppError(`Printer "${name}" was not found. Check that it is connected and turned on, or choose another printer in Settings.`);
   }
   return name;
+}
+
+function describeSerial(name, ports) {
+  const port = serial.portOf(name);
+  const p = ports.find((x) => x.port === port);
+  const label = p ? `${port}${p.deviceName ? ` · ${p.deviceName}` : ''}${p.kind === 'bluetooth' ? ' (Bluetooth)' : p.kind === 'usb' ? ' (USB)' : ''}` : port || name;
+  return {
+    name: label,
+    device: name,
+    auto: false,
+    serial: true,
+    found: !!p,
+    offline: false,
+    ready: !!p,
+    virtual: false,
+    message: p ? `${label} is set up — press Verify printers to check it answers.` : `${port || name} was not found. Pair the printer again or check its cable, then press Detect again.`,
+  };
 }
 
 function describe(list, chosen, helper) {
@@ -100,9 +132,13 @@ function describe(list, chosen, helper) {
 async function printerStatus({ fresh = false } = {}) {
   const list = await listPrinters({ fresh });
   const pr = settings.get('printer');
-  const helper = pr.method === 'thermal' && process.platform === 'win32' ? await rawPrint.ping() : null;
-  const receipt = describe(list, pr.receiptPrinter, helper);
-  const kitchen = describe(list, pr.tokenPrinter || pr.receiptPrinter, helper);
+  const anySerial = serial.isSerialName(pr.receiptPrinter) || serial.isSerialName(pr.tokenPrinter);
+  const ports = anySerial ? await serial.listPorts({ fresh }) : [];
+  const winNeeded = !serial.isSerialName(pr.receiptPrinter) || (pr.tokenPrinter && !serial.isSerialName(pr.tokenPrinter));
+  const helper = winNeeded && pr.method === 'thermal' && process.platform === 'win32' ? await rawPrint.ping() : null;
+  const one = (name) => (serial.isSerialName(name) ? describeSerial(name, ports) : describe(list, name, helper));
+  const receipt = one(pr.receiptPrinter);
+  const kitchen = one(pr.tokenPrinter || pr.receiptPrinter);
   return { ...receipt, helper, count: list.length, kitchen, kitchenSame: !pr.tokenPrinter || pr.tokenPrinter === pr.receiptPrinter };
 }
 
@@ -110,7 +146,26 @@ async function printerStatus({ fresh = false } = {}) {
 async function verifyPrinters() {
   await refreshPrinters();
   const st = await printerStatus({ fresh: true });
-  return { receipt: { role: 'Receipt printer', ...st }, kitchen: { role: 'Kitchen / token printer (KOT)', ...st.kitchen }, ok: st.ready && st.kitchen.ready };
+  // COM / Bluetooth printers: really open the port (Windows connects to the printer)
+  const check = async (x) => {
+    if (!x.serial || !x.found) return x;
+    const r = await serial.probe(serial.portOf(x.device));
+    return { ...x, ready: r.ok, message: r.ok ? `${x.name} answered and is ready.` : r.message };
+  };
+  const receipt = await check(st);
+  const kitchen = st.kitchenSame ? { ...st.kitchen, ready: receipt.ready, message: receipt.message } : await check(st.kitchen);
+  return { receipt: { role: 'Receipt printer', ...receipt }, kitchen: { role: 'Kitchen / token printer (KOT)', ...kitchen }, ok: receipt.ready && kitchen.ready };
+}
+
+/** Send a finished ESC/POS job to a Windows printer or straight to a COM / Bluetooth port. */
+async function sendJob(name, job, doc) {
+  if (serial.isSerialName(name)) {
+    const pr = settings.get('printer');
+    const port = serial.portOf(name);
+    const info = (await serial.listPorts()).find((p) => p.port === port);
+    return serial.send(port, job, { baud: pr.serialBaud, speed: pr.serialSpeed, kind: info?.kind });
+  }
+  return rawPrint.sendRaw(name, job, doc);
 }
 
 let monitor = null;
@@ -170,7 +225,7 @@ async function sendWithRetry(requested, deviceName, job, doc) {
   let lastErr;
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      await rawPrint.sendRaw(name, job, doc);
+      await sendJob(name, job, doc);
       return;
     } catch (err) {
       lastErr = err;
@@ -272,7 +327,8 @@ function printHtml(html, opts) {
   if (jobKey && inFlight.has(jobKey)) return Promise.reject(new AppError('This document is already printing.'));
   if (jobKey) inFlight.add(jobKey);
   const method = settings.get('printer').method;
-  const job = queue.then(() => (method === 'driver' ? printDriver(html, opts) : printThermal(html, opts)));
+  // a COM / Bluetooth printer has no Windows driver: always the direct (thermal) path
+  const job = queue.then(() => (method === 'driver' && !serial.isSerialName(opts.printerName) ? printDriver(html, opts) : printThermal(html, opts)));
   queue = job.catch(() => {});
   return job.finally(() => jobKey && inFlight.delete(jobKey));
 }
@@ -324,7 +380,7 @@ function warmUp() {
   startMonitor();
 }
 
-module.exports = { listPrinters, printerStatus, verifyPrinters, refreshPrinters, printHtml, renderPng, printWithDialog, htmlToPdf, warmUp, buildThermalJob, shutdown: () => {
+module.exports = { listPorts: (a) => serial.listPorts(a), listPrinters, printerStatus, verifyPrinters, refreshPrinters, printHtml, renderPng, printWithDialog, htmlToPdf, warmUp, buildThermalJob, shutdown: () => {
     if (monitor) clearInterval(monitor);
     monitor = null;
     rawPrint.shutdown();

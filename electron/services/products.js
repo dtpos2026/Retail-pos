@@ -5,7 +5,7 @@ const { AppError, assert } = require('../core/errors');
 const { nowLocal, cleanStr, round2, toNumber } = require('../core/util');
 
 const COLUMNS = `p.id, p.name, p.sku, p.barcode, p.category_id, p.sale_price, p.cost_price, p.discount,
-  p.stock_qty, p.low_stock, p.unit, p.track_stock, p.active, p.sort_order, p.updated_at, p.is_deal, p.weighed, p.is_ingredient,
+  p.stock_qty, p.low_stock, p.unit, p.track_stock, p.active, p.sort_order, p.updated_at, p.is_deal, p.weighed, p.is_ingredient, p.open_price,
   (SELECT group_concat(CAST(di.qty AS INTEGER) || ' × ' || cp.name, ' + ') FROM deal_items di JOIN products cp ON cp.id = di.product_id WHERE di.deal_id = p.id) AS deal_text,
   (p.image IS NOT NULL) AS has_image, c.name AS category_name, c.color AS category_color`;
 
@@ -16,6 +16,7 @@ function shape(p) {
     is_deal: !!p.is_deal,
     weighed: !!p.weighed,
     is_ingredient: !!p.is_ingredient,
+    open_price: !!p.open_price,
     track_stock: !!p.track_stock,
     has_image: !!p.has_image,
     image_url: p.has_image ? `posimg://product/${p.id}?v=${encodeURIComponent(p.updated_at)}` : null,
@@ -175,10 +176,12 @@ function save(input) {
     discount,
     low_stock: round2(toNumber(input.low_stock)),
     unit: cleanStr(input.unit || 'pcs', 20) || 'pcs',
-    track_stock: isDeal ? false : input.track_stock !== false,
+    // Restaurant inventory: only raw items carry stock; dishes take it through their recipe.
+    track_stock: isDeal ? false : restaurantDish(input, id) ? false : input.track_stock !== false,
     is_deal: isDeal,
     weighed: input.weighed === undefined ? (id ? (ctx.db.get('SELECT weighed FROM products WHERE id = ?', [id])?.weighed ? 1 : 0) : 0) : input.weighed ? 1 : 0,
     is_ingredient: input.is_ingredient === undefined ? (id ? (ctx.db.get('SELECT is_ingredient FROM products WHERE id = ?', [id])?.is_ingredient ? 1 : 0) : 0) : input.is_ingredient ? 1 : 0,
+    open_price: input.open_price === undefined ? (id ? (ctx.db.get('SELECT open_price FROM products WHERE id = ?', [id])?.open_price ? 1 : 0) : 0) : input.open_price ? 1 : 0,
     active: input.active !== false,
     updated_at: nowLocal(),
   };
@@ -231,6 +234,18 @@ function save(input) {
     }
     return productId;
   });
+}
+
+function restaurantDish(input, id) {
+  let mode = '';
+  try {
+    mode = require('./settings').get('inventory').mode;
+  } catch {
+    return false;
+  }
+  if (mode !== 'restaurant') return false;
+  const ingredient = input.is_ingredient === undefined ? !!(id && ctx.db.get('SELECT is_ingredient FROM products WHERE id = ?', [id])?.is_ingredient) : !!input.is_ingredient;
+  return !ingredient;
 }
 
 function remove({ id }) {

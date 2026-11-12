@@ -7,10 +7,11 @@ import { initials, formatQty } from '../lib/format';
 import { ImportMenuModal, BulkPicturesModal, DealForm } from '../components/BulkModals';
 import { PageHead, Button, SearchBox, Select, Loading, Empty, Money, Modal, Field, Input, NumberInput, Switch, Badge } from '../components/ui';
 
-const UNITS = ['pcs', 'plate', 'kg', 'g', 'litre', 'ml', 'dozen', 'pack', 'bottle', 'box', 'cup', 'glass', 'serving'];
+const UNITS = ['pcs', 'plate', 'portion', 'bowl', 'kg', 'g', 'litre', 'ml', 'dozen', 'pack', 'bottle', 'box', 'cup', 'glass', 'serving', 'roti', 'naan'];
 
 function ProductForm({ product, categories, allProducts = [], onClose, onSaved }) {
   const { toast, toastError, settings, confirm } = useApp();
+  const restaurant = settings.inventory.mode === 'restaurant'; // stock lives in raw inventory items; dishes use recipes
   const [f, setF] = useState(() => ({
     name: '', sku: '', barcode: '', category_id: categories[0]?.id || '', sale_price: '', cost_price: '', discount: 0,
     stock_qty: 0, low_stock: 5, unit: 'pcs', track_stock: true, active: true, weighed: false, is_ingredient: false, variants: [], recipe: [], ...product, image: undefined,
@@ -120,9 +121,15 @@ function ProductForm({ product, categories, allProducts = [], onClose, onSaved }
               <Switch checked={!!f.weighed} onChange={(on) => setF((x) => ({ ...x, weighed: on, unit: on && !['kg', 'g', 'litre', 'ml'].includes(x.unit) ? 'kg' : x.unit }))} />
             </div>
             <div className="row">
-              <div className="grow"><div className="b">Ingredient / raw material</div><div className="small faint">Hidden from the POS screen. Use it inside recipes (flour, cheese, beef…). Buy it with Inventory → Stock In.</div></div>
-              <Switch checked={!!f.is_ingredient} onChange={set('is_ingredient')} />
+              <div className="grow"><div className="b">Rate at sale (khula sauda)</div><div className="small faint">For daal, sabzi and the like: tapping the item asks for the amount (e.g. Rs 200). The sale price above is only the usual rate shown on the pad.</div></div>
+              <Switch checked={!!f.open_price} onChange={set('open_price')} />
             </div>
+            {!restaurant && (
+              <div className="row">
+                <div className="grow"><div className="b">Ingredient / raw material</div><div className="small faint">Hidden from the POS screen. Use it inside recipes (flour, cheese, beef…). Buy it with Inventory → Stock In.</div></div>
+                <Switch checked={!!f.is_ingredient} onChange={set('is_ingredient')} />
+              </div>
+            )}
           </div>
           <div className="full card card-pad col" style={{ background: 'var(--surface-2)', gap: 8 }}>
             <div className="row"><div className="grow"><div className="b">Variants (sizes)</div><div className="small faint">e.g. Small / Medium / Large — each with its own price. The cashier picks one when tapping the item.</div></div>
@@ -137,7 +144,8 @@ function ProductForm({ product, categories, allProducts = [], onClose, onSaved }
             ))}
           </div>
           <div className="full card card-pad col" style={{ background: 'var(--surface-2)', gap: 8 }}>
-            <div className="row"><div className="grow"><div className="b">Recipe management</div><div className="small faint">Ingredients used for ONE sale. Stock of each ingredient is reduced automatically and the cost price is calculated from them.</div></div></div>
+            <div className="row"><div className="grow"><div className="b">Recipe management{restaurant ? ' — raw items from Inventory' : ''}</div><div className="small faint">{restaurant ? 'What ONE plate / piece uses from your inventory (e.g. Chicken 0.5 kg, Ghee 0.08 kg). Every sale takes these out of stock and the cost price comes from them.' : 'Ingredients used for ONE sale. Stock of each ingredient is reduced automatically and the cost price is calculated from them.'}</div></div></div>
+            {restaurant && !allProducts.some((p) => p.is_ingredient) && <div className="small" style={{ color: 'var(--warning)' }}>No raw items yet — add them in Inventory → Add inventory item, then pick them here.</div>}
             {(f.recipe || []).map((r, i) => {
               const ing = allProducts.find((p) => p.id === r.ingredientId) || r;
               return (
@@ -152,7 +160,7 @@ function ProductForm({ product, categories, allProducts = [], onClose, onSaved }
             <div className="input-icon"><Input placeholder="Search an ingredient to add…" value={ingQ} onChange={(e) => setIngQ(e.target.value)} /></div>
             {ingQ.trim() && (
               <div className="col" style={{ gap: 4, border: '1px solid var(--border)', borderRadius: 10, padding: 6 }}>
-                {allProducts.filter((p) => !p.is_deal && p.id !== f.id && p.name.toLowerCase().includes(ingQ.trim().toLowerCase()) && !(f.recipe || []).some((r) => r.ingredientId === p.id)).slice(0, 6).map((p) => (
+                {allProducts.filter((p) => !p.is_deal && p.id !== f.id && (!restaurant || p.is_ingredient) && p.name.toLowerCase().includes(ingQ.trim().toLowerCase()) && !(f.recipe || []).some((r) => r.ingredientId === p.id)).slice(0, 6).map((p) => (
                   <button key={p.id} type="button" className="row" style={{ gap: 8, padding: '6px 8px', background: 'none', border: 0, cursor: 'pointer', textAlign: 'left' }} onClick={() => { setF((x) => ({ ...x, recipe: [...(x.recipe || []), { ingredientId: p.id, qty: 1 }] })); setIngQ(''); }}>
                     <Plus size={14} color="var(--primary)" /><b className="grow"><bdi>{p.name}</bdi></b><span className="muted small">{p.unit}{p.is_ingredient ? ' · ingredient' : ''}</span>
                   </button>
@@ -161,6 +169,11 @@ function ProductForm({ product, categories, allProducts = [], onClose, onSaved }
             )}
             {(f.recipe || []).length > 0 && <div className="small muted">Cost per sale: <b>Rs. {Math.round((f.recipe || []).reduce((s, r) => s + (Number(r.qty) || 0) * ((allProducts.find((p) => p.id === r.ingredientId) || r).cost_price || 0), 0) * 100) / 100}</b></div>}
           </div>
+          {restaurant ? (
+            <div className="full card card-pad small muted" style={{ background: 'var(--surface-2)' }}>
+              <b style={{ color: 'var(--text)' }}>Stock</b> — in restaurant inventory a dish has no stock of its own. Its recipe above takes the raw items out of Inventory with every sale.
+            </div>
+          ) : (
           <div className="full card card-pad" style={{ background: 'var(--surface-2)' }}>
             <div className="row" style={{ marginBottom: 10 }}>
               <div className="grow"><div className="b">Track stock</div><div className="small faint">{settings.inventory.enabled ? 'Sales reduce stock automatically.' : 'Inventory is disabled in Settings — stock will not change.'}</div></div>
@@ -177,6 +190,7 @@ function ProductForm({ product, categories, allProducts = [], onClose, onSaved }
               </div>
             )}
           </div>
+          )}
         </div>
       </div>
     </Modal>
@@ -218,13 +232,15 @@ export default function Products() {
   const filtered = useMemo(() => {
     if (!rows) return [];
     const s = search.trim().toLowerCase();
+    const restaurant = settings.inventory.mode === 'restaurant';
     return rows.filter(
       (p) =>
+        (!restaurant || !p.is_ingredient) && // raw items are managed in Inventory
         (!cat || String(p.category_id) === cat) &&
         (!status || (status === 'active' ? p.active : status === 'inactive' ? !p.active : p.track_stock && p.stock_qty <= p.low_stock)) &&
         (!s || p.name.toLowerCase().includes(s) || (p.sku || '').toLowerCase().includes(s) || (p.barcode || '').includes(s))
     );
-  }, [rows, search, cat, status]);
+  }, [rows, search, cat, status, settings.inventory.mode]);
 
   return (
     <div className="col" style={{ gap: 16 }}>
@@ -248,7 +264,7 @@ export default function Products() {
           <div className="table-wrap" style={{ maxHeight: 'calc(100vh - 290px)' }}>
             <table className="table">
               <thead>
-                <tr><th>Product</th><th>Category</th><th>Code</th><th className="num">Price</th><th className="num">Cost</th>{settings.inventory.enabled && <th className="num">Stock</th>}<th>Status</th><th /></tr>
+                <tr><th>Product</th><th>Category</th><th>Code</th><th className="num">Price</th><th className="num">Cost</th>{settings.inventory.enabled && settings.inventory.mode !== 'restaurant' && <th className="num">Stock</th>}<th>Status</th><th /></tr>
               </thead>
               <tbody>
                 {filtered.map((p) => (
@@ -263,7 +279,7 @@ export default function Products() {
                     <td className="muted">{p.sku || p.barcode || '—'}</td>
                     <td className="num b"><Money value={p.sale_price} />{p.discount > 0 && <div className="small" style={{ color: 'var(--success)' }}>−<Money value={p.discount} /></div>}</td>
                     <td className="num muted">{p.cost_price ? <Money value={p.cost_price} /> : '—'}</td>
-                    {settings.inventory.enabled && (
+                    {settings.inventory.enabled && settings.inventory.mode !== 'restaurant' && (
                       <td className="num">{p.track_stock ? <Badge color={p.stock_qty <= 0 ? 'red' : p.stock_qty <= p.low_stock ? 'amber' : 'green'}>{formatQty(p.stock_qty)}</Badge> : <span className="faint">—</span>}</td>
                     )}
                     <td>{p.active ? <Badge color="green">Active</Badge> : <Badge>Inactive</Badge>}</td>

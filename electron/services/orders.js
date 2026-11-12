@@ -130,6 +130,8 @@ function save(input) {
       const unitPrice = round2(toNumber(it.unitPrice, variant ? variant.price : product ? product.sale_price : 0));
       const unitDiscount = round2(Math.min(unitPrice, Math.max(0, toNumber(it.unitDiscount))));
       if (unitDiscount > (product ? product.discount : 0) + 0.001) manualDiscount = true;
+      // A different rate on a fixed-price item is a discount (needs permission); "khula sauda" items take any amount.
+      if (product && !product.open_price && !product.weighed && unitPrice + 0.001 < (variant ? variant.price : product.sale_price)) manualDiscount = true;
       const name = cleanStr(it.name || (variant ? `${product.name} (${variant.name})` : product?.name), 120);
       assert(name, 'Item name is required.');
       return {
@@ -149,10 +151,25 @@ function save(input) {
     if (manualDiscount && !can(user, 'discount')) throw new AppError('You do not have permission to give discounts.');
 
     const deliveryCharges = orderType === 'delivery' ? toNumber(input.deliveryCharges) : 0;
+    // dine-in only: per head (persons x rate) and a manual service charge — each only when switched on in Settings
+    const dine = orderType === 'dine_in';
+    let covers = 0;
+    let coverRate = 0;
+    if (dine && sales.perHeadEnabled && toNumber(input.covers) > 0) {
+      covers = Math.min(999, Math.floor(toNumber(input.covers)));
+      coverRate = input.coverRate === undefined || input.coverRate === '' ? Number(sales.perHeadRate) || 0 : Math.max(0, toNumber(input.coverRate));
+    }
+    const serviceMode = input.serviceMode === 'amount' ? 'amount' : 'percent';
+    const serviceValue = dine && sales.serviceEnabled ? Math.max(0, toNumber(input.serviceValue)) : 0;
+    assert(serviceMode !== 'percent' || serviceValue <= 100, 'Service charge cannot be more than 100%.');
     const totals = calcOrder({
       items,
       orderDiscount: toNumber(input.orderDiscount),
       deliveryCharges,
+      covers,
+      coverRate,
+      serviceMode,
+      serviceValue,
       taxEnabled: sales.taxEnabled,
       taxRate: sales.taxRate,
       roundTotal: sales.roundTotal,
@@ -173,7 +190,12 @@ function save(input) {
     if (customerId && !customerName) customerName = ctx.db.get('SELECT name FROM customers WHERE id = ?', [customerId])?.name || null;
 
     const waiter = orderType === 'dine_in' ? staff.pick(input.waiterId, 'waiter') : null;
-    const rider = orderType === 'delivery' ? staff.pick(input.riderId, 'rider') : null;
+    let rider = orderType === 'delivery' ? staff.pick(input.riderId, 'rider') : null;
+    if (orderType === 'delivery' && !rider) {
+      const typed = cleanStr(input.riderName, 60);
+      if (typed) rider = { id: null, name: typed }; // a rider who is not in the list, typed by the cashier
+    }
+    if (orderType === 'delivery' && sales.requireRider) assert(rider, 'Select the rider for this delivery (or type the rider\'s name).');
 
     // ---- table ---------------------------------------------------------
     let table = null;
@@ -214,6 +236,12 @@ function save(input) {
       tax_rate: sales.taxEnabled ? sales.taxRate : 0,
       tax_amount: totals.tax,
       delivery_charges: totals.deliveryCharges,
+      covers,
+      cover_rate: coverRate,
+      cover_charge: totals.coverCharge,
+      service_mode: serviceMode,
+      service_value: serviceValue,
+      service_charge: totals.serviceCharge,
       round_off: totals.roundOff,
       total: totals.total,
       cost_total: costTotal,
@@ -295,7 +323,7 @@ function save(input) {
       if (table) ctx.db.run("UPDATE dining_tables SET status = 'available', current_order_id = NULL WHERE id = ?", [table.id]);
 
       const mode = ['combined', 'item', 'none'].includes(input.tokenMode) ? input.tokenMode : tokenCfg.orderTypes.includes(orderType) ? tokenCfg.mode : 'none';
-      if (tokenCfg.enabled && mode !== 'none') tokens = createTokens(orderId, mode, items);
+      if ((tokenCfg.enabled || input.forceToken) && mode !== 'none') tokens = createTokens(orderId, mode, items);
     }
 
     return get({ id: orderId });
@@ -323,6 +351,38 @@ function createTokens(orderId, mode, items) {
   }
   ctx.db.run('UPDATE orders SET token_no = ? WHERE id = ?', [numbers.join(', '), orderId]);
   return numbers;
+}
+
+/** Is this product a "token item" (roti, naan…) for the given POS mode? */
+function isQuickToken(product, orderType) {
+  const t = settings.get('token');
+  if (!t.quickEnabled || !product || product.is_deal) return false;
+  if (!(t.quickOrderTypes || []).includes(orderType)) return false;
+  return (t.quickProductIds || []).map(Number).includes(Number(product.id)) || (!!product.category_id && (t.quickCategoryIds || []).map(Number).includes(Number(product.category_id)));
+}
+
+/**
+ * Token item sold on its own: a paid counter (takeaway) sale with a priced token and nothing else
+ * (no bill, no kitchen ticket). Used for roti / naan counters.
+ */
+function quickToken({ productId, qty, orderType }) {
+  const p = ctx.db.get('SELECT * FROM products WHERE id = ? AND active = 1', [Number(productId)]);
+  assert(p, 'This item no longer exists.');
+  assert(isQuickToken(p, orderType || 'takeaway'), `"${p.name}" is not a token item here. Check Settings → Tokens → Token items.`);
+  const q = Math.round((toNumber(qty) + Number.EPSILON) * 1000) / 1000;
+  assert(q > 0, 'Enter how many.');
+  assert(settings.get('sales').enableTakeaway, 'Token items are sold as counter (takeaway) sales — switch on Takeaway in Settings → Sales & Tax.');
+  const sales = settings.get('sales');
+  const { total } = calcOrder({ items: [{ qty: q, unitPrice: p.sale_price, unitDiscount: p.discount || 0 }], taxEnabled: sales.taxEnabled, taxRate: sales.taxRate, roundTotal: sales.roundTotal });
+  return save({
+    orderType: 'takeaway',
+    action: 'pay',
+    items: [{ productId: p.id, name: p.name, qty: q, unitPrice: p.sale_price, unitDiscount: p.discount || 0 }],
+    payment: { method: methodKeys().includes('cash') ? 'cash' : methodKeys().find((m) => m !== 'bank') || methodKeys()[0], tendered: total },
+    tokenMode: 'combined',
+    forceToken: true,
+    notes: 'Token item',
+  });
 }
 
 /** Generate a token for an already completed order that has none (e.g. forgot to tick token). */
@@ -385,4 +445,4 @@ function receivePayment({ id, amount, method }) {
   return get({ id: o.id });
 }
 
-module.exports = { ORDER_TYPES, get, list, pending, save, addToken, cancel, refund, receivePayment };
+module.exports = { quickToken, isQuickToken, ORDER_TYPES, get, list, pending, save, addToken, cancel, refund, receivePayment };

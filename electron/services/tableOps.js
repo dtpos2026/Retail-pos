@@ -48,6 +48,10 @@ function recalc(orderId, orderDiscount) {
     items: items.map((i) => ({ qty: i.qty, unitPrice: i.unit_price, unitDiscount: i.qty ? i.discount / i.qty : 0 })),
     orderDiscount: disc,
     deliveryCharges: 0,
+    covers: o.covers,
+    coverRate: o.cover_rate,
+    serviceMode: o.service_mode,
+    serviceValue: o.service_value,
     taxEnabled: sales.taxEnabled,
     taxRate: sales.taxRate,
     roundTotal: sales.roundTotal,
@@ -55,8 +59,8 @@ function recalc(orderId, orderDiscount) {
   items.forEach((i, idx) => ctx.db.run('UPDATE order_items SET discount = ?, total = ? WHERE id = ?', [totals.lines[idx].discount, totals.lines[idx].total, i.id]));
   const cost = round2(items.reduce((s, i) => s + i.cost_price * i.qty, 0));
   ctx.db.run(
-    `UPDATE orders SET subtotal = ?, item_discount = ?, order_discount = ?, tax_rate = ?, tax_amount = ?, round_off = ?, total = ?, cost_total = ?, updated_at = ? WHERE id = ?`,
-    [totals.subtotal, totals.itemDiscount, totals.orderDiscount, sales.taxEnabled ? sales.taxRate : 0, totals.tax, totals.roundOff, totals.total, cost, nowLocal(), orderId]
+    `UPDATE orders SET subtotal = ?, item_discount = ?, order_discount = ?, tax_rate = ?, tax_amount = ?, cover_charge = ?, service_charge = ?, round_off = ?, total = ?, cost_total = ?, updated_at = ? WHERE id = ?`,
+    [totals.subtotal, totals.itemDiscount, totals.orderDiscount, sales.taxEnabled ? sales.taxRate : 0, totals.tax, totals.coverCharge, totals.serviceCharge, totals.roundOff, totals.total, cost, nowLocal(), orderId]
   );
 }
 

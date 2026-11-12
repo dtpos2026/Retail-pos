@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Store, ReceiptText, Printer, Ticket, Percent, Wallet, Boxes, DatabaseBackup, KeyRound, SlidersHorizontal, Save, Upload, X, RefreshCw,
-  FolderOpen, HardDriveDownload, RotateCcw, CheckCircle2, AlertTriangle, Usb, Bluetooth, Database, Trash2, FlaskConical, FileText, Lock, Palette, ChefHat, Zap, MoveHorizontal, Landmark, LifeBuoy, UserRound, Plus, Bike, ShieldCheck, MapPin, FileSpreadsheet, FileJson,
+  FolderOpen, HardDriveDownload, RotateCcw, CheckCircle2, AlertTriangle, Usb, Bluetooth, Database, Trash2, FlaskConical, FileText, Lock, Palette, ChefHat, Zap, MoveHorizontal, Landmark, LifeBuoy, UserRound, Plus, Bike, ShieldCheck, MapPin, FileSpreadsheet, FileJson, BookOpen,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { useApp } from '../context/AppContext';
@@ -11,6 +11,9 @@ import { Button, Field, Input, NumberInput, Select, ToggleRow, Seg, Tabs, Loadin
 import ReceiptPreview from '../components/ReceiptPreview';
 import { LicenseActivateForm } from './Activation';
 import SupportBox from '../components/SupportBox';
+import InventoryModeCard from '../components/InventoryMode';
+import AddPrinterModal from '../components/AddPrinter';
+import HelpGuide from '../components/HelpGuide';
 import { applyAppearance } from '../context/AppContext';
 import { BRAND } from '@shared/brand.mjs';
 import { DT_LOCKUP_WHITE, ContactButtons } from '../components/Brand';
@@ -309,6 +312,8 @@ function PrinterTab() {
   const [status, setStatus] = useState(null);
   const [verify, setVerify] = useState(null);
   const [verifying, setVerifying] = useState(false);
+  const [ports, setPorts] = useState([]);
+  const [adding, setAdding] = useState(false);
   const runVerify = async () => {
     setVerifying(true);
     try {
@@ -322,13 +327,18 @@ function PrinterTab() {
   const load = (fresh = false) => {
     api('print.printers', { fresh }).then(setPrinters).catch((e) => { toastError(e); setPrinters([]); });
     api('print.status', { fresh }).then(setStatus).catch(() => {});
+    api('printers.ports', { fresh }).then(setPorts).catch(() => setPorts([]));
   };
   useEffect(() => {
     load();
     const t = setInterval(() => api('print.status').then(setStatus).catch(() => {}), 10000);
     return () => clearInterval(t);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  const opts = [{ value: '', label: '— Auto-detect thermal printer (recommended) —' }, ...(printers || []).map((p) => ({ value: p.name, label: `${p.displayName}${p.isDefault ? ' (default)' : ''}` }))];
+  // COM / Bluetooth printers (no driver) are listed after the Windows printers; a chosen port that is missing stays visible
+  const kindLabel = (k) => (k === 'bluetooth' ? 'Bluetooth' : k === 'usb' ? 'USB-serial' : 'serial');
+  const portOpts = ports.map((p) => ({ value: p.name, label: `${p.port}${p.deviceName ? ` · ${p.deviceName}` : ''} (${kindLabel(p.kind)}, direct)` }));
+  const missing = [s.v.receiptPrinter, s.v.tokenPrinter].filter((n, i, a) => n && /^serial:/i.test(n) && a.indexOf(n) === i && !ports.some((p) => p.name === n)).map((n) => ({ value: n, label: `${n.slice(7)} (not found — pair again)` }));
+  const opts = [{ value: '', label: '— Auto-detect thermal printer (recommended) —' }, ...(printers || []).map((p) => ({ value: p.name, label: `${p.displayName}${p.isDefault ? ' (default)' : ''}` })), ...portOpts, ...missing];
   const test = async (kind) => {
     if (s.dirty && !(await s.save())) return;
     setTesting(kind);
@@ -347,7 +357,9 @@ function PrinterTab() {
         <div className="row">
           <div className="b grow">Installed printers ({printers ? printers.length : '…'})</div>
           <Button size="sm" icon={RefreshCw} onClick={() => load(true)}>Detect again</Button>
+          <Button size="sm" variant="primary" icon={Plus} onClick={() => setAdding(true)}>Add a printer</Button>
         </div>
+        {adding && <AddPrinterModal s={s} onClose={() => setAdding(false)} onChanged={() => load(true)} />}
         <div className="card card-pad col" style={{ gap: 10, background: 'var(--surface-2)' }}>
           <div className="row"><ShieldCheck size={18} color="var(--primary)" /><b className="grow">Print verification</b><Button size="sm" variant="primary" icon={ShieldCheck} onClick={runVerify} loading={verifying}>Verify printers</Button></div>
           {!verify ? <div className="small muted">Checks that the receipt printer and the kitchen (KOT) printer are connected and ready — before the first bill. This also runs automatically in the background.</div> : [verify.receipt, verify.kitchen].map((p) => (
@@ -413,8 +425,8 @@ function PrinterTab() {
       <div className="card card-pad col small" style={{ gap: 12 }}>
         <div className="b" style={{ fontSize: 15 }}>Printer setup help</div>
         <div className="row" style={{ alignItems: 'flex-start' }}><MoveHorizontal size={18} className="faint" /><div><b>Uneven side margins?</b> Press <b>Margin test</b>. If the left gap is bigger, set <b>Side balance</b> to a negative number (e.g. −8); if the right gap is bigger, use a positive number (e.g. 8). Each 8 dots = 1 mm.</div></div>
-        <div className="row" style={{ alignItems: 'flex-start' }}><Usb size={18} className="faint" /><div><b>USB thermal printer:</b> install the driver from the printer CD/website. It then appears in the list above (e.g. "POS-80", "XP-58", "BlackCopper").</div></div>
-        <div className="row" style={{ alignItems: 'flex-start' }}><Bluetooth size={18} className="faint" /><div><b>Bluetooth printer:</b> pair it in Windows Settings → Bluetooth &amp; devices, then install its driver so Windows lists it as a printer. It will then appear above.</div></div>
+        <div className="row" style={{ alignItems: 'flex-start' }}><Bluetooth size={18} className="faint" /><div><b>Bluetooth printer (58mm mini, MediaLink, SpeedX, Xprinter…):</b> press <b>Add a printer</b> → Bluetooth → Search → Pair (PIN 0000 / 1234). No driver needed — it prints straight to its COM port.</div></div>
+        <div className="row" style={{ alignItems: 'flex-start' }}><Usb size={18} className="faint" /><div><b>USB thermal printer:</b> the driver from the printer CD/website is best — it then appears in the list (e.g. "POS-80", "XP-58"). No driver? <b>Add a printer</b> → USB installs the built-in Windows driver for it.</div></div>
         <div className="row" style={{ alignItems: 'flex-start' }}><ReceiptText size={18} className="faint" /><div><b>Paper size:</b> choose 58mm or 80mm in the Receipt tab (and Tokens tab). In thermal mode DT Retail POS controls the length itself, so the Windows paper setting does not matter.</div></div>
         <div className="row" style={{ alignItems: 'flex-start' }}><Zap size={18} className="faint" /><div><b>Blank paper at the top?</b> Use the <b>Thermal — fast</b> method. If your printer prints strange characters, switch to <b>Windows driver</b>.</div></div>
         <div className="row" style={{ alignItems: 'flex-start' }}><AlertTriangle size={18} className="faint" /><div><b>Cut position:</b> adjust <b>Extra feed</b> so the cut lands right after the last line. Choose <b>Compatibility cut</b> for older printers.</div></div>
@@ -424,6 +436,58 @@ function PrinterTab() {
 }
 
 // ------------------------------------------------------------------ Tokens
+/** Token items (roti, naan…): choose items or whole categories; tapping one on the POS sells it at once with a priced token. */
+function TokenItemsCard({ s }) {
+  const v = s.v;
+  const [cats, setCats] = useState([]);
+  const [prods, setProds] = useState([]);
+  const [q, setQ] = useState('');
+  useEffect(() => {
+    api('categories.list').then(setCats).catch(() => {});
+    api('products.list', { activeOnly: true }).then(setProds).catch(() => {});
+  }, []);
+  const toggle = (key, id, on) => s.set(key)(on ? [...new Set([...(v[key] || []), id])] : (v[key] || []).filter((x) => x !== id));
+  const chosenProducts = prods.filter((p) => (v.quickProductIds || []).includes(p.id));
+  const found = q.trim() ? prods.filter((p) => !p.is_deal && p.name.toLowerCase().includes(q.trim().toLowerCase()) && !(v.quickProductIds || []).includes(p.id)).slice(0, 6) : [];
+  return (
+    <div className="card card-pad col" style={{ gap: 12 }}>
+      <ToggleRow title="Token items (roti, naan…)" desc="Tapping such an item asks how many and sells it at once: a token with the price is printed — no bill and no kitchen ticket. Works even when the token system is off." checked={v.quickEnabled} onChange={s.set('quickEnabled')} />
+      {v.quickEnabled && (
+        <>
+          <div className="toggle-row">
+            <div className="t"><div>Use it on the POS in</div><div>Recorded as a paid counter (takeaway) sale.</div></div>
+            {[['takeaway', 'Takeaway'], ['dine_in', 'Dine-In'], ['delivery', 'Delivery']].map(([k, l]) => <Check key={k} label={l} checked={(v.quickOrderTypes || []).includes(k)} onChange={(on) => toggle('quickOrderTypes', k, on)} />)}
+          </div>
+          <div>
+            <div className="label" style={{ marginBottom: 6 }}>Whole categories</div>
+            <div className="row wrap" style={{ gap: 6 }}>
+              {cats.length === 0 && <span className="small muted">No categories yet.</span>}
+              {cats.map((c) => {
+                const on = (v.quickCategoryIds || []).includes(c.id);
+                return <button type="button" key={c.id} className={`chip-toggle ${on ? 'on' : ''}`} onClick={() => toggle('quickCategoryIds', c.id, !on)}><span className="dot" style={{ background: c.color }} /><bdi>{c.name}</bdi>{on && <CheckCircle2 size={14} />}</button>;
+              })}
+            </div>
+          </div>
+          <div>
+            <div className="label" style={{ marginBottom: 6 }}>Single items</div>
+            <div className="row wrap" style={{ gap: 6, marginBottom: 8 }}>
+              {chosenProducts.map((p) => <button type="button" key={p.id} className="chip-toggle on" onClick={() => toggle('quickProductIds', p.id, false)} title="Remove"><bdi>{p.name}</bdi> <X size={13} /></button>)}
+              {chosenProducts.length === 0 && <span className="small muted">None — search below to add, e.g. Roti, Naan, Kulcha.</span>}
+            </div>
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search an item to add (Roti, Naan…)" />
+            {found.length > 0 && (
+              <div className="col" style={{ gap: 4, marginTop: 6 }}>
+                {found.map((p) => <button type="button" key={p.id} className="list-pick" onClick={() => { toggle('quickProductIds', p.id, true); setQ(''); }}><Plus size={14} /> <bdi>{p.name}</bdi> <span className="muted small">{p.category_name || ''}</span></button>)}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+      <SaveBar s={s} />
+    </div>
+  );
+}
+
 function TokenTab() {
   const s = useSection('token');
   const { toast, toastError, confirm } = useApp();
@@ -444,6 +508,7 @@ function TokenTab() {
       <div className="col" style={{ gap: 16 }}>
         <div className="card card-pad">
           <ToggleRow title="Enable token system" desc="Print a token number for customers / kitchen." checked={v.enabled} onChange={s.set('enabled')} />
+          {!v.enabled && <ToggleRow title="Kitchen ticket (KOT) instead" desc="With tokens off, every paid takeaway / delivery order prints a kitchen ticket for the kitchen." checked={v.kotWhenOff} onChange={s.set('kotWhenOff')} />}
           <div className="toggle-row">
             <div className="t"><div>Default token mode</div><div>Can be changed on each payment.</div></div>
             <Seg value={v.mode} onChange={s.set('mode')} options={[{ value: 'combined', label: 'Combined' }, { value: 'item', label: 'Per item' }, { value: 'none', label: 'Normal bill only' }]} />
@@ -458,6 +523,7 @@ function TokenTab() {
             {[['dine_in', 'Dine-In'], ['takeaway', 'Takeaway'], ['delivery', 'Delivery']].map(([k, l]) => <Check key={k} label={l} checked={v.orderTypes.includes(k)} onChange={(on) => toggleType(k, on)} />)}
           </div>
         </div>
+        <TokenItemsCard s={s} />
         <div className="card card-pad col">
           <div className="b">Token design</div>
           <div className="grid grid-3" style={{ gap: 10 }}>
@@ -525,8 +591,25 @@ function SalesTab() {
             <Field label="Tax rate (%)"><NumberInput value={v.taxRate} onChange={(x) => s.set('taxRate')(Number(x))} /></Field>
           </div>
         )}
+        <ToggleRow title="Per head charge (Dine-In)" desc="Charge each person at the table (cover charge). On the POS press “Per head”, type how many persons — it is added to the bill." checked={!!v.perHeadEnabled} onChange={s.set('perHeadEnabled')} />
+        {v.perHeadEnabled && (
+          <div className="form-grid" style={{ margin: '10px 0' }}>
+            <Field label="Name on the bill"><Input value={v.perHeadLabel} onChange={(e) => s.set('perHeadLabel')(e.target.value)} placeholder="Per head" /></Field>
+            <Field label="Rate per person (Rs.)" hint="Can be changed on each bill"><NumberInput value={v.perHeadRate} onChange={(x) => s.set('perHeadRate')(Number(x))} /></Field>
+          </div>
+        )}
+        <ToggleRow title="Service charge (Dine-In, added by hand)" desc="Shows a “Service” button on dine-in bills. The cashier adds it when it applies — as a percent of the bill or a fixed amount." checked={!!v.serviceEnabled} onChange={s.set('serviceEnabled')} />
+        {v.serviceEnabled && (
+          <div className="form-grid" style={{ margin: '10px 0' }}>
+            <Field label="Name on the bill"><Input value={v.serviceLabel} onChange={(e) => s.set('serviceLabel')(e.target.value)} placeholder="Service charge" /></Field>
+            <Field label="Suggested type"><Select value={v.serviceMode} onChange={(e) => s.set('serviceMode')(e.target.value)} options={[{ value: 'percent', label: 'Percent (%)' }, { value: 'amount', label: 'Amount (Rs.)' }]} /></Field>
+            <Field label={v.serviceMode === 'percent' ? 'Suggested percent (%)' : 'Suggested amount (Rs.)'} hint="Can be changed on each bill"><NumberInput value={v.serviceValue} onChange={(x) => s.set('serviceValue')(Number(x))} /></Field>
+          </div>
+        )}
+        <div className="small faint" style={{ margin: '0 0 8px' }}>Per head and service charge are added after tax, like delivery charges.</div>
         <ToggleRow title="Round total to whole rupees" checked={v.roundTotal} onChange={s.set('roundTotal')} />
         <ToggleRow title="Allow credit (unpaid) sales" desc="Customer pays later — tracked as Due" checked={v.allowCredit} onChange={s.set('allowCredit')} />
+        <ToggleRow title="Rider is required for delivery" desc="A delivery order cannot be saved or paid without a rider (choose from Waiters & Riders or type the name)." checked={!!v.requireRider} onChange={s.set('requireRider')} />
         <SaveBar s={s} />
       </div>
     </div>
@@ -583,11 +666,15 @@ function PaymentTab() {
 // ------------------------------------------------------------------ Inventory
 function InventoryTab() {
   const s = useSection('inventory');
+  const { settings } = useApp();
   return (
-    <div className="card card-pad" style={{ maxWidth: 720 }}>
-      <ToggleRow title="Enable inventory tracking" desc="Sales reduce stock; stock in/out and low stock alerts. When off, the POS works normally without stock." checked={s.v.enabled} onChange={s.set('enabled')} />
-      <ToggleRow title="Allow selling when out of stock" desc="Recommended for restaurants. Turn off to block sales that exceed stock." checked={s.v.allowNegative} onChange={s.set('allowNegative')} />
-      <SaveBar s={s} />
+    <div className="col" style={{ gap: 16, maxWidth: 820 }}>
+      <InventoryModeCard />
+      <div className="card card-pad">
+        <ToggleRow title="Enable inventory tracking" desc={settings.inventory.mode === 'restaurant' ? 'Sales take the raw items of each dish (its recipe) out of stock; stock in/out and low stock alerts. When off, the POS works normally without stock.' : 'Sales reduce stock; stock in/out and low stock alerts. When off, the POS works normally without stock.'} checked={s.v.enabled} onChange={s.set('enabled')} />
+        <ToggleRow title="Allow selling when out of stock" desc="Recommended for restaurants. Turn off to block sales that exceed stock." checked={s.v.allowNegative} onChange={s.set('allowNegative')} />
+        <SaveBar s={s} />
+      </div>
     </div>
   );
 }
@@ -792,10 +879,18 @@ function StaffTab() {
 }
 
 function SupportTab() {
+  const [view, setView] = useState('guide');
   return (
-    <div className="card card-pad col" style={{ maxWidth: 720, gap: 14 }}>
-      <SupportBox />
-      <div className="small faint">When this computer is online, DT Retail POS shares basic device details with your provider for support and licensing: computer name, Windows version, model, memory, IP address and the approximate city of your internet connection. Your sales data, customers and prices are never sent.</div>
+    <div className="col" style={{ gap: 14 }}>
+      <div><Seg value={view} onChange={setView} options={[{ value: 'guide', label: 'Help guide · مدد گائیڈ', icon: BookOpen }, { value: 'message', label: 'Message provider', icon: LifeBuoy }]} /></div>
+      {view === 'guide' ? (
+        <HelpGuide />
+      ) : (
+        <div className="card card-pad col" style={{ maxWidth: 720, gap: 14 }}>
+          <SupportBox />
+          <div className="small faint">When this computer is online, DT Retail POS shares basic device details with your provider for support and licensing: computer name, Windows version, model, memory, IP address and the approximate city of your internet connection. Your sales data, customers and prices are never sent.</div>
+        </div>
+      )}
     </div>
   );
 }

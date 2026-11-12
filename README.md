@@ -14,6 +14,17 @@ Retail-pos/                  ← POS software (Windows, offline). Run npm comman
 ```
 
 
+## What's new in v1.10.0
+
+- **Add a printer, inside the software** (Settings → Printers → *Add a printer*): **Bluetooth** search + pairing (PIN 0000 / 1234 tried automatically) for 58 mm mini printers (MediaLink, SpeedX, Xprinter…), the **COM port** they create (prints straight to it — **no driver**), and **USB without a driver** (installs Windows' built-in generic driver). COM / Bluetooth printers appear in the receipt and kitchen printer lists. → [docs/PRINTER_SETUP.md](docs/PRINTER_SETUP.md)
+- **Inventory: Retail or Restaurant** — chosen once, then **locked** (only a factory reset opens it). Restaurant: you add **raw items** (ghee, gosht, daal, chicken); menu dishes carry no stock and use the raw items through **recipe management**; every sale deducts them. Retail works as before. Inventory can still be switched on / off.
+- **Delivery rider is compulsory** (optional setting) — pick from the list or **type the name by hand**.
+- **Open rate ("khula sauda")**: items like daal / sabzi — tap the item and type the amount (Rs 200); the bill shows *Daal Sabzi … Rs 200*. Any bill line's rate can be edited (lowering a fixed price needs discount permission). New units: portion, bowl, roti, naan.
+- **Token items** (roti / naan): choose items or whole categories and the order types (e.g. Takeaway). Tapping one asks the quantity, then prints **one priced token** — no receipt, no KOT. With tokens switched off, a **KOT** prints instead.
+- **Dine-in per head + service charge**: persons × rate ("Per head"), and a manual **Service charge** in % or Rs, both set up in Settings → Sales & Tax and added by hand on the bill.
+- **Help guide** (Settings → Support): searchable, **English / اردو (Nastaliq)**, with icons, "where to find it" and step-by-step topics + FAQ.
+- Database migrations v6 (open rate) and v7 (per head / service charge).
+
 ## What's new in v1.9.0
 
 - **Forgot password?** The POS is offline, so the provider resets it: Super Admin → Devices / Licenses → key button → new password. The POS applies it automatically (or via *Forgot password or PIN? → Check for new password* on the login screen). Only a PBKDF2 hash travels, the old password stops working. → [docs/SUPER_ADMIN_SETUP.md](docs/SUPER_ADMIN_SETUP.md)

@@ -54,9 +54,9 @@ async function printReceipt({ orderId, reprint }) {
   });
 }
 
-async function printTokens({ orderId }) {
+async function printTokens({ orderId, priced = false }) {
   const cfg = settings.get('token');
-  const htmls = tokenHtmls({ orderId });
+  const htmls = tokenHtmls({ orderId, overrides: priced ? { token: { showItems: true, showPrices: true, showTotal: true } } : undefined });
   let result;
   for (let i = 0; i < htmls.length; i++) {
     result = await printer().printHtml(htmls[i], { printerName: tokenPrinter(), widthMm: cfg.paperWidth, jobKey: `token:${orderId}:${i}` });
@@ -88,7 +88,29 @@ async function printAfterSale({ orderId, receipt, token }) {
       out.errors.push(`Token: ${e.userFacing ? e.message : 'printing failed'}`);
     }
   }
+  const tk = settings.get('token');
+  if (!tk.enabled && tk.kotWhenOff && o.order_type !== 'dine_in') {
+    // no token system: the kitchen still gets its ticket
+    try {
+      out.kot = await printKot({ orderId });
+    } catch (e) {
+      out.errors.push(`Kitchen ticket: ${e.userFacing ? e.message : 'printing failed'}`);
+    }
+  }
   return out;
+}
+
+/** Token item (roti / naan) sold at once: only its priced token is printed — no bill, no KOT. */
+async function quickTokenSale({ productId, qty, orderType }) {
+  const o = orders.quickToken({ productId, qty, orderType });
+  let printed = null;
+  let error = null;
+  try {
+    printed = await printTokens({ orderId: o.id, priced: true });
+  } catch (e) {
+    error = e.userFacing ? e.message : 'Token printing failed — reprint it from Orders.';
+  }
+  return { order: o, printed, error };
 }
 
 function testPageHtml() {
@@ -157,6 +179,7 @@ async function printReportThermal({ key, from, to, width }) {
 }
 
 module.exports = {
+  quickTokenSale,
   TEMPLATES,
   TOKEN_DESIGNS,
   receiptHtml,

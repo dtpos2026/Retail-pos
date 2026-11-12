@@ -1,14 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Boxes, PackagePlus, PackageMinus, ClipboardCheck, History, AlertTriangle, Wallet, PackageX } from 'lucide-react';
+import { Boxes, PackagePlus, PackageMinus, ClipboardCheck, History, AlertTriangle, Wallet, PackageX, Plus, Pencil, Trash2, ChefHat } from 'lucide-react';
 import { api } from '../lib/api';
 import { useApp } from '../context/AppContext';
 import { formatDateTime, formatQty, formatMoney } from '../lib/format';
 import { PageHead, Button, Loading, Empty, Modal, Field, NumberInput, Input, SearchBox, Tabs, Stat, Badge, Money, Select } from '../components/ui';
+import InventoryModeCard from '../components/InventoryMode';
+
+const RAW_UNITS = ['kg', 'g', 'litre', 'ml', 'pcs', 'dozen', 'pack', 'bottle', 'box', 'tin', 'bag'];
 
 const TYPE_LABEL = { opening: 'Opening', in: 'Stock In', out: 'Stock Out', adjust: 'Adjustment', sale: 'Sale', return: 'Refund return' };
 
 export default function Inventory() {
-  const { settings, toast, toastError, can, reloadSettings } = useApp();
+  const { settings, toast, toastError, can, reloadSettings, confirm } = useApp();
+  const [item, setItem] = useState(null); // add / edit a raw inventory item (restaurant mode)
   const [tab, setTab] = useState('stock');
   const [data, setData] = useState(null);
   const [moves, setMoves] = useState(null);
@@ -55,12 +59,37 @@ export default function Inventory() {
     }
   };
 
+  const restaurant = settings.inventory.mode === 'restaurant';
+  const saveItem = async () => {
+    try {
+      await api('inventory.saveItem', item);
+      toast(item.id ? 'Item updated' : 'Inventory item added');
+      setItem(null);
+      load();
+    } catch (e) {
+      toastError(e);
+    }
+  };
+  const removeItem = async (p) => {
+    if (!(await confirm({ title: `Delete "${p.name}"?`, message: p.used_in ? `It is used in ${p.used_in} recipe(s), so it will be switched off instead of deleted.` : 'This raw item will be removed.', danger: true, confirmText: 'Delete' }))) return;
+    try {
+      const r = await api('inventory.removeItem', { id: p.id });
+      toast(r.deactivated ? 'Item switched off (still used in recipes or history)' : 'Item deleted');
+      load();
+    } catch (e) {
+      toastError(e);
+    }
+  };
+
   if (!data) return <Loading />;
   const OPS = { in: { title: 'Stock In (Purchase)', icon: PackagePlus }, out: { title: 'Stock Out (Waste / Use)', icon: PackageMinus }, adjust: { title: 'Adjust to Counted Stock', icon: ClipboardCheck } };
 
   return (
     <div className="col" style={{ gap: 16 }}>
-      <PageHead title="Inventory" sub="Track stock in, stock out and adjustments. Sales reduce stock automatically." />
+      <PageHead title="Inventory" sub={restaurant ? 'Raw items of your kitchen (ghee, chicken, mutton, daal, rice…). Each dish takes them out of stock through its recipe.' : 'Track stock in, stock out and adjustments. Sales reduce stock automatically.'}>
+        {restaurant && can('inventory') && <Button variant="primary" icon={Plus} onClick={() => setItem({ name: '', unit: 'kg', stock_qty: '', cost_price: '', low_stock: '' })}>Add inventory item</Button>}
+      </PageHead>
+      {!settings.inventory.modeLocked && <InventoryModeCard onSaved={load} />}
       {!settings.inventory.enabled && (
         <div className="card card-pad row" style={{ background: 'var(--warning-50)', borderColor: 'transparent' }}>
           <AlertTriangle color="var(--warning)" />
@@ -69,8 +98,8 @@ export default function Inventory() {
         </div>
       )}
       <div className="grid grid-4">
-        <Stat icon={Boxes} label="Tracked products" value={data.totals.items} color="#4f46e5" />
-        <Stat icon={Wallet} label="Stock value (cost)" value={formatMoney(data.totals.stockValue, cur)} hint={`Sale value ${formatMoney(data.totals.saleValue, cur)}`} color="#16a34a" />
+        <Stat icon={restaurant ? ChefHat : Boxes} label={restaurant ? 'Raw items' : 'Tracked products'} value={data.totals.items} color="#4f46e5" />
+        <Stat icon={Wallet} label="Stock value (cost)" value={formatMoney(data.totals.stockValue, cur)} hint={restaurant ? 'at average purchase cost' : `Sale value ${formatMoney(data.totals.saleValue, cur)}`} color="#16a34a" />
         <Stat icon={AlertTriangle} label="Low stock" value={data.totals.low} color="#d97706" />
         <Stat icon={PackageX} label="Out of stock" value={data.totals.out} color="#dc2626" />
       </div>
@@ -78,21 +107,25 @@ export default function Inventory() {
       {tab === 'stock' ? (
         <>
           <div className="card card-pad row">
-            <SearchBox value={search} onChange={setSearch} placeholder="Search product…" style={{ flex: 1 }} />
+            <SearchBox value={search} onChange={setSearch} placeholder={restaurant ? 'Search raw item…' : 'Search product…'} style={{ flex: 1 }} />
             <Select value={filter} onChange={(e) => setFilter(e.target.value)} style={{ width: 170 }} options={[{ value: '', label: 'All items' }, { value: 'low', label: 'Low stock' }, { value: 'out', label: 'Out of stock' }]} />
           </div>
           <div className="card">
             {rows.length === 0 ? (
-              <Empty icon={Boxes} title="No tracked products" text="Turn on 'Track stock' for products you want to count." />
+              restaurant ? (
+                <Empty icon={ChefHat} title="No raw items yet" text="Add what your kitchen buys — e.g. Chicken (kg), Ghee (kg), Daal Mash (kg), Rice (kg), Atta (kg). Then open a dish in Products → Recipe management and pick these items." action={can('inventory') && <Button variant="primary" icon={Plus} onClick={() => setItem({ name: '', unit: 'kg', stock_qty: '', cost_price: '', low_stock: '' })}>Add inventory item</Button>} />
+              ) : (
+                <Empty icon={Boxes} title="No tracked products" text="Turn on 'Track stock' for products you want to count." />
+              )
             ) : (
               <div className="table-wrap" style={{ maxHeight: 'calc(100vh - 430px)' }}>
                 <table className="table">
-                  <thead><tr><th>Product</th><th>Category</th><th className="num">Stock</th><th className="num">Low alert</th><th className="num">Cost</th><th className="num">Value</th><th /></tr></thead>
+                  <thead><tr><th>{restaurant ? 'Raw item' : 'Product'}</th><th>{restaurant ? 'Used in' : 'Category'}</th><th className="num">Stock</th><th className="num">Low alert</th><th className="num">{restaurant ? 'Cost / unit' : 'Cost'}</th><th className="num">Value</th><th /></tr></thead>
                   <tbody>
                     {rows.map((p) => (
                       <tr key={p.id}>
                         <td className="b"><bdi>{p.name}</bdi>{!p.active && <Badge>Inactive</Badge>}</td>
-                        <td className="muted"><bdi>{p.category_name || '—'}</bdi></td>
+                        <td className="muted">{restaurant ? (p.used_in ? `${p.used_in} recipe${p.used_in > 1 ? 's' : ''}` : 'not linked yet') : <bdi>{p.category_name || '—'}</bdi>}</td>
                         <td className="num"><Badge color={p.stock_qty <= 0 ? 'red' : p.stock_qty <= p.low_stock ? 'amber' : 'green'}>{formatQty(p.stock_qty)} {p.unit}</Badge></td>
                         <td className="num muted">{formatQty(p.low_stock)}</td>
                         <td className="num"><Money value={p.cost_price} /></td>
@@ -101,6 +134,7 @@ export default function Inventory() {
                           <Button size="sm" variant="soft" icon={PackagePlus} onClick={() => setOp({ type: 'in', product: p, qty: '', unitCost: p.cost_price, note: '' })}>In</Button>{' '}
                           <Button size="sm" icon={PackageMinus} onClick={() => setOp({ type: 'out', product: p, qty: '', note: '' })}>Out</Button>{' '}
                           <Button size="sm" icon={ClipboardCheck} onClick={() => setOp({ type: 'adjust', product: p, qty: p.stock_qty, note: '' })}>Adjust</Button>
+                          {restaurant && can('inventory') && <>{' '}<Button size="sm" variant="ghost" icon={Pencil} title="Edit item" onClick={() => setItem({ id: p.id, name: p.name, unit: p.unit, cost_price: p.cost_price, low_stock: p.low_stock })} /><Button size="sm" variant="ghost" icon={Trash2} title="Delete item" onClick={() => removeItem(p)} /></>}
                         </td>
                       </tr>
                     ))}
@@ -137,6 +171,26 @@ export default function Inventory() {
             </div>
           )}
         </div>
+      )}
+      {item && (
+        <Modal
+          title={item.id ? 'Edit inventory item' : 'Add inventory item'}
+          icon={ChefHat}
+          size="sm"
+          onClose={() => setItem(null)}
+          footer={<><Button onClick={() => setItem(null)}>Cancel</Button><Button variant="primary" onClick={saveItem}>Save</Button></>}
+        >
+          <div className="col">
+            <Field label="Item name *" hint="e.g. Chicken, Ghee, Daal Mash, Basmati rice, Atta"><Input autoFocus dir="auto" value={item.name} onChange={(e) => setItem({ ...item, name: e.target.value })} /></Field>
+            <div className="form-grid">
+              <Field label="Unit"><Select value={item.unit} onChange={(e) => setItem({ ...item, unit: e.target.value })} options={[...new Set([...RAW_UNITS, item.unit])].map((u) => ({ value: u, label: u }))} /></Field>
+              {!item.id && <Field label="Opening stock"><NumberInput value={item.stock_qty} onChange={(v) => setItem({ ...item, stock_qty: v })} placeholder="0" /></Field>}
+              <Field label={`Purchase cost per ${item.unit}`}><NumberInput value={item.cost_price} onChange={(v) => setItem({ ...item, cost_price: v })} placeholder="0" /></Field>
+              <Field label="Low stock alert at"><NumberInput value={item.low_stock} onChange={(v) => setItem({ ...item, low_stock: v })} placeholder="0" /></Field>
+            </div>
+            {item.id && <div className="small muted">Change the quantity with Stock In / Out / Adjust.</div>}
+          </div>
+        </Modal>
       )}
       {op && (
         <Modal
