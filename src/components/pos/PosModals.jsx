@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { Scale, Banknote, Ticket, Delete as DeleteIcon, Ruler, Percent, UserRound, Armchair, PauseCircle, PencilLine, PlusSquare, Search, Trash2, PlayCircle, Users } from 'lucide-react';
 import { Modal, Button, Field, Input, NumberInput, Seg, Empty, Money, StatusBadge, SearchBox } from '../ui';
 import { api } from '../../lib/api';
-import { useApp } from '../../context/AppContext';
 import { formatDateTime, orderTypeLabel, round2 } from '../../lib/format';
 import TableVisual from '../TableVisual';
 

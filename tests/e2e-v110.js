@@ -211,6 +211,21 @@ let failed = false;
     if (!it || Math.round(it.line_total ?? it.total ?? it.unit_price * it.qty) !== 200) throw new Error('saved line: ' + JSON.stringify(it));
   });
 
+  await step('barcode scan / Enter on an open-rate item opens the amount pad (not a silent add)', async () => {
+    const cats = await inv('categories.list');
+    await inv('products.save', { name: 'Scan Sabzi', category_id: cats[0].id, sale_price: 120, unit: 'plate', open_price: true, barcode: '8901234500011' });
+    await page.click('a[href="#/pos"]');
+    await page.waitForSelector('.pcard');
+    await page.fill('input[placeholder^="Search product"]', '8901234500011');
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('.price-pad');
+    await page.click('.price-pad button:text-is("250")');
+    await page.click('.price-pad button:has-text("Add to cart")');
+    const foot = await page.locator('.cart-items, .cart-body, .cart').first().innerText();
+    if (!/Scan Sabzi/.test(foot) || !/250/.test(foot)) throw new Error('line: ' + foot.replace(/\n/g, ' | ').slice(0, 200));
+    await page.click('.cart-head button[title^="New order"]');
+  });
+
   // ---------------------------------------------------------------- token items
   await step('Token items: roti asks the quantity, prints ONE priced token, no receipt / KOT', async () => {
     const cats = await inv('categories.list');

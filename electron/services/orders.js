@@ -356,7 +356,9 @@ function createTokens(orderId, mode, items) {
 /** Is this product a "token item" (roti, naan…) for the given POS mode? */
 function isQuickToken(product, orderType) {
   const t = settings.get('token');
-  if (!t.quickEnabled || !product || product.is_deal) return false;
+  if (!t.quickEnabled || !product || product.is_deal || product.weighed || product.open_price) return false;
+  // items with sizes need the size picker, so they are never instant token items
+  if (product.id && ctx.db.get('SELECT 1 AS x FROM product_variants WHERE product_id = ? LIMIT 1', [Number(product.id)])) return false;
   if (!(t.quickOrderTypes || []).includes(orderType)) return false;
   return (t.quickProductIds || []).map(Number).includes(Number(product.id)) || (!!product.category_id && (t.quickCategoryIds || []).map(Number).includes(Number(product.category_id)));
 }

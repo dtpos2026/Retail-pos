@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   UtensilsCrossed, ShoppingBag, Bike, Armchair, UserRound, PauseCircle, Percent, Plus, Minus, Trash2, FilePlus2,
-  CreditCard, Printer, Save, X, ScanBarcode, PlusSquare, StickyNote, ShoppingCart, CheckCircle2, PanelLeft, PanelTop, Users,
+  CreditCard, Printer, Save, X, ScanBarcode, PlusSquare, StickyNote, ShoppingCart, PanelLeft, PanelTop, Users,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { useApp } from '../context/AppContext';
@@ -209,7 +209,7 @@ export default function Pos() {
     try {
       const p = await api('products.findByCode', { code });
       if (p) {
-        addProduct(p);
+        pick(p); // same rules as a tap: token item, sizes, weight pad, open rate
         setQ('');
         return;
       }
@@ -217,7 +217,7 @@ export default function Pos() {
       /* fall through */
     }
     if (filtered.length === 1) {
-      addProduct(filtered[0]);
+      pick(filtered[0]);
       setQ('');
     } else if (!filtered.length) toast(`No product found for "${code}"`, 'warn');
   };

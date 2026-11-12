@@ -46,6 +46,13 @@
 | 3 | Add-a-printer steps cramped; Pair button still shown after pairing | UI layout / state | 2-column steps; Pair only while no COM port exists |
 | 4 | Per head / Service / Note buttons cut off on the bill panel | Row did not wrap | Row wraps |
 
+### Round 2 (v1.10.2) — bug hunt after the report
+Static analysis (eslint: undefined variables, hooks rules, unused code) found no undefined variable or hook error. Reviewing the logic found and fixed:
+- barcode / Enter on an open-rate, token, sized or weighed item skipped the pad and added it silently at the default price;
+- merging dine-in bills lost the persons of the merged bill (Per head), and the merged-away bill kept its charges;
+- the server did not apply the same “token item” exclusions as the screen.
+Tests added: table operations (merge / transfer / split / pay) with per head, token item rules, scanner path. Result: **94 unit, 36 + 12 + 9 + 11 e2e steps, all pass.**
+
 ## 4. What could NOT be tested here (honest limits)
 
 1. **Real Bluetooth / USB printer hardware.** Only the customer's video showed real hardware: pairing and COM4 creation worked there; the print step then hit bug #1, which is now fixed — **but the fix itself has not yet been run on that printer.** Please press *Verify printers* and *Test receipt* on the shop computer.

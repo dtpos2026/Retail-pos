@@ -14,6 +14,13 @@ Retail-pos/                  ← POS software (Windows, offline). Run npm comman
 ```
 
 
+## What's new in v1.10.2
+
+- **Fix:** scanning a barcode (or pressing Enter on a search with one result) added open-rate, token and sized items silently at their default price — it now opens the same pad / picker as a tap.
+- **Fix:** merging dine-in bills now adds up the persons for *Per head* (and the merged-away bills carry no charges).
+- Token items: open-rate, weighed and sized items are excluded on the server too (same rule as the screen).
+- More tests: table operations with per head, token item rules, scanner path.
+
 ## What's new in v1.10.1
 
 - **Fix:** printing on a paired Bluetooth / COM printer failed with *"UNKNOWN"* (seen on a real MediaLink PT-210). The COM port is now opened through Windows' SerialPort, jobs on one port run one at a time (Test print and Verify no longer collide), and errors say what to do.

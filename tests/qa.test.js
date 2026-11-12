@@ -135,3 +135,52 @@ test('token item slip: quantity, price and total are on the token (every token d
   }
   settings.set('token', tokenCfg);
 });
+
+test('table operations keep per head / service charge sane: merge adds the persons, transfer keeps them, split leaves them on the original bill, pay keeps them', () => {
+  const tableOps = require('../electron/services/tableOps');
+  const sales = settings.get('sales');
+  settings.set('sales', { ...sales, taxEnabled: false, roundTotal: false, perHeadEnabled: true, perHeadRate: 100, serviceEnabled: true, serviceMode: 'percent', serviceValue: 10 });
+  const mkTable = (name) => { tablesSvc.save({ name, seats: 4 }); return ctx.db.get('SELECT id FROM dining_tables WHERE name = ?', [name]).id; };
+  const [t1, t2, t3, t4] = ['TO-1', 'TO-2', 'TO-3', 'TO-4'].map(mkTable);
+  const r = products.save({ name: 'TO Dish', sale_price: 1000, unit: 'plate', track_stock: false });
+  const pid = typeof r === 'object' ? r.id : r;
+  const it = (q) => ({ productId: pid, name: 'TO Dish', qty: q, unitPrice: 1000 });
+  const a = orders.save({ orderType: 'dine_in', action: 'hold', tableId: t1, covers: 2, serviceMode: 'percent', serviceValue: 10, items: [it(2)] });
+  const b = orders.save({ orderType: 'dine_in', action: 'hold', tableId: t2, covers: 3, serviceMode: 'percent', serviceValue: 10, items: [it(1)] });
+  assert.equal(a.total, 2000 + 200 + 200); assert.equal(b.total, 1000 + 100 + 300);
+  // merge b into a: 3 plates, 5 persons, service on the merged bill
+  tableOps.merge({ intoOrderId: a.id, fromOrderIds: [b.id] });
+  const m = orders.get({ id: a.id });
+  assert.equal(m.covers, 5); assert.equal(m.cover_charge, 500); assert.equal(m.service_charge, 300); assert.equal(m.total, 3000 + 500 + 300);
+  const gone = ctx.db.get('SELECT * FROM orders WHERE id = ?', [b.id]);
+  assert.equal(gone.status, 'cancelled'); assert.equal(gone.total, 0); assert.equal(gone.cover_charge, 0); assert.equal(gone.service_charge, 0); assert.equal(gone.covers, 0);
+  // transfer keeps everything
+  tableOps.transfer({ orderId: a.id, toTableId: t3 });
+  assert.equal(orders.get({ id: a.id }).total, 3800);
+  // split one plate to a new bill: persons / per head stay on the original, the new bill is plain
+  const item = ctx.db.get('SELECT id FROM order_items WHERE order_id = ?', [a.id]);
+  tableOps.split({ orderId: a.id, lines: [{ itemId: item.id, qty: 1 }], toTableId: t4 });
+  const orig = orders.get({ id: a.id });
+  assert.equal(orig.covers, 5); assert.equal(orig.cover_charge, 500); assert.equal(orig.service_charge, 200); assert.equal(orig.total, 2000 + 500 + 200);
+  const child = ctx.db.get("SELECT * FROM orders WHERE table_id = ? AND status = 'pending'", [t4]);
+  assert.equal(child.covers, 0); assert.equal(child.cover_charge, 0);
+  // reopening the saved bill and paying it keeps the charges
+  const paid = orders.save({ orderType: 'dine_in', action: 'pay', id: a.id, tableId: t3, covers: orig.covers, coverRate: orig.cover_rate, serviceMode: orig.service_mode, serviceValue: orig.service_value, items: [it(2)], payment: { method: 'cash', tendered: 3000 }, tokenMode: 'none' });
+  assert.equal(paid.status, 'completed'); assert.equal(paid.total, 2700); assert.equal(paid.paid, 2700);
+  settings.set('sales', sales);
+});
+
+test('token items: open-rate, weighed and sized items are never instant token items (same rule on screen and server)', () => {
+  const tk = settings.get('token');
+  const mk = (extra) => { const r = products.save({ name: `TK ${Math.random()}`, sale_price: 20, unit: 'pcs', track_stock: false, ...extra }); return typeof r === 'object' ? r.id : r; };
+  const plain = mk({}); const open = mk({ open_price: true }); const weighed = mk({ weighed: true, unit: 'kg' });
+  const sized = mk({ variants: [{ name: 'Small', price: 10 }, { name: 'Large', price: 30 }] });
+  settings.set('token', { ...tk, quickEnabled: true, quickProductIds: [plain, open, weighed, sized], quickCategoryIds: [], quickOrderTypes: ['takeaway'] });
+  const get = (id) => ctx.db.get('SELECT * FROM products WHERE id = ?', [id]);
+  assert.equal(orders.isQuickToken(get(plain), 'takeaway'), true);
+  assert.equal(orders.isQuickToken(get(open), 'takeaway'), false);
+  assert.equal(orders.isQuickToken(get(weighed), 'takeaway'), false);
+  assert.equal(orders.isQuickToken(get(sized), 'takeaway'), false);
+  assert.throws(() => orders.quickToken({ productId: sized, qty: 2, orderType: 'takeaway' }), /not a token item/);
+  settings.set('token', tk);
+});

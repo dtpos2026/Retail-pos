@@ -83,18 +83,21 @@ function merge({ intoOrderId, fromOrderIds }) {
   return ctx.db.transaction(() => {
     const into = pendingOrder(intoOrderId);
     let extraDiscount = 0;
+    let covers = Number(into.covers) || 0; // persons of all merged bills count for "per head"
     const names = [];
     for (const fid of from) {
       const f = pendingOrder(fid);
       ctx.db.run('UPDATE order_items SET order_id = ? WHERE order_id = ?', [into.id, f.id]);
       extraDiscount += toNumber(f.order_discount);
+      covers += Number(f.covers) || 0;
       names.push(f.table_name || f.order_no);
       ctx.db.run(
-        "UPDATE orders SET status = 'cancelled', cancel_reason = ?, subtotal = 0, item_discount = 0, order_discount = 0, tax_amount = 0, total = 0, cost_total = 0, updated_at = ? WHERE id = ?",
+        "UPDATE orders SET status = 'cancelled', cancel_reason = ?, subtotal = 0, item_discount = 0, order_discount = 0, tax_amount = 0, covers = 0, cover_charge = 0, service_charge = 0, total = 0, cost_total = 0, updated_at = ? WHERE id = ?",
         [`Merged into ${into.order_no}`, nowLocal(), f.id]
       );
       release(f.table_id, f.id);
     }
+    if (covers !== (Number(into.covers) || 0)) ctx.db.run('UPDATE orders SET covers = ? WHERE id = ?', [Math.min(999, covers), into.id]);
     const note = `Merged: ${names.join(', ')}`;
     ctx.db.run('UPDATE orders SET merged_note = ? WHERE id = ?', [[into.merged_note, note].filter(Boolean).join(' · '), into.id]);
     recalc(into.id, round2(toNumber(into.order_discount) + extraDiscount));
