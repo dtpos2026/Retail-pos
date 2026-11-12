@@ -311,8 +311,8 @@ Retail-pos/
 
 | Test | Natija |
 |---|---|
-| **Unit tests** (`npm test`) | **86 pass** — sales, tables, tokens, inventory, reports, backup / restore, permissions, templates, license, heartbeat, bulk import, variants / recipes, Excel / JSON export-import, margins, staff, **remote password reset, sales totals** |
-| **UI end-to-end** (asal Electron app, Playwright) | **36 qadam pass**, koi console error nahi — login, sales, dine-in, delivery, tables, variants, kg number pad, deals, categories, bulk import, waiters, bank, margins, reports, themes, printer settings, cashier restrictions, Excel / JSON export-import |
+| **Unit tests** (`npm test`) | **92 pass** — sales, tables, tokens, inventory, reports, backup / restore, permissions, templates, license, heartbeat, bulk import, variants / recipes, Excel / JSON export-import, margins, staff, **remote password reset, sales totals** |
+| **UI end-to-end** (asal Electron app, Playwright) | **36 qadam pass** (purani suite) + **v1.10 (11) + final QA sweep (9)**, koi console error nahi — login, sales, dine-in, delivery, tables, variants, kg number pad, deals, categories, bulk import, waiters, bank, margins, reports, themes, printer settings, cashier restrictions, Excel / JSON export-import |
 | **v1.10 e2e** (`tests/e2e-v110.js`) | 11 qadam pass — nakli Bluetooth printer se search → pair → test print COM port tak, USB driver install, help guide (English / Urdu font / search), Restaurant mode lock, khula sauda, token item (sirf **1** parchi), per head + service charge, rider haath se |
 | **License e2e** | Pehli activation, chhoti key, device approval, **sales totals + users + logo provider tak, Forgot password → reset lagna → naya password se login (purana band)**, suspend lock screen + chat, reactivate — nakli Firestore ke saath |
 | **Firestore rules (emulator)** | Device limit race, approval, status ki hifazat, support, invoices, public verify, audit log — sab pass |
