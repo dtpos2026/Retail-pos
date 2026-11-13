@@ -14,6 +14,13 @@ Retail-pos/                  ← POS software (Windows, offline). Run npm comman
 ```
 
 
+## What's new in v1.10.3
+
+- **Bluetooth printing made robust** (found on a real MediaLink PT-210: connected and verified, but a print job hung and every later print said *"already printing"*):
+  - Bluetooth jobs are sent *slowly and steadily* by default (**Sending speed: Auto**) so small printers' buffers do not overflow.
+  - A stalled job now stops by itself and says exactly where: *could not connect* / *stopped after N of M bytes* — and it is **not retried three times** any more, so the queue never stays blocked for minutes.
+  - New **Text test** button (Settings → Printers and Add a printer): a few plain lines, no picture — the quickest way to see whether the printer takes data. The log (Settings → General → Open logs) records connect time, bytes sent and the stage reached.
+
 ## What's new in v1.10.2
 
 - **Fix:** scanning a barcode (or pressing Enter on a search with one result) added open-rate, token and sized items silently at their default price — it now opens the same pad / picker as a tap.

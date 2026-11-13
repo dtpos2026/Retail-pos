@@ -193,6 +193,7 @@ module.exports = {
   printReportThermal,
   testPrint,
   marginTestHtml,
+  textTest: (a) => printer().textTest(a && a.printerName),
   printerStatus: (a) => printer().printerStatus(a),
   verifyPrinters: () => printer().verifyPrinters(),
   listPrinters: (a) => printer().listPrinters(a || {}),

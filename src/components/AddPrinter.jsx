@@ -23,6 +23,7 @@ function UseButtons({ name, onUse, current }) {
   };
   return (
     <div className="row wrap" style={{ gap: 6 }}>
+      <Button size="sm" icon={Printer} loading={busy === 'text'} onClick={() => run('text', async () => { const r = await api('print.textTest', { printerName: name }); toast(`Text test sent in ${(r.ms / 1000).toFixed(1)} s — check the paper`); })} title="A few plain lines, no picture: the quickest check that the printer takes data">Text test</Button>
       <Button size="sm" icon={Printer} loading={busy === 'test'} onClick={() => run('test', async () => { const r = await api('print.test', { kind: 'receipt', printerName: name }); toast(`Test page printed on ${r.printer || name}`); })}>Test print</Button>
       <Button size="sm" variant={current.receipt === name ? 'primary' : undefined} icon={ReceiptText} loading={busy === 'r'} onClick={() => run('r', () => onUse('receiptPrinter', name))}>{current.receipt === name ? 'Receipt printer ✓' : 'Use for receipts'}</Button>
       <Button size="sm" variant={current.kitchen === name ? 'primary' : undefined} icon={ChefHat} loading={busy === 'k'} onClick={() => run('k', () => onUse('tokenPrinter', name))}>{current.kitchen === name ? 'Kitchen printer ✓' : 'Use for kitchen / tokens'}</Button>
@@ -180,7 +181,7 @@ function ComPane({ s, onUse, current }) {
           <Select value={String(s.v.serialBaud)} onChange={(e) => s.set('serialBaud')(Number(e.target.value))} options={[9600, 19200, 38400, 57600, 115200].map((b) => ({ value: String(b), label: String(b) }))} />
         </Field>
         <Field label="Sending speed" style={{ marginBottom: 0 }}>
-          <Select value={s.v.serialSpeed} onChange={(e) => s.set('serialSpeed')(e.target.value)} options={[{ value: 'safe', label: 'Safe (cheap Bluetooth printers)' }, { value: 'normal', label: 'Normal (recommended)' }, { value: 'fast', label: 'Fast' }]} />
+          <Select value={s.v.serialSpeed === 'normal' ? 'auto' : s.v.serialSpeed} onChange={(e) => s.set('serialSpeed')(e.target.value)} options={[{ value: 'auto', label: 'Auto (recommended)' }, { value: 'safe', label: 'Safe — slowest, for cheap Bluetooth printers' }, { value: 'fast', label: 'Fast — cables only' }]} />
         </Field>
         {s.dirty && <Button size="sm" variant="primary" onClick={() => s.save()} loading={s.saving}>Save speed</Button>}
         <div className="grow" />

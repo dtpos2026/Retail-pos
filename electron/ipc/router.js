@@ -263,6 +263,7 @@ const routes = {
   'print.afterSale': { perm: 'pos', fn: (a) => printService.printAfterSale(a) },
   'orders.quickToken': { perm: 'pos', fn: async (a) => { const r = await printService.quickTokenSale(a); license.salesChanged(); return r; } },
   'print.test': { fn: (a) => printService.testPrint(a) },
+  'print.textTest': { fn: (a) => printService.textTest(a) },
 
   // ---- backup / data -------------------------------------------------------
   'backup.list': { perm: 'backup', fn: () => backup.list() },

@@ -88,3 +88,28 @@ test('jobs on one COM port run one at a time (no "port busy" between Test print 
   serial.setFake(null);
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test('Bluetooth pacing is slow and steady by default; a stalled printer gives a specific, no-retry message', () => {
+  assert.deepEqual(serial.pace('auto', 'bluetooth'), serial.pace('safe', 'bluetooth'));
+  assert.deepEqual(serial.pace('normal', 'bluetooth'), serial.pace('safe', 'bluetooth'), 'old saved "normal" is treated as auto');
+  assert.ok(serial.pace('auto', 'usb').chunk > serial.pace('auto', 'bluetooth').chunk);
+  assert.ok(serial.pace('fast', 'bluetooth').chunk > serial.pace('safe', 'bluetooth').chunk);
+  let e = serial.describeStall('opening', 'COM4');
+  assert.match(e.message, /could not connect/); assert.equal(e.noRetry, true);
+  e = serial.describeStall('sent:2560/30000', 'COM4');
+  assert.match(e.message, /2560 of 30000 bytes/); assert.match(e.message, /Safe/);
+  assert.match(serial.describeStall('opened:900', 'COM4').message, /did not accept/);
+  const job = serial.textTestJob();
+  assert.equal(job[0], 0x1b); assert.equal(job[1], 0x40); assert.match(job.toString('latin1'), /Printer test OK/);
+});
+
+test('text test goes through the COM path in one small job', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rpos-tt-'));
+  fs.writeFileSync(path.join(dir, 'ports.json'), JSON.stringify([{ port: 'COM4', kind: 'bluetooth', address: 'AABBCCDDEEFF', deviceName: 'PT-210' }]));
+  serial.setFake(dir);
+  await serial.send('COM4', serial.textTestJob(), { kind: 'bluetooth' });
+  const bin = fs.readFileSync(path.join(dir, 'COM4.bin'));
+  assert.ok(bin.length < 200); assert.match(bin.toString('latin1'), /DT Retail POS/);
+  serial.setFake(null);
+  fs.rmSync(dir, { recursive: true, force: true });
+});

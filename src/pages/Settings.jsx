@@ -343,8 +343,13 @@ function PrinterTab() {
     if (s.dirty && !(await s.save())) return;
     setTesting(kind);
     try {
-      const r = await api('print.test', { kind });
-      toast(`Test ${kind === 'margins' ? 'margin page' : kind} printed on ${r.printer}`);
+      if (kind === 'text') {
+        const r = await api('print.textTest', {});
+        toast(`Text test sent to ${r.printer} in ${(r.ms / 1000).toFixed(1)} s — check the paper`);
+      } else {
+        const r = await api('print.test', { kind });
+        toast(`Test ${kind === 'margins' ? 'margin page' : kind} printed on ${r.printer}`);
+      }
     } catch (e) {
       toastError(e);
     } finally {
@@ -414,6 +419,7 @@ function PrinterTab() {
           <ToggleRow title="Print tokens automatically after payment" checked={s.v.autoPrintToken} onChange={s.set('autoPrintToken')} />
         </div>
         <div className="row">
+          <Button icon={Printer} loading={testing === 'text'} onClick={() => test('text')} title="A few plain lines, no picture — the quickest check that the printer takes data">Text test</Button>
           <Button icon={Printer} loading={testing === 'receipt'} onClick={() => test('receipt')}>Test receipt</Button>
           <Button icon={Ticket} loading={testing === 'token'} onClick={() => test('token')}>Test token</Button>
           <Button icon={ChefHat} loading={testing === 'kot'} onClick={() => test('kot')}>Verify kitchen KOT (test print)</Button>

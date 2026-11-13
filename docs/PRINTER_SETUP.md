@@ -37,9 +37,11 @@ Leave *Receipt printer* on **Auto-detect thermal printer**. DT Retail POS recogn
 4. Windows creates a COM port (e.g. COM5). Press **Test print**, then **Use for receipts** (and/or **Use for kitchen / tokens**).
 5. **Forget** (the unlink button) removes the pairing. *Windows Bluetooth settings* opens Windows' own page if you prefer pairing there (then use the **COM port** tab).
 
+**Text test** (next to *Test print*) sends only a few plain lines — no picture. Use it first: if the text prints but the receipt does not, the printer is connected and the problem is speed (choose *Safe*); if even the text does not print, the message says whether Windows could not connect or the printer stopped taking data. Details (connect time, bytes sent) are written to the log: Settings → General → *Open logs*.
+
 **COM port** — lists every COM port (Bluetooth, USB-to-serial, old serial printers) with *Test print* / *Use for…*. Two settings:
 - **Speed (baud)** — only for a serial *cable* (9600 is usual; try 115200 if the print is garbage). Bluetooth ignores it.
-- **Sending speed** — *Safe* for cheap Bluetooth printers that print half a bill or stop in the middle, *Normal* (default), *Fast*.
+- **Sending speed** — *Auto* (default: slow and steady for Bluetooth, normal for cables), *Safe* (slowest), *Fast* (cables only).
 
 **USB (no driver)** — a USB thermal printer without its driver only shows up as a port such as `USB001`. Press **Install**: Windows asks permission once and the built-in *Generic / Text Only* driver is installed on that port. The printer then appears in the normal printer list.
 

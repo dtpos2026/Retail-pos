@@ -62,7 +62,7 @@ const DEFAULTS = {
     compatCut: false, // older printers without "feed and cut"
     openDrawer: false, // kick the cash drawer (connected to the receipt printer) when a receipt prints
     serialBaud: 9600, // COM printers on a cable (USB-serial / RS-232); Bluetooth ignores it
-    serialSpeed: 'normal', // safe | normal | fast — how quickly a job is pushed into a COM / Bluetooth printer
+    serialSpeed: 'auto', // auto | safe | fast — how quickly a job is pushed into a COM / Bluetooth printer (auto = slow and steady for Bluetooth)
   },
   token: {
     enabled: true,

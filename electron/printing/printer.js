@@ -168,6 +168,15 @@ async function sendJob(name, job, doc) {
   return rawPrint.sendRaw(name, job, doc);
 }
 
+/** Settings → Printers "Text test": a few plain lines, no picture — shows at once whether the printer takes data. */
+async function textTest(name) {
+  const printerName = name || settings.get('printer').receiptPrinter;
+  const device = await resolvePrinter(printerName);
+  const started = Date.now();
+  await sendJob(device, serial.textTestJob(), 'DT Retail POS text test');
+  return { printer: device, ms: Date.now() - started };
+}
+
 let monitor = null;
 
 /** Keeps the printer path alive: fresh printer list, print helper running, render worker warm. */
@@ -230,7 +239,7 @@ async function sendWithRetry(requested, deviceName, job, doc) {
     } catch (err) {
       lastErr = err;
       logger.warn('Print attempt failed', attempt + 1, name, err.message);
-      if (attempt === 2) break;
+      if (attempt === 2 || err.noRetry) break; // a printer that stalled is not fixed by trying again at once
       await new Promise((r) => setTimeout(r, 500 + attempt * 700));
       rawPrint.shutdown();
       try {
@@ -324,7 +333,7 @@ async function printDriver(html, { printerName, widthMm, copies = 1, jobKey }) {
  */
 function printHtml(html, opts) {
   const { jobKey } = opts;
-  if (jobKey && inFlight.has(jobKey)) return Promise.reject(new AppError('This document is already printing.'));
+  if (jobKey && inFlight.has(jobKey)) return Promise.reject(new AppError('The previous print of this document is still in progress — please wait for it to finish (or fail), then try again.'));
   if (jobKey) inFlight.add(jobKey);
   const method = settings.get('printer').method;
   // a COM / Bluetooth printer has no Windows driver: always the direct (thermal) path
@@ -380,7 +389,7 @@ function warmUp() {
   startMonitor();
 }
 
-module.exports = { listPorts: (a) => serial.listPorts(a), listPrinters, printerStatus, verifyPrinters, refreshPrinters, printHtml, renderPng, printWithDialog, htmlToPdf, warmUp, buildThermalJob, shutdown: () => {
+module.exports = { textTest, listPorts: (a) => serial.listPorts(a), listPrinters, printerStatus, verifyPrinters, refreshPrinters, printHtml, renderPng, printWithDialog, htmlToPdf, warmUp, buildThermalJob, shutdown: () => {
     if (monitor) clearInterval(monitor);
     monitor = null;
     rawPrint.shutdown();
