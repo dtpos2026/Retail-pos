@@ -30,9 +30,12 @@ const portOf = (name) => {
 const nameFor = (port) => `${PREFIX}${String(port).toUpperCase()}`;
 
 // How fast the job is pushed into the port. Small Bluetooth printers have tiny buffers; "safe" never overruns them.
-const SPEEDS = { safe: { chunk: 256, gap: 50 }, normal: { chunk: 1024, gap: 25 }, fast: { chunk: 4096, gap: 4 } };
+const SPEEDS = { safe: { chunk: 256, gap: 50 }, medium: { chunk: 512, gap: 20 }, normal: { chunk: 1024, gap: 25 }, fast: { chunk: 1024, gap: 6 } };
 /** "auto" (and the old "normal") = slow and steady for Bluetooth printers (tiny buffers, no flow control), normal for cables. */
-const pace = (speed, kind) => (speed === 'fast' ? SPEEDS.fast : speed === 'safe' || ((speed === 'auto' || speed === 'normal' || !speed) && kind === 'bluetooth') ? SPEEDS.safe : SPEEDS.normal);
+const pace = (speed, kind) => {
+  if (SPEEDS[speed] && speed !== 'normal') return SPEEDS[speed];
+  return kind === 'bluetooth' ? SPEEDS.medium : SPEEDS.normal; // auto (and the old "normal")
+};
 const BAUDS = [9600, 19200, 38400, 57600, 115200];
 
 const LIST_SCRIPT = [

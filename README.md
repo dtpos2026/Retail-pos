@@ -14,6 +14,12 @@ Retail-pos/                  ← POS software (Windows, offline). Run npm comman
 ```
 
 
+## What's new in v1.10.4
+
+- **Bluetooth pairing steadier** (real MediaLink PT-210): Windows' occasional "no Bluetooth radio" answer is retried and never blocks the search; pairing tries the PINs and the printing service in **one** run (several retries) instead of restarting for each PIN.
+- **Faster printing**: *Auto* now sends Bluetooth data at about 25 KB/s (was ~5 KB/s, which made the printer stop and start — "tick-tick"). New **Bluetooth / COM sending speed** list right in Settings → Printers: Auto, Safe, Medium, **Fast**.
+- **Add a printer** window sits at the top and is shorter, so it fits small laptop screens.
+
 ## What's new in v1.10.3
 
 - **Bluetooth printing made robust** (found on a real MediaLink PT-210: connected and verified, but a print job hung and every later print said *"already printing"*):

@@ -12,7 +12,7 @@ import ReceiptPreview from '../components/ReceiptPreview';
 import { LicenseActivateForm } from './Activation';
 import SupportBox from '../components/SupportBox';
 import InventoryModeCard from '../components/InventoryMode';
-import AddPrinterModal from '../components/AddPrinter';
+import AddPrinterModal, { SPEED_OPTIONS } from '../components/AddPrinter';
 import HelpGuide from '../components/HelpGuide';
 import { applyAppearance } from '../context/AppContext';
 import { BRAND } from '@shared/brand.mjs';
@@ -389,6 +389,11 @@ function PrinterTab() {
         <Field label="Token / kitchen printer" hint="Leave on default to use the receipt printer.">
           <Select value={s.v.tokenPrinter} onChange={(e) => s.set('tokenPrinter')(e.target.value)} options={[{ value: '', label: '— Same as receipt printer —' }, ...opts.slice(1)]} />
         </Field>
+        {(portOpts.length > 0 || /^serial:/i.test(s.v.receiptPrinter || '')) && (
+          <Field label="Bluetooth / COM sending speed" hint="Printing slow with ‘tick-tick’ stops? Choose Fast. Printer stops or prints garbage? Choose Safe.">
+            <Select value={s.v.serialSpeed === 'normal' ? 'auto' : s.v.serialSpeed} onChange={(e) => s.set('serialSpeed')(e.target.value)} options={SPEED_OPTIONS} />
+          </Field>
+        )}
         <div className="card card-pad col" style={{ background: 'var(--primary-50)', borderColor: 'transparent', gap: 12 }}>
           <div className="row"><Zap size={18} color="var(--primary)" /><div className="b grow">Print method</div>
             <Seg value={s.v.method} onChange={s.set('method')} options={[{ value: 'thermal', label: 'Thermal — fast (recommended)' }, { value: 'driver', label: 'Windows driver' }]} />

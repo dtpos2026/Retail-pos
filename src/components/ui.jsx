@@ -16,7 +16,7 @@ export function Button({ variant, size, icon: Icon, children, loading, className
 // Only the top-most open modal reacts to Escape.
 const modalStack = [];
 
-export function Modal({ title, icon: Icon, onClose, children, footer, size, closeOnOverlay = false }) {
+export function Modal({ title, icon: Icon, onClose, children, footer, size, className = '', closeOnOverlay = false }) {
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
   useEffect(() => {
@@ -35,8 +35,8 @@ export function Modal({ title, icon: Icon, onClose, children, footer, size, clos
     };
   }, []);
   return (
-    <div className="overlay" onMouseDown={(e) => closeOnOverlay && e.target === e.currentTarget && onClose?.()}>
-      <div className={`modal ${size || ''}`} role="dialog">
+    <div className={`overlay ${className ? `${className}-overlay` : ''}`} onMouseDown={(e) => closeOnOverlay && e.target === e.currentTarget && onClose?.()}>
+      <div className={`modal ${size || ''} ${className}`} role="dialog">
         <div className="modal-head">
           {Icon && (
             <div className="thumb" style={{ background: 'var(--primary-50)', color: 'var(--primary)', width: 36, height: 36 }}>

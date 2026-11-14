@@ -260,3 +260,9 @@
 .help-faq-a { padding: 0 14px 14px; font-size: 14px; line-height: 1.7; color: var(--text); }
 .help-faq-a.urdu { font-size: 16px; line-height: 2.1; }
 @media (max-width: 900px) { .help-body { grid-template-columns: 1fr; } .help-index { position: static; max-height: 260px; } }
+
+/* Add a printer: sits at the top of the window and never taller than the visible screen (small laptops) */
+.add-printer-modal-overlay { place-items: start center; padding-top: 10px; }
+.add-printer-modal { max-height: calc(100vh - 90px); }
+.add-printer-modal .modal-body { padding-top: 0; }
+.add-printer-steps > div { padding: 6px 10px; font-size: 12px; }

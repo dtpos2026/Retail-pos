@@ -90,10 +90,10 @@ test('jobs on one COM port run one at a time (no "port busy" between Test print 
 });
 
 test('Bluetooth pacing is slow and steady by default; a stalled printer gives a specific, no-retry message', () => {
-  assert.deepEqual(serial.pace('auto', 'bluetooth'), serial.pace('safe', 'bluetooth'));
-  assert.deepEqual(serial.pace('normal', 'bluetooth'), serial.pace('safe', 'bluetooth'), 'old saved "normal" is treated as auto');
-  assert.ok(serial.pace('auto', 'usb').chunk > serial.pace('auto', 'bluetooth').chunk);
-  assert.ok(serial.pace('fast', 'bluetooth').chunk > serial.pace('safe', 'bluetooth').chunk);
+  assert.deepEqual(serial.pace('auto', 'bluetooth'), serial.pace('medium', 'bluetooth'));
+  assert.deepEqual(serial.pace('normal', 'bluetooth'), serial.pace('auto', 'bluetooth'), 'old saved "normal" is treated as auto');
+  const rate = (s, k) => { const p = serial.pace(s, k); return p.chunk / (p.gap + 5); };
+  assert.ok(rate('safe', 'bluetooth') < rate('auto', 'bluetooth') && rate('auto', 'bluetooth') < rate('fast', 'bluetooth'), 'safe < auto < fast');
   let e = serial.describeStall('opening', 'COM4');
   assert.match(e.message, /could not connect/); assert.equal(e.noRetry, true);
   e = serial.describeStall('sent:2560/30000', 'COM4');

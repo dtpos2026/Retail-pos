@@ -4,6 +4,7 @@ import { api } from '../lib/api';
 import { useApp } from '../context/AppContext';
 import { Modal, Button, Field, Input, Select, Seg, Badge } from './ui';
 
+export const SPEED_OPTIONS = [{ value: 'auto', label: 'Auto (recommended)' }, { value: 'safe', label: 'Safe — slowest (printer stops / garbage)' }, { value: 'medium', label: 'Medium' }, { value: 'fast', label: 'Fast — quickest print' }];
 const fmtAddr = (a) => String(a || '').replace(/(..)(?!$)/g, '$1:');
 const KIND = { bluetooth: { label: 'Bluetooth', icon: Bluetooth }, usb: { label: 'USB-serial', icon: Usb }, serial: { label: 'Serial', icon: Cable } };
 
@@ -181,7 +182,7 @@ function ComPane({ s, onUse, current }) {
           <Select value={String(s.v.serialBaud)} onChange={(e) => s.set('serialBaud')(Number(e.target.value))} options={[9600, 19200, 38400, 57600, 115200].map((b) => ({ value: String(b), label: String(b) }))} />
         </Field>
         <Field label="Sending speed" style={{ marginBottom: 0 }}>
-          <Select value={s.v.serialSpeed === 'normal' ? 'auto' : s.v.serialSpeed} onChange={(e) => s.set('serialSpeed')(e.target.value)} options={[{ value: 'auto', label: 'Auto (recommended)' }, { value: 'safe', label: 'Safe — slowest, for cheap Bluetooth printers' }, { value: 'fast', label: 'Fast — cables only' }]} />
+          <Select value={s.v.serialSpeed === 'normal' ? 'auto' : s.v.serialSpeed} onChange={(e) => s.set('serialSpeed')(e.target.value)} options={SPEED_OPTIONS} />
         </Field>
         {s.dirty && <Button size="sm" variant="primary" onClick={() => s.save()} loading={s.saving}>Save speed</Button>}
         <div className="grow" />
@@ -287,7 +288,7 @@ export default function AddPrinterModal({ s, onClose, onChanged }) {
     onChanged?.();
   };
   return (
-    <Modal title="Add a printer" icon={Printer} onClose={onClose} size="lg">
+    <Modal title="Add a printer" icon={Printer} onClose={onClose} size="lg" className="add-printer-modal">
       <div className="col" style={{ gap: 16 }}>
         <Seg value={tab} onChange={setTab} options={[{ value: 'bluetooth', label: 'Bluetooth', icon: Bluetooth }, { value: 'com', label: 'COM port', icon: Cable }, { value: 'usb', label: 'USB (no driver)', icon: Usb }]} />
         {tab === 'bluetooth' && <BluetoothPane onUse={onUse} current={current} onChanged={onChanged} />}

@@ -88,11 +88,15 @@ public static class DtBt {
   static IntPtr Radio() {
     var p = new BLUETOOTH_FIND_RADIO_PARAMS();
     p.dwSize = (uint)Marshal.SizeOf(typeof(BLUETOOTH_FIND_RADIO_PARAMS));
-    IntPtr radio;
-    IntPtr find = BluetoothFindFirstRadio(ref p, out radio);
-    if (find == IntPtr.Zero) return IntPtr.Zero;
-    BluetoothFindRadioClose(find);
-    return radio;
+    // Windows sometimes answers "no radio" for a moment while Bluetooth wakes up: ask a few times.
+    // A NULL radio is allowed by the API and means "all local radios", so a miss is never fatal.
+    for (int i = 0; i < 4; i++) {
+      IntPtr radio;
+      IntPtr find = BluetoothFindFirstRadio(ref p, out radio);
+      if (find != IntPtr.Zero) { BluetoothFindRadioClose(find); return radio; }
+      System.Threading.Thread.Sleep(400);
+    }
+    return IntPtr.Zero;
   }
 
   static BLUETOOTH_DEVICE_INFO NewInfo() {
@@ -104,7 +108,6 @@ public static class DtBt {
 
   public static string Scan(int seconds) {
     IntPtr radio = Radio();
-    if (radio == IntPtr.Zero) return "{\"error\":\"no-radio\"}";
     var sp = new BLUETOOTH_DEVICE_SEARCH_PARAMS();
     sp.dwSize = (uint)Marshal.SizeOf(typeof(BLUETOOTH_DEVICE_SEARCH_PARAMS));
     sp.fReturnAuthenticated = 1; sp.fReturnRemembered = 1; sp.fReturnUnknown = 1; sp.fReturnConnected = 1; sp.fIssueInquiry = 1;
@@ -121,25 +124,43 @@ public static class DtBt {
       } while (BluetoothFindNextDevice(find, ref info));
       BluetoothFindDeviceClose(find);
     }
-    CloseHandle(radio);
+    if (radio != IntPtr.Zero) CloseHandle(radio);
     return "{\"devices\":[" + string.Join(",", items.ToArray()) + "]}";
   }
 
-  public static string Pair(string address, string pin) {
+  public static string Pair(string address, string pins) {
     IntPtr radio = Radio();
-    if (radio == IntPtr.Zero) return "{\"error\":\"no-radio\"}";
     var info = NewInfo();
     info.Address = Convert.ToUInt64(address, 16);
     BluetoothGetDeviceInfo(radio, ref info);
     uint auth = 0;
-    if (info.fAuthenticated == 0) auth = BluetoothAuthenticateDevice(IntPtr.Zero, radio, ref info, pin, (uint)pin.Length);
+    string used = "";
+    // already paired (Windows remembers it): no PIN needed. Otherwise try each PIN in turn, in this one run.
+    if (info.fAuthenticated == 0) {
+      foreach (string pin in pins.Split(',')) {
+        if (pin.Length == 0) continue;
+        var attempt = NewInfo();
+        attempt.Address = info.Address;
+        BluetoothGetDeviceInfo(radio, ref attempt);
+        auth = BluetoothAuthenticateDevice(IntPtr.Zero, radio, ref attempt, pin, (uint)pin.Length);
+        used = pin;
+        var chk = NewInfo();
+        chk.Address = info.Address;
+        BluetoothGetDeviceInfo(radio, ref chk);
+        if (auth == 0 || chk.fAuthenticated != 0) { info = chk; break; }
+      }
+    }
     var spp = new Guid("${SPP}");
-    uint svc = BluetoothSetServiceState(radio, ref info, ref spp, 1);
+    uint svc = 1;
+    for (int i = 0; i < 3 && svc != 0; i++) {
+      svc = BluetoothSetServiceState(radio, ref info, ref spp, 1);
+      if (svc != 0) System.Threading.Thread.Sleep(700);
+    }
     var check = NewInfo();
     check.Address = info.Address;
     BluetoothGetDeviceInfo(radio, ref check);
-    CloseHandle(radio);
-    return string.Format("{{\"auth\":{0},\"service\":{1},\"paired\":{2},\"name\":\"{3}\"}}", auth, svc, check.fAuthenticated != 0 ? "true" : "false", Esc(check.szName));
+    if (radio != IntPtr.Zero) CloseHandle(radio);
+    return string.Format("{{\"auth\":{0},\"service\":{1},\"paired\":{2},\"name\":\"{3}\",\"pin\":\"{4}\"}}", auth, svc, check.fAuthenticated != 0 ? "true" : "false", Esc(check.szName), Esc(used));
   }
 
   public static string Forget(string address) {
@@ -206,7 +227,6 @@ async function btScan({ seconds = 10 } = {}) {
   else {
     if (process.platform !== 'win32') throw new AppError('Bluetooth pairing works on Windows only.');
     const r = await runHelper(['-Action', 'scan', '-Seconds', String(Math.max(4, Math.min(15, Number(seconds) || 10)))], 60000);
-    if (r.error === 'no-radio') throw new AppError('No Bluetooth on this computer (or it is switched off). Turn Bluetooth on in Windows, or plug in a Bluetooth USB adapter.');
     if (r.error) throw new AppError(`Bluetooth search failed: ${r.error}`);
     devices = r.devices || [];
   }
@@ -251,13 +271,8 @@ async function btPair({ address, pin }) {
     return { paired: true, name: d.name, port: p ? p.port : null, printer: p ? p.name : null };
   }
   if (process.platform !== 'win32') throw new AppError('Bluetooth pairing works on Windows only.');
-  let last = null;
-  for (const code of pins) {
-    last = await runHelper(['-Action', 'pair', '-Address', a, '-Pin', code], 90000);
-    if (last.error === 'no-radio') throw new AppError('No Bluetooth on this computer (or it is switched off).');
-    if (last.error) throw new AppError(`Pairing failed: ${last.error}`);
-    if (last.paired) break;
-  }
+  const last = await runHelper(['-Action', 'pair', '-Address', a, '-Pin', pins.join(',')], 120000);
+  if (last.error) throw new AppError(`Pairing failed: ${last.error}`);
   logger.info('Bluetooth pairing', a, JSON.stringify(last));
   if (!last || !last.paired) {
     throw new AppError(`The printer did not accept the PIN${pins.length > 1 ? 's 0000 / 1234' : ''}. Switch it on, keep it close, check its PIN (often on the self-test page) and try again — or pair it in Windows Bluetooth settings.`);
