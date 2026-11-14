@@ -61,6 +61,7 @@ const DEFAULTS = {
     autoDetect: true, // pick the thermal printer automatically when none is chosen
     compatCut: false, // older printers without "feed and cut"
     openDrawer: false, // kick the cash drawer (connected to the receipt printer) when a receipt prints
+    quality: 'high', // high = drawn at 2x and averaged down (sharper text) | standard = 1x
     serialBaud: 9600, // COM printers on a cable (USB-serial / RS-232); Bluetooth ignores it
     serialSpeed: 'auto', // auto | safe | medium | fast — how quickly a job is pushed into a COM / Bluetooth printer
   },

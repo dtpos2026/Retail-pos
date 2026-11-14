@@ -107,7 +107,8 @@ let failed = false;
     const after = (await inv('inventory.summary')).products.find((p) => p.name === name).stock_qty;
     if (Math.abs(after - before - 5) > 0.001) throw new Error(`stock ${before} -> ${after}`);
     await page.click('a[href="#/products"]');
-    await page.waitForSelector('table.table');
+    await page.waitForSelector('button:has-text("Add Product")'); // the Products page itself (not the Inventory table still on screen)
+    await page.waitForSelector('table.table tbody tr:has-text("Chicken Biryani")');
     const heads = await page.locator('table.table thead th').allTextContents();
     if (heads.some((h) => /^stock$/i.test(h.trim()))) throw new Error('product list still has a Stock column');
     await page.click('table.table tbody tr:has-text("Chicken Biryani")');

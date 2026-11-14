@@ -34,7 +34,7 @@ const SPEEDS = { safe: { chunk: 256, gap: 50 }, medium: { chunk: 512, gap: 20 },
 /** "auto" (and the old "normal") = slow and steady for Bluetooth printers (tiny buffers, no flow control), normal for cables. */
 const pace = (speed, kind) => {
   if (SPEEDS[speed] && speed !== 'normal') return SPEEDS[speed];
-  return kind === 'bluetooth' ? SPEEDS.medium : SPEEDS.normal; // auto (and the old "normal")
+  return kind === 'bluetooth' ? SPEEDS.fast : SPEEDS.normal; // auto (and the old "normal"): quick; Safe / Medium are one tap away
 };
 const BAUDS = [9600, 19200, 38400, 57600, 115200];
 

@@ -126,9 +126,32 @@ function toGray({ width, height, bgra }) {
   return gray;
 }
 
+/**
+ * Shrink a gray image by an integer factor with an area average (supersampling): the page is drawn at 2x the printer's
+ * resolution and averaged down, so text edges are smoother and strokes keep their true weight.
+ */
+function downsampleGray(gray, width, height, f) {
+  if (f <= 1) return { gray, width, height };
+  const w = Math.floor(width / f);
+  const h = Math.floor(height / f);
+  const out = new Uint8Array(w * h);
+  const n = f * f;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let s = 0;
+      for (let dy = 0; dy < f; dy++) {
+        const row = (y * f + dy) * width + x * f;
+        for (let dx = 0; dx < f; dx++) s += gray[row + dx];
+      }
+      out[y * w + x] = Math.round(s / n);
+    }
+  }
+  return { gray: out, width: w, height: h };
+}
+
 /** Full-colour PNG (for "Save as PNG" / sharing on WhatsApp). */
 function toPng({ width, height, bgra }) {
   return nativeImage.createFromBitmap(bgra, { width, height }).toPNG();
 }
 
-module.exports = { renderBgra, toGray, toPng, warmUp };
+module.exports = { renderBgra, toGray, toPng, warmUp, downsampleGray };

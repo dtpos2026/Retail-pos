@@ -14,6 +14,11 @@ Retail-pos/                  ← POS software (Windows, offline). Run npm comman
 ```
 
 
+## What's new in v1.10.5
+
+- **Faster printing:** long blank gaps in a receipt are sent as a quick paper feed instead of rows of empty data (about a third less data on typical bills), and *Auto* sending speed for Bluetooth is now the fast level (Safe / Medium stay in Settings → Printers if a printer needs it).
+- **Print quality** (Settings → Printers → Thermal): *High* (default) draws the receipt at 2× resolution and averages it down for smoother, truer text; *Standard* is the old 1× mode. The head is 203 dpi, so the gain is modest — it mainly helps thin strokes and Urdu.
+
 ## What's new in v1.10.4
 
 - **Bluetooth pairing steadier** (real MediaLink PT-210): Windows' occasional "no Bluetooth radio" answer is retried and never blocks the search; pairing tries the PINs and the printing service in **one** run (several retries) instead of restarting for each PIN.

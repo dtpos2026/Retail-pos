@@ -210,9 +210,14 @@ function thermalGeometry(widthMm) {
 
 async function buildThermalJob(html, { widthMm, copies = 1, drawer = false }) {
   const { dots, content, shift, cssWidthMm, pr } = thermalGeometry(widthMm);
-  const img = await rasterize.renderBgra(html, { cssWidthMm, pixelWidth: content });
+  // High quality: draw at 2x the printer's resolution and average down (smoother, truer text); Standard: 1x
+  const ss = pr.quality === 'standard' ? 1 : 2;
+  const big = await rasterize.renderBgra(html, { cssWidthMm, pixelWidth: content * ss, maxHeightPx: 60000 });
+  const small = rasterize.downsampleGray(rasterize.toGray(big), big.width, big.height, ss);
+  const img = { width: small.width, height: small.height, imgRects: big.imgRects.map((r) => ({ x: r.x / ss, y: r.y / ss, w: r.w / ss, h: r.h / ss })) };
+  if (ss > 1) escpos.sharpenText(small.gray, small.width, small.height, img.imgRects);
   const left = Math.max(0, shift); // + shift: unused dots on the left, content moves right
-  const gray = escpos.padGray(rasterize.toGray(img), img.width, img.height, dots, left);
+  const gray = escpos.padGray(small.gray, img.width, img.height, dots, left);
   img.imgRects = img.imgRects.map((r) => ({ ...r, x: r.x + left }));
   img.width = dots;
   const looksBlank = !gray.some((v) => v < 200);

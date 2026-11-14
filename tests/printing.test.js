@@ -184,3 +184,17 @@ test('cash drawer pulse is added once before the receipt when requested', () => 
   assert.equal(escpos.decodeJob(job).cuts, 2);
   assert.equal(escpos.buildJob(bmp, {}).toString('hex').includes('1b700019fa'), false);
 });
+
+test('ESC/POS: long blank gaps are sent as a feed (less data) and decode back to the same picture', () => {
+  const w = 384, h = 900;
+  const gray = new Uint8Array(w * h).fill(255);
+  for (let y = 10; y < 40; y++) for (let x = 20; x < 300; x++) gray[y * w + x] = 0;
+  for (let y = 700; y < 730; y++) for (let x = 20; x < 300; x++) gray[y * w + x] = 0; // 660 blank rows in between
+  const bmp = escpos.trimBlankTail(escpos.packBitmap(gray, w, h, { threshold: 150 }), 0);
+  const plain = escpos.buildJob(bmp, { blankRun: 0 });
+  const small = escpos.buildJob(bmp, {});
+  assert.ok(small.length < plain.length / 3, `job ${small.length} vs ${plain.length}`);
+  const a = escpos.decodeJob(plain), b = escpos.decodeJob(small);
+  assert.equal(b.height, a.height); assert.equal(b.cuts, 1);
+  for (const y of [20, 35, 400, 710, 725]) assert.deepEqual(Buffer.from(b.rows[y]), Buffer.from(a.rows[y]), `row ${y}`);
+});

@@ -407,6 +407,7 @@ function PrinterTab() {
             <div className="form-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
               <Field label="Paper cut"><Select value={s.v.cut} onChange={(e) => s.set('cut')(e.target.value)} options={[{ value: 'partial', label: 'Partial cut' }, { value: 'full', label: 'Full cut' }, { value: 'none', label: 'No cut (tear)' }]} /></Field>
               <Field label="Extra feed (mm)" hint="Blank space after the receipt"><NumberInput value={s.v.feedMm} onChange={(x) => s.set('feedMm')(Number(x))} /></Field>
+              <Field label="Print quality" hint="High is sharper (drawn at 2× resolution)"><Select value={s.v.quality || 'high'} onChange={(e) => s.set('quality')(e.target.value)} options={[{ value: 'high', label: 'High (recommended)' }, { value: 'standard', label: 'Standard' }]} /></Field>
               <Field label="Print darkness"><Select value={s.v.darkness} onChange={(e) => s.set('darkness')(e.target.value)} options={[{ value: 'light', label: 'Light' }, { value: 'normal', label: 'Normal' }, { value: 'dark', label: 'Dark / bold' }]} /></Field>
               <Field label="Side balance (dots)" hint="Left/right equal: − moves print left, + moves it right"><div className="row" style={{ gap: 6 }}>
                 <Button size="sm" onClick={() => s.set('shift')(Math.max(-96, (Number(s.v.shift) || 0) - 4))} title="Move print left">◄</Button>

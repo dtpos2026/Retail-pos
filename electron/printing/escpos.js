@@ -45,6 +45,25 @@ function mmForDots(dots) {
 const DARKNESS = { light: 185, normal: 150, dark: 120 };
 
 /**
+ * Crisp text after supersampling: thin strokes come out mid-gray, so stretch the contrast (grays darker than `lo`
+ * become black, lighter than `hi` white). Picture regions are left alone — they get their own dithering curve.
+ */
+function sharpenText(gray, width, height, rects = [], lo = 70, hi = 215) {
+  const keep = rects.length ? gray.slice() : null;
+  const k = 255 / (hi - lo);
+  for (let i = 0; i < gray.length; i++) {
+    const v = (gray[i] - lo) * k;
+    gray[i] = v < 0 ? 0 : v > 255 ? 255 : v;
+  }
+  for (const r of rects) {
+    const x0 = Math.max(0, Math.floor(r.x)), x1 = Math.min(width, Math.ceil(r.x + r.w));
+    const y0 = Math.max(0, Math.floor(r.y)), y1 = Math.min(height, Math.ceil(r.y + r.h));
+    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) gray[y * width + x] = keep[y * width + x];
+  }
+  return gray;
+}
+
+/**
  * Pack a grayscale image into 1-bit rows (1 = black), MSB first.
  * @param {Uint8Array} gray width*height gray values (0 black .. 255 white)
  * @param {{x:number,y:number,w:number,h:number}[]} ditherRects regions (dots) that get error-diffusion dithering (logos)
@@ -125,20 +144,54 @@ function trimBlankTail(bitmap, keepRows = 0) {
   return { ...bitmap, height, data: data.subarray(0, height * rowBytes) };
 }
 
+/** Split a bitmap into printed segments and blank runs (>= minBlank rows). blankRun 0 = never split. */
+function segments(bitmap, minBlank) {
+  const { rowBytes, data, height } = bitmap;
+  if (!minBlank) return [{ y: 0, rows: height, blank: false }];
+  const isBlank = (y) => {
+    const s = y * rowBytes;
+    for (let i = 0; i < rowBytes; i++) if (data[s + i] !== 0) return false;
+    return true;
+  };
+  const out = [];
+  let y = 0;
+  while (y < height) {
+    const blank = isBlank(y);
+    let e = y + 1;
+    while (e < height && isBlank(e) === blank) e++;
+    const len = e - y;
+    // a blank run only becomes a feed when it is long (and not at the very start: keep the top margin as it was drawn)
+    const asFeed = blank && len >= minBlank && y > 0;
+    const last = out[out.length - 1];
+    if (last && last.blank === asFeed) last.rows += len;
+    else out.push({ y, rows: len, blank: asFeed });
+    y = e;
+  }
+  return out;
+}
+
 /**
  * Build the complete print job.
  * @param {{width:number,height:number,rowBytes:number,data:Buffer}} bitmap
  * @param {{cut?:'partial'|'full'|'none', feedMm?:number, compatCut?:boolean, copies?:number, band?:number}} opts
  */
-function buildJob(bitmap, { cut = 'partial', feedMm = 3, compatCut = false, copies = 1, band = 240, drawer = false } = {}) {
+function buildJob(bitmap, { cut = 'partial', feedMm = 3, compatCut = false, copies = 1, band = 240, drawer = false, blankRun = 40 } = {}) {
   const parts = [];
   for (let c = 0; c < Math.max(1, copies); c++) {
     parts.push(Buffer.from([ESC, 0x40])); // initialise
     if (drawer && c === 0) parts.push(Buffer.from([ESC, 0x70, 0x00, 0x19, 0xfa])); // kick the cash drawer (pin 2)
-    for (let y = 0; y < bitmap.height; y += band) {
-      const rows = Math.min(band, bitmap.height - y);
-      const head = Buffer.from([GS, 0x76, 0x30, 0x00, bitmap.rowBytes & 0xff, (bitmap.rowBytes >> 8) & 0xff, rows & 0xff, (rows >> 8) & 0xff]);
-      parts.push(head, bitmap.data.subarray(y * bitmap.rowBytes, (y + rows) * bitmap.rowBytes));
+    // Long blank stretches (gaps between sections) become a quick paper feed instead of rows of zero bytes:
+    // much less data to send, so the receipt starts and finishes sooner.
+    for (const seg of segments(bitmap, blankRun)) {
+      if (seg.blank) {
+        for (let left = seg.rows; left > 0; left -= 255) parts.push(Buffer.from([ESC, 0x4a, Math.min(255, left)]));
+        continue;
+      }
+      for (let y = seg.y; y < seg.y + seg.rows; y += band) {
+        const rows = Math.min(band, seg.y + seg.rows - y);
+        const head = Buffer.from([GS, 0x76, 0x30, 0x00, bitmap.rowBytes & 0xff, (bitmap.rowBytes >> 8) & 0xff, rows & 0xff, (rows >> 8) & 0xff]);
+        parts.push(head, bitmap.data.subarray(y * bitmap.rowBytes, (y + rows) * bitmap.rowBytes));
+      }
     }
     const feedDots = Math.max(0, Math.min(255, Math.round(feedMm * 8)));
     if (cut === 'none') {
@@ -165,14 +218,21 @@ function decodeJob(buf) {
   let rowBytes = 0;
   let cuts = 0;
   let feeds = 0;
+  let pendingFeed = 0;
   while (i < buf.length) {
-    if (buf[i] === ESC && buf[i + 1] === 0x40) i += 2;
+    if (buf[i] === ESC && buf[i + 1] === 0x40) {
+      pendingFeed = 0; // a new copy starts: the feed after the previous one is not part of the picture
+      i += 2;
+    }
     else if (buf[i] === ESC && buf[i + 1] === 0x4a) {
       feeds += buf[i + 2];
+      pendingFeed += buf[i + 2]; // a feed between two picture bands is a blank stretch of the image
       i += 3;
     } else if (buf[i] === ESC && buf[i + 1] === 0x70) {
       i += 5;
     } else if (buf[i] === GS && buf[i + 1] === 0x76 && buf[i + 2] === 0x30) {
+      for (; pendingFeed > 0 && rows.length; pendingFeed--) rows.push(Buffer.alloc(buf[i + 4] | (buf[i + 5] << 8)));
+      pendingFeed = 0;
       rowBytes = buf[i + 4] | (buf[i + 5] << 8);
       const h = buf[i + 6] | (buf[i + 7] << 8);
       i += 8;
@@ -186,4 +246,4 @@ function decodeJob(buf) {
   return { rowBytes, width: rowBytes * 8, height: rows.length, rows, cuts, feedDots: feeds };
 }
 
-module.exports = { effectiveDots, padGray, dotsForPaper, mmForDots, DARKNESS, packBitmap, trimBlankTail, buildJob, decodeJob };
+module.exports = { sharpenText, effectiveDots, padGray, dotsForPaper, mmForDots, DARKNESS, packBitmap, trimBlankTail, buildJob, decodeJob };
