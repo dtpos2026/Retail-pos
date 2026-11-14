@@ -90,10 +90,10 @@ test('jobs on one COM port run one at a time (no "port busy" between Test print 
 });
 
 test('Bluetooth pacing is slow and steady by default; a stalled printer gives a specific, no-retry message', () => {
-  assert.deepEqual(serial.pace('auto', 'bluetooth'), serial.pace('fast', 'bluetooth'));
+  assert.deepEqual(serial.pace('auto', 'bluetooth'), serial.pace('normal', 'bluetooth'));
   assert.deepEqual(serial.pace('normal', 'bluetooth'), serial.pace('auto', 'bluetooth'), 'old saved "normal" is treated as auto');
-  const rate = (s, k) => { const p = serial.pace(s, k); return p.chunk / (p.gap + 5); };
-  assert.ok(rate('safe', 'bluetooth') < rate('medium', 'bluetooth') && rate('medium', 'bluetooth') < rate('fast', 'bluetooth'), 'safe < medium < fast');
+  const f = (s) => serial.pace(s, 'bluetooth').adaptive;
+  assert.ok(f('safe') > f('medium') && f('medium') > f('auto') && f('auto') > f('fast'), 'safe slowest ... fast quickest');
   let e = serial.describeStall('opening', 'COM4');
   assert.match(e.message, /could not connect/); assert.equal(e.noRetry, true);
   e = serial.describeStall('sent:2560/30000', 'COM4');
@@ -112,4 +112,18 @@ test('text test goes through the COM path in one small job', async () => {
   assert.ok(bin.length < 200); assert.match(bin.toString('latin1'), /DT Retail POS/);
   serial.setFake(null);
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('Bluetooth pacing follows what is printed: dense picture rows wait longer than blank / text rows', () => {
+  const row = 48;
+  const head = Buffer.from([0x1d, 0x76, 0x30, 0x00, row, 0, 0, 0]);
+  const blank = Buffer.alloc(row * 20);
+  const dense = Buffer.alloc(row * 20, 0xaa); // half the dots black (dithered picture)
+  const plan = serial.gapPlan(Buffer.concat([head, blank, dense]), 480, 1.2);
+  assert.ok(plan.length >= 2);
+  const lightGap = plan[0], denseGap = Math.max(...plan);
+  assert.ok(denseGap > lightGap * 2, `dense ${denseGap} vs light ${lightGap}`);
+  const fast = serial.gapPlan(Buffer.concat([head, dense]), 480, 0.8)[1], safe = serial.gapPlan(Buffer.concat([head, dense]), 480, 4)[1];
+  assert.ok(safe > fast * 3);
+  assert.ok(plan.every((g) => g >= 2 && g <= 600));
 });

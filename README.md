@@ -14,6 +14,10 @@ Retail-pos/                  ← POS software (Windows, offline). Run npm comman
 ```
 
 
+## What's new in v1.10.6
+
+- **Fix: garbage text before / inside slips** ("Max NVLogo num is 4 … NVLogo PIC", seen on a real MediaLink PT-210). Fast fixed-speed sending overran the printer on dense areas (logos, pictures): lost bytes were read as printer commands. Bluetooth jobs are now paced by **what is being printed** — light text rows go quickly, dense rows wait for the print head — with a safety factor per level (Fast 0.8, **Auto 1.2**, Medium 1.6, Safe 4).
+
 ## What's new in v1.10.5
 
 - **Faster printing:** long blank gaps in a receipt are sent as a quick paper feed instead of rows of empty data (about a third less data on typical bills), and *Auto* sending speed for Bluetooth is now the fast level (Safe / Medium stay in Settings → Printers if a printer needs it).

@@ -30,12 +30,42 @@ const portOf = (name) => {
 const nameFor = (port) => `${PREFIX}${String(port).toUpperCase()}`;
 
 // How fast the job is pushed into the port. Small Bluetooth printers have tiny buffers; "safe" never overruns them.
-const SPEEDS = { safe: { chunk: 256, gap: 50 }, medium: { chunk: 512, gap: 20 }, normal: { chunk: 1024, gap: 25 }, fast: { chunk: 1024, gap: 6 } };
+// Bluetooth printers have no reliable flow control, and a thermal head prints dense areas (logos, pictures) much slower
+// than text. So Bluetooth jobs are paced by what is being printed (`adaptive` = safety factor on the estimated print time).
+const SPEEDS = {
+  safe: { chunk: 512, gap: 50, adaptive: 4 },
+  medium: { chunk: 512, gap: 20, adaptive: 1.6 },
+  normal: { chunk: 1024, gap: 25 },
+  fast: { chunk: 512, gap: 6, adaptive: 0.8 },
+  auto: { chunk: 512, gap: 15, adaptive: 1.2 },
+};
 /** "auto" (and the old "normal") = slow and steady for Bluetooth printers (tiny buffers, no flow control), normal for cables. */
 const pace = (speed, kind) => {
-  if (SPEEDS[speed] && speed !== 'normal') return SPEEDS[speed];
-  return kind === 'bluetooth' ? SPEEDS.fast : SPEEDS.normal; // auto (and the old "normal"): quick; Safe / Medium are one tap away
+  const lvl = SPEEDS[speed] && speed !== 'normal' && speed !== 'auto' ? speed : null;
+  if (kind === 'bluetooth') return SPEEDS[lvl || 'auto'];
+  // cables / USB-serial: fixed pacing (they have real flow control)
+  return lvl === 'safe' ? { chunk: 256, gap: 50 } : lvl === 'medium' ? { chunk: 512, gap: 20 } : lvl === 'fast' ? { chunk: 1024, gap: 6 } : SPEEDS.normal;
 };
+
+const POP = Uint8Array.from({ length: 256 }, (_, i) => { let n = 0; for (let v = i; v; v >>= 1) n += v & 1; return n; });
+/**
+ * Milliseconds to wait after each chunk so the printer is never sent more than it can print: about 1.7 ms per picture row
+ * plus up to 8 ms more for a fully black row (heat limit), times a safety factor. Exported for tests.
+ */
+function gapPlan(data, chunk, factor) {
+  let rowBytes = 48;
+  for (let i = 0; i + 7 < data.length && i < 64; i++) if (data[i] === 0x1d && data[i + 1] === 0x76 && data[i + 2] === 0x30) { rowBytes = data[i + 4] | (data[i + 5] << 8) || 48; break; }
+  const gaps = [];
+  for (let i = 0; i < data.length; i += chunk) {
+    const end = Math.min(data.length, i + chunk);
+    let bits = 0;
+    for (let j = i; j < end; j++) bits += POP[data[j]];
+    const density = bits / ((end - i) * 8);
+    const rows = (end - i) / rowBytes;
+    gaps.push(Math.max(2, Math.min(600, Math.round(rows * (1.7 + 8 * density) * factor))));
+  }
+  return gaps;
+}
 const BAUDS = [9600, 19200, 38400, 57600, 115200];
 
 const LIST_SCRIPT = [
@@ -122,7 +152,7 @@ async function listPorts({ fresh = false } = {}) {
  * with "UNKNOWN", and two jobs on one port at once fail with "busy" — so every job on a port runs one at a time.
  */
 const WRITE_SCRIPT = [
-  'param([string]$Port, [string]$File, [string]$Status = "", [int]$Baud = 9600, [int]$Chunk = 1024, [int]$Gap = 25, [int]$Probe = 0, [int]$Timeout = 8000)',
+  'param([string]$Port, [string]$File, [string]$Status = "", [int]$Baud = 9600, [int]$Chunk = 1024, [int]$Gap = 25, [int]$Probe = 0, [int]$Timeout = 8000, [string]$Plan = "")',
   "$ErrorActionPreference = 'Stop'",
   'function Done($o) { [Console]::Out.WriteLine((ConvertTo-Json -InputObject $o -Compress)); exit 0 }',
   'function Mark($s) { if ($Status) { try { [System.IO.File]::WriteAllText($Status, $s) } catch {} } }',
@@ -137,12 +167,14 @@ const WRITE_SCRIPT = [
   '  if (-not $Probe) {',
   '    $bytes = [System.IO.File]::ReadAllBytes($File)',
   '    $total = $bytes.Length',
+  '    $gaps = @(); if ($Plan) { $gaps = @((Get-Content -Raw $Plan) -split "," | Where-Object { $_ } | ForEach-Object { [int]$_ }) }',
   '    for ($i = 0; $i -lt $bytes.Length; $i += $Chunk) {',
   '      $n = [Math]::Min($Chunk, $bytes.Length - $i)',
   '      $sp.Write($bytes, $i, $n)',
   '      $sent = $i + $n',
   "      if (($i / $Chunk) % 8 -eq 0) { Mark ('sent:' + $sent + '/' + $bytes.Length) }",
-  '      if ($Gap -gt 0) { Start-Sleep -Milliseconds $Gap }',
+  '      $k = [int]($i / $Chunk); $g = $Gap; if ($k -lt $gaps.Count) { $g = $gaps[$k] }',
+  '      if ($g -gt 0) { Start-Sleep -Milliseconds $g }',
   '    }',
   '    $t = 0; while ($sp.BytesToWrite -gt 0 -and $t -lt $Timeout) { Start-Sleep -Milliseconds 50; $t += 50 }',
   '    Start-Sleep -Milliseconds 300',
@@ -231,7 +263,8 @@ function exclusive(port, job) {
 
 /** Write an ESC/POS job to a COM port in small pieces. */
 async function send(port, bytes, { baud = 9600, speed = 'auto', kind } = {}) {
-  const { chunk, gap } = pace(speed, kind);
+  const p = pace(speed, kind);
+  const { chunk, gap } = p;
   const data = Buffer.from(bytes);
   if (fakeDir) {
     return exclusive(port, async () => {
@@ -248,9 +281,16 @@ async function send(port, bytes, { baud = 9600, speed = 'auto', kind } = {}) {
     fs.writeFileSync(file, data);
     const b = BAUDS.includes(Number(baud)) ? Number(baud) : 9600;
     // connecting (Bluetooth can take ~15 s) + the bytes at the chosen pace; never minutes
-    const budget = 25000 + Math.ceil(data.length / chunk) * (gap + 15);
+    let plan = null;
+    let waits = Math.ceil(data.length / chunk) * (gap + 15);
+    if (p.adaptive) {
+      plan = gapPlan(data, chunk, p.adaptive);
+      fs.writeFileSync(path.join(dir, 'plan.txt'), plan.join(','));
+      waits = plan.reduce((s, g) => s + g + 15, 0);
+    }
+    const budget = 25000 + waits;
     try {
-      await runHelper(port, ['-File', file, '-Baud', String(b), '-Chunk', String(chunk), '-Gap', String(gap)], budget, path.join(dir, 'status.txt'));
+      await runHelper(port, ['-File', file, '-Baud', String(b), '-Chunk', String(chunk), '-Gap', String(gap), ...(plan ? ['-Plan', path.join(dir, 'plan.txt')] : [])], budget, path.join(dir, 'status.txt'));
     } finally {
       fs.rm(dir, { recursive: true, force: true }, () => {});
     }
@@ -279,4 +319,4 @@ async function probe(port) {
   }
 }
 
-module.exports = { PREFIX, SPEEDS, BAUDS, setFake, isSerialName, portOf, nameFor, parsePorts, listPorts, send, probe, explainHelper, describeStall, textTestJob, pace };
+module.exports = { PREFIX, SPEEDS, BAUDS, setFake, isSerialName, portOf, nameFor, parsePorts, listPorts, send, probe, explainHelper, describeStall, textTestJob, pace, gapPlan };

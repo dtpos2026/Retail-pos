@@ -1,6 +1,6 @@
 # DT Retail POS — System Details (Mukammal Tafseel)
 
-**Version 1.10.5 · Developed by Digital Target · digitaltarget.digital@gmail.com**
+**Version 1.10.6 · Developed by Digital Target · digitaltarget.digital@gmail.com**
 
 Yeh document **DT Retail POS** system ki poori tafseel hai: yeh kya hai, kya kya kar sakta hai, kaise kaam karta hai, license aur security ka nizam, technical dhancha, kya test hua aur kya abhi baqi hai. Is ko owner, investor, ya technical team — sab padh sakte hain. Roz ke istemaal ka tareeqa alag document **User Guide** (`DT_RETAIL_POS_USER_GUIDE.pdf`) mein hai.
 
@@ -300,8 +300,8 @@ Retail-pos/
 | Cheez | Tafseel |
 |---|---|
 | **Zaroorat** | Windows 10 / 11 (64-bit), 4 GB RAM, 500 MB jagah, optional thermal printer |
-| **Installer** | `RetailPOS-Setup-1.10.5.exe` (NSIS): install folder chunna, desktop aur Start-menu shortcut "DT Retail POS", uninstall par data mehfooz |
-| **Portable** | `RetailPOS-Portable-1.10.5.exe` (bina install) |
+| **Installer** | `RetailPOS-Setup-1.10.6.exe` (NSIS): install folder chunna, desktop aur Start-menu shortcut "DT Retail POS", uninstall par data mehfooz |
+| **Portable** | `RetailPOS-Portable-1.10.6.exe` (bina install) |
 | **Build** | Windows par `npm run dist`, ya GitHub Actions workflow "Build Windows installer" |
 | **Panel deploy** | `cd superadmin && npx firebase-tools deploy` (hosting + rules) — har version ke baad rules dobara deploy |
 
@@ -353,6 +353,7 @@ Retail-pos/
 | **1.8** | Variants (sizes), recipes, kg number pad; categories (top "⋯" / left rail); **Excel + JSON export / import**; device location fix |
 | **1.8.1** | POS table picker mein floors; token slip par waiter / rider |
 | **1.9.1** | Forgot-password window reset ko **khud (8 second mein)** utha leti hai; version label sab jagah theek |
+| **1.10.6** | Print ke andar / pehle **kachra ("NVLogo") theek**: Bluetooth data ab print ki ghanayi ke hisab se bheja jata hai (halki lines tez, bhari tasveer/logo dheemi), Auto 1.2 / Fast 0.8 / Medium 1.6 / Safe 4 |
 | **1.10.5** | Tez print: khali hisse data ki jagah feed, Bluetooth Auto = Fast; **Print quality** High (2x se chhota kar ke) / Standard |
 | **1.10.4** | Bluetooth pairing mazboot (radio dobara poochna, PIN + service ek hi run mein), print tez (Auto ~25 KB/s, Printers tab mein **Sending speed** Safe / Medium / Fast), Add a printer window upar aur chhoti |
 | **1.10.3** | Bluetooth print robust: Sending speed **Auto** (Bluetooth par dheema aur mustaqil), atke hue job par saaf paigham ("connect nahi hua" / "N of M bytes ke baad ruka"), 3 dafa retry band, **Text test** button, log mein stage + timing |
