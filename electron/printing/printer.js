@@ -82,7 +82,15 @@ async function resolvePrinter(name) {
     if (!ports.some((p) => p.port === port)) throw new AppError(`${port} was not found. Pair the Bluetooth printer again (Settings → Printers → Add a printer) or check its cable.`);
     return name;
   }
-  let printers = await listPrinters();
+  // Right after start-up Windows can take a long time to list every printer (network / virtual ones). A printer that
+  // was chosen by name does not have to wait for that: try it directly, and the retry logic re-checks if it fails.
+  const started = Date.now();
+  let printers = cache.at ? await listPrinters() : await Promise.race([listPrinters(), new Promise((r) => setTimeout(() => r(null), name ? 3000 : 12000))]);
+  if (printers === null) {
+    logger.warn('Printer list is slow (still loading after', Date.now() - started, 'ms)', name ? `- using "${name}" directly` : '');
+    if (name) return name;
+    printers = await listPrinters();
+  }
   if (!printers.length) printers = await listPrinters({ fresh: true });
   if (!printers.length) throw new AppError('No printer is installed on this computer. Install your printer driver in Windows first.');
   if (!name) {
@@ -176,6 +184,9 @@ async function textTest(name) {
   await sendJob(device, serial.textTestJob(), 'DT Retail POS text test');
   return { printer: device, ms: Date.now() - started };
 }
+
+// Start the printer path as soon as the app is up (not only after the splash): list, print helper, render worker.
+setTimeout(() => { try { require('electron').app.whenReady().then(() => setTimeout(() => { try { warmUp(); } catch { /* ignore */ } }, 1500)); } catch { /* ignore */ } }, 0);
 
 let monitor = null;
 

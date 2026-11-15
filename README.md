@@ -14,6 +14,10 @@ Retail-pos/                  ← POS software (Windows, offline). Run npm comman
 ```
 
 
+## What's new in v1.10.7
+
+- **First print after start-up** (USB / driver printers): the first receipt no longer waits for Windows to list *every* installed printer (slow right after boot with many network / virtual printers). A printer chosen by name is used directly; the printer path (list, print helper, render worker) now starts as soon as the app is ready. Each raw print is logged with its timing (Settings → General → Open logs).
+
 ## What's new in v1.10.6
 
 - **Fix: garbage text before / inside slips** ("Max NVLogo num is 4 … NVLogo PIC", seen on a real MediaLink PT-210). Fast fixed-speed sending overran the printer on dense areas (logos, pictures): lost bytes were read as printer commands. Bluetooth jobs are now paced by **what is being printed** — light text rows go quickly, dense rows wait for the print head — with a safety factor per level (Fast 0.8, **Auto 1.2**, Medium 1.6, Safe 4).

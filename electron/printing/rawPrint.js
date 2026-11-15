@@ -202,8 +202,10 @@ async function sendRaw(printerName, bytes, docName = 'Retail POS') {
   await start();
   const file = path.join(ctx.paths.temp, `job-${Date.now()}-${++counter}.bin`);
   fs.writeFileSync(file, bytes);
+  const t0 = Date.now();
   try {
     const res = await send({ printer: printerName, file, doc: docName });
+    logger.info('Raw print', printerName, res, `${Date.now() - t0} ms`, `${bytes.length} bytes`);
     if (res !== 'OK') {
       logger.error('Raw print failed', printerName, res);
       throw new AppError(explain(res, printerName));
