@@ -421,6 +421,7 @@ function PrinterTab() {
         </div>
         <div>
           <ToggleRow title="Open cash drawer when a receipt prints" desc="For a cash drawer plugged into the receipt printer (RJ11). Reprints do not open it." checked={s.v.openDrawer} onChange={s.set('openDrawer')} />
+          <ToggleRow title="Print on another printer if the chosen one is not available" desc="If the receipt printer is missing, off or fails, the bill prints on another printer Windows has (a thermal printer first, else the default) so nothing is lost." checked={s.v.fallbackAny !== false} onChange={s.set('fallbackAny')} />
           <ToggleRow title="Print receipt automatically after payment" checked={s.v.autoPrintReceipt} onChange={s.set('autoPrintReceipt')} />
           <ToggleRow title="Print tokens automatically after payment" checked={s.v.autoPrintToken} onChange={s.set('autoPrintToken')} />
         </div>

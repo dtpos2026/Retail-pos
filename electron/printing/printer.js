@@ -268,17 +268,48 @@ async function sendWithRetry(requested, deviceName, job, doc) {
   throw lastErr;
 }
 
+/**
+ * "Print on whatever is available": when the chosen printer is missing or does not work, use another printer from
+ * Windows instead of losing the print. A thermal-looking printer gets the fast ESC/POS job; any other printer (an
+ * office printer, say) gets the normal Windows-driver print, because raw ESC/POS would come out as garbage there.
+ */
+async function printOnAnother(html, opts, failedName, reason) {
+  if (settings.get('printer').fallbackAny === false) return null;
+  const list = (await listPrinters({ fresh: true })).filter((p) => p.name !== failedName && p.name !== opts.printerName);
+  const pick = detect.pickThermal(list);
+  if (!pick) return null;
+  logger.warn('Printing on another printer:', pick.name, '— the chosen one failed:', reason);
+  if (detect.score(pick) >= 10) {
+    const { job } = await buildThermalJob(html, { widthMm: opts.widthMm, copies: opts.copies || 1, drawer: false });
+    await sendWithRetry(pick.name, pick.name, job, `DT Retail POS ${opts.jobKey || ''}`.trim());
+    return { printer: pick.name, method: 'thermal', fallback: true };
+  }
+  const r = await printDriver(html, { ...opts, printerName: pick.name });
+  return { ...r, printer: pick.name, fallback: true };
+}
+
 async function printThermal(html, { printerName, widthMm, copies = 1, jobKey, drawer = false }) {
   const dump = dumpDir();
-  const deviceName = dump ? '(dump)' : await resolvePrinter(printerName);
-  const { job } = await buildThermalJob(html, { widthMm, copies, drawer });
-  if (dump) {
-    fs.mkdirSync(dump, { recursive: true });
-    fs.writeFileSync(path.join(dump, `${String(jobKey || 'job').replace(/[^\w.-]+/g, '_')}-${Date.now()}.escpos`), job);
-  } else {
-    await sendWithRetry(printerName, deviceName, job, `DT Retail POS ${jobKey || ''}`.trim());
+  let deviceName;
+  try {
+    deviceName = dump ? '(dump)' : await resolvePrinter(printerName);
+    const { job } = await buildThermalJob(html, { widthMm, copies, drawer });
+    if (dump) {
+      fs.mkdirSync(dump, { recursive: true });
+      fs.writeFileSync(path.join(dump, `${String(jobKey || 'job').replace(/[^\w.-]+/g, '_')}-${Date.now()}.escpos`), job);
+    } else {
+      await sendWithRetry(printerName, deviceName, job, `DT Retail POS ${jobKey || ''}`.trim());
+    }
+  } catch (err) {
+    if (dump || !printerName) throw err; // nothing chosen = auto already picked the best one
+    const alt = await printOnAnother(html, { printerName, widthMm, copies, jobKey }, deviceName, err.message).catch((e2) => {
+      logger.warn('No other printer worked either', e2.message);
+      return null;
+    });
+    if (!alt) throw err;
+    return alt;
   }
-  logger.info('Printed (thermal)', jobKey || '', 'on', deviceName, `${job.length} bytes`);
+  logger.info('Printed (thermal)', jobKey || '', 'on', deviceName);
   return { printer: deviceName, method: 'thermal' };
 }
 

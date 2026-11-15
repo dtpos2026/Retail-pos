@@ -14,6 +14,10 @@ Retail-pos/                  ← POS software (Windows, offline). Run npm comman
 ```
 
 
+## What's new in v1.10.8
+
+- **Print on whatever is available:** if the chosen printer is missing, switched off or fails, the print goes to another printer Windows has — a thermal-looking one first (fast ESC/POS), otherwise the Windows default / any real printer through the normal driver (raw ESC/POS would be garbage on an office printer). Switch off in Settings → Printers ("Print on another printer if the chosen one is not available").
+
 ## What's new in v1.10.7
 
 - **First print after start-up** (USB / driver printers): the first receipt no longer waits for Windows to list *every* installed printer (slow right after boot with many network / virtual printers). A printer chosen by name is used directly; the printer path (list, print helper, render worker) now starts as soon as the app is ready. Each raw print is logged with its timing (Settings → General → Open logs).

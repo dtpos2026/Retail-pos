@@ -1,6 +1,6 @@
 # DT Retail POS — User Guide (Istemaal ki Rehnumai)
 
-**Version 1.10.7 · Digital Target · digitaltarget.digital@gmail.com**
+**Version 1.10.8 · Digital Target · digitaltarget.digital@gmail.com**
 
 Yeh guide restaurant / dukaan ke **owner, manager, cashier aur waiter** ke liye hai. Is mein software install karne se le kar rozana billing, reports, backup aur masail ke hal tak sab kuch **qadam ba qadam** likha hai. Screen par jo naam likhe hain (jaise **Settings → Printers**) bilkul wohi button / tab ke naam hain jo software mein nazar aate hain.
 
@@ -16,7 +16,7 @@ Aakhir mein (Appendix A) **Super Admin panel** ki guide bhi hai — yeh sirf sof
 - Internet **sirf pehli activation** ke liye chahiye (ek dafa). Uske baad poora software internet ke baghair chalta hai.
 
 ### 1.2 Install karna
-1. Provider se mila hua **RetailPOS-Setup-1.10.7.exe** double-click karein (ya bina install wali file **RetailPOS-Portable-1.10.7.exe**).
+1. Provider se mila hua **RetailPOS-Setup-1.10.8.exe** double-click karein (ya bina install wali file **RetailPOS-Portable-1.10.8.exe**).
 2. Install folder chunein, **Install** dabayein. Desktop par **DT Retail POS** ka shortcut ban jata hai.
 3. Aap ka saara data `C:\Users\<aap ka naam>\AppData\Roaming\Retail POS\` mein rehta hai. Software uninstall karne se data **delete nahi hota**.
 
