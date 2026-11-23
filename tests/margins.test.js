@@ -31,19 +31,28 @@ test('old unequal margins become one side margin + printer side balance (same pr
   assert.equal(settings.get('printer').shift, 24);
 });
 
-test('receipt, token and report HTML use the same margin on both sides', () => {
-  settings.set('receipt', { marginSide: 2.5 });
+test('left and right margins are independent, saved, and used by receipt, token and kitchen slips', () => {
   const pads = (html) => /body\{width:[\d.]+mm;padding:([\d.]+)mm ([\d.]+)mm ([\d.]+)mm ([\d.]+)mm/.exec(html).slice(1, 5).map(Number);
-  for (const html of [printService.receiptHtml({ sample: true }), printService.tokenHtmls({ sample: true })[0], printService.kotHtml({ sample: true })]) {
-    const [, r, , l] = pads(html);
-    assert.equal(l, r);
-    assert.ok(l > 0);
+  // the single side margin still sets both sides (older callers)
+  settings.set('receipt', { marginSide: 2.5 });
+  assert.equal(settings.get('receipt').marginLeft, 2.5);
+  assert.equal(settings.get('receipt').marginRight, 2.5);
+  // separate values are kept exactly, also after a restart (cache cleared)
+  settings.set('receipt', { marginLeft: 1, marginRight: 6 });
+  settings.clearCache();
+  const r0 = settings.get('receipt');
+  assert.equal(r0.marginLeft, 1); assert.equal(r0.marginRight, 6);
+  const [, r, , l] = pads(printService.receiptHtml({ sample: true }));
+  assert.equal(l, 1); assert.equal(r, 6);
+  for (const html of [printService.tokenHtmls({ sample: true })[0], printService.kotHtml({ sample: true })]) {
+    const [, rr, , ll] = pads(html);
+    assert.ok(ll > 0 && rr > ll, 'token / KOT follow the same left and right margins');
   }
-  assert.equal(pads(printService.receiptHtml({ sample: true }))[1], 2.5);
-  // preview overrides cannot create unequal margins
-  const html = printService.receiptHtml({ sample: true, overrides: { receipt: { ...settings.get('receipt'), marginSide: 3, marginLeft: 6, marginRight: 0 } } });
-  const [, r, , l] = pads(html);
-  assert.equal(l, 3);
-  assert.equal(r, 3);
-  assert.throws(() => settings.set('receipt', { marginSide: 30 }), /between 0 and 20/);
+  // preview overrides carry their own margins
+  const html = printService.receiptHtml({ sample: true, overrides: { receipt: { ...settings.get('receipt'), marginLeft: 3, marginRight: 0 } } });
+  const [, r2, , l2] = pads(html);
+  assert.equal(l2, 3); assert.equal(r2, 0);
+  assert.throws(() => settings.set('receipt', { marginRight: 30 }), /between 0 and 20/);
+  assert.throws(() => settings.set('receipt', { marginLeft: -1 }), /between 0 and 20/);
+  settings.set('receipt', { marginLeft: 1, marginRight: 1, marginSide: 1 });
 });

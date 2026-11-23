@@ -548,10 +548,27 @@ function ticket(d) {
 const RENDERERS = { classic, modern, minimal, restaurant, retail, compact, boxed, bold, tax, luxury, ticket };
 
 
+/**
+ * "Compact mode" for any design: smaller type, tight line spacing and paddings, small logo, no amount in words.
+ * The Compact design is already the smallest, so it is left as it is.
+ */
+function compactCss(fontSize) {
+  const fs = Math.max(8, fontSize - 2.5);
+  return `
+body{font-size:${fs}px!important;line-height:1.1!important;padding-top:.6mm!important;padding-bottom:1.5mm!important}
+td,th{padding-top:.1mm!important;padding-bottom:.1mm!important}
+td[style*="padding"],th[style*="padding"]{padding:.2mm .6mm!important}
+div[style*="padding"]{padding-top:.4mm!important;padding-bottom:.4mm!important}
+[style*="margin"]{margin-top:.4mm!important;margin-bottom:.4mm!important}
+.logo{margin-bottom:.4mm!important}.logo img{max-height:13mm!important}`;
+}
+
 function renderReceipt(data) {
   const key = RENDERERS[data.cfg.template] ? data.cfg.template : 'classic';
-  const body = RENDERERS[key](data);
-  return wrap(baseCss(data.cfg), body, `Receipt ${data.order.no}`);
+  const tight = !!data.cfg.compact && key !== 'compact';
+  const d = tight ? { ...data, words: '' } : data;
+  const css = baseCss(d.cfg) + (tight ? compactCss(Number(d.cfg.fontSize) || 12) : '');
+  return wrap(css, RENDERERS[key](d), `Receipt ${data.order.no}`);
 }
 
 module.exports = { TEMPLATES, renderReceipt };

@@ -21,8 +21,9 @@ const DEFAULTS = {
     template: 'classic',
     marginTop: 1,
     marginBottom: 3,
-    marginSide: 1, // equal left and right margin (mm)
-    marginLeft: 1, // kept equal to marginSide (older versions stored them separately)
+    marginSide: 1, // = the smaller of left / right (kept for older code)
+    marginLinked: true, // screen option: editing one side also sets the other
+    marginLeft: 1, // mm, independent of the right margin
     marginRight: 1,
     showLogo: true,
     logoWidth: 45, // percentage of printable width
@@ -188,7 +189,12 @@ function get(section) {
   }
   if (section === 'receipt' && stored) migrateMargins(stored);
   const value = merge(DEFAULTS[section], stored);
-  if (section === 'receipt') value.marginLeft = value.marginRight = value.marginSide;
+  if (section === 'receipt') {
+    // left and right margins are independent; a record without them (older data) uses the single side margin
+    if (!stored || stored.marginLeft === undefined) value.marginLeft = value.marginSide;
+    if (!stored || stored.marginRight === undefined) value.marginRight = value.marginSide;
+    value.marginSide = Math.min(value.marginLeft, value.marginRight);
+  }
   cache.set(section, value);
   return value;
 }
@@ -204,6 +210,7 @@ function migrateMargins(stored) {
   const r = Number(stored.marginRight);
   if (!Number.isFinite(l) || !Number.isFinite(r)) return;
   stored.marginSide = Math.min(l, r);
+  stored.marginLeft = stored.marginRight = stored.marginSide; // the difference moves to the printer's Side balance (below)
   if (Math.abs(l - r) > 0.01) {
     const row = ctx.db.get("SELECT value FROM settings WHERE key = 'printer'");
     let pr = {};
@@ -235,7 +242,11 @@ function set(section, patch, { internal = false } = {}) {
     patch = { ...(patch || {}), mode: current.mode, modeLocked: current.modeLocked };
   }
   const value = merge(DEFAULTS[section], { ...current, ...(patch || {}) });
-  if (section === 'receipt') value.marginLeft = value.marginRight = value.marginSide;
+  if (section === 'receipt') {
+    // an older caller that only knows the single side margin sets both sides
+    if (patch && patch.marginSide !== undefined && patch.marginLeft === undefined && patch.marginRight === undefined) value.marginLeft = value.marginRight = value.marginSide;
+    value.marginSide = Math.min(Number(value.marginLeft), Number(value.marginRight));
+  }
   validate(section, value);
   ctx.db.run(
     'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
@@ -248,7 +259,7 @@ function set(section, patch, { internal = false } = {}) {
 function validate(section, v) {
   if (section === 'receipt') {
     if (![58, 80].includes(Number(v.paperWidth))) throw new AppError('Paper width must be 58mm or 80mm.');
-    for (const k of ['marginTop', 'marginBottom', 'marginSide']) {
+    for (const k of ['marginTop', 'marginBottom', 'marginSide', 'marginLeft', 'marginRight']) {
       if (v[k] < 0 || v[k] > 20) throw new AppError('Margins must be between 0 and 20 mm.');
     }
     if (v.fontSize < 8 || v.fontSize > 20) throw new AppError('Font size must be between 8 and 20.');

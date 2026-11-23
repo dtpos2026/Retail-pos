@@ -14,6 +14,11 @@ Retail-pos/                  ← POS software (Windows, offline). Run npm comman
 ```
 
 
+## What's new in v1.10.9
+
+- **Left and right margins are separate** (Settings → Receipt → *Left margin* / *Right margin*): for printers whose print area is not centred or is narrower than the paper (right side cut off). Tick *Keep left and right equal* to link them again. Saved once and kept; used by receipts, tokens, kitchen slips and reports. The Margin test page now shows a ruler to read the visible edges.
+- **Compact mode really saves paper**: on every design it now cuts **33–48 %** of the receipt length (was ~8 %) — smaller type, tight spacing and paddings, small logo, no amount-in-words. The *Compact* design itself stays the smallest (about 45–55 % of Classic).
+
 ## What's new in v1.10.8
 
 - **Print on whatever is available:** if the chosen printer is missing, switched off or fails, the print goes to another printer Windows has — a thermal-looking one first (fast ESC/POS), otherwise the Windows default / any real printer through the normal driver (raw ESC/POS would be garbage on an office printer). Switch off in Settings → Printers ("Print on another printer if the chosen one is not available").

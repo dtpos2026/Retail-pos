@@ -398,6 +398,41 @@ let failed = false;
     await inv('settings.set', { section: 'receipt', values: all.receipt });
     if (bad.length) throw new Error('unbalanced: ' + bad.join('; '));
   });
+  await step('compact mode saves at least 30% paper on every design; left / right margins can differ and stay saved', async () => {
+    const dump = path.join(ud, 'prints');
+    const escpos = require('../electron/printing/escpos');
+    const inv = async (m, a) => { const r = await page.evaluate(([mm, aa]) => window.pos.invoke(mm, aa), [m, a]); if (!r.ok) throw new Error(`${m}: ${r.error && r.error.message}`); return r.data; };
+    const all = await inv('settings.getAll');
+    const order = (await inv('orders.list', { limit: 5 })).find((o) => o.status === 'completed');
+    const heightFor = async () => {
+      const before = new Set(fs.readdirSync(dump));
+      await inv('print.receipt', { orderId: order.id, reprint: true });
+      const f = fs.readdirSync(dump).find((x) => !before.has(x));
+      return escpos.decodeJob(fs.readFileSync(path.join(dump, f))).height;
+    };
+    const bad = [];
+    for (const tk of ['classic', 'modern', 'boxed', 'tax']) {
+      await inv('settings.set', { section: 'receipt', values: { ...all.receipt, template: tk, paperWidth: 80, compact: false } });
+      const normal = await heightFor();
+      await inv('settings.set', { section: 'receipt', values: { ...all.receipt, template: tk, paperWidth: 80, compact: true } });
+      const compact = await heightFor();
+      if (compact > normal * 0.7) bad.push(`${tk}: ${normal} -> ${compact}`);
+    }
+    // independent margins: left 1 mm, right 8 mm -> the right side of the picture is blank for at least 8 mm
+    await inv('settings.set', { section: 'receipt', values: { ...all.receipt, template: 'classic', paperWidth: 80, compact: false, marginLinked: false, marginLeft: 1, marginRight: 8, marginSide: 1 } });
+    const before = new Set(fs.readdirSync(dump));
+    await inv('print.receipt', { orderId: order.id, reprint: true });
+    const f = fs.readdirSync(dump).find((x) => !before.has(x));
+    const j = escpos.decodeJob(fs.readFileSync(path.join(dump, f)));
+    let minX = j.width, maxX = -1;
+    for (const r of j.rows) for (let x = 0; x < j.width; x++) if (r[x >> 3] & (0x80 >> (x & 7))) { if (x < minX) minX = x; if (x > maxX) maxX = x; }
+    const left = minX, right = j.width - 1 - maxX;
+    const saved = await inv('settings.getAll');
+    await inv('settings.set', { section: 'receipt', values: all.receipt });
+    if (bad.length) throw new Error('compact too big: ' + bad.join('; '));
+    if (!(right >= 8 * 8 - 8 && left < 20 && right - left > 40)) throw new Error(`margins not independent: left ${left} right ${right}`);
+    if (saved.receipt.marginLeft !== 1 || saved.receipt.marginRight !== 8) throw new Error('margins not saved');
+  });
   await step('80mm report preview + print', async () => {
     await page.click('a[href="#/reports"]');
     await page.waitForSelector('table.table');

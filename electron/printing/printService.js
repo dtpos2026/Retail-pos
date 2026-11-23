@@ -148,7 +148,7 @@ body{width:${bw}mm;font-family:Arial,sans-serif;font-size:12px}
   <div class="row"><span>◄ LEFT</span><span>RIGHT ►</span></div>
   <div class="b" style="font-weight:700;font-size:15px;margin:1mm 0">MARGIN TEST</div>
   <div>Paper ${widthMm} mm · width ${bw.toFixed(1)} mm · balance ${Number(pr.shift) || 0}</div>
-  <div style="font-size:10px;margin-top:1mm">Both black borders must be the same distance from the paper edges. If the LEFT gap is bigger, lower Side balance (e.g. -8); if the RIGHT gap is bigger, raise it (e.g. +8).</div>
+  <div style="font-size:10px;margin-top:1mm">Count the ruler number at the first visible mark on the LEFT and on the RIGHT. Use Settings → Receipt → Left / Right margin (mm) to move each side separately (or Printers → Side balance to shift both). If the right border is cut off, raise the Right margin.</div>
 </div>
 </body></html>`;
 }

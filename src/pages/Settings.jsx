@@ -245,8 +245,9 @@ function ReceiptTab() {
           <div className="form-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
             <Field label="Top margin (mm)"><NumberInput value={v.marginTop} onChange={(x) => s.set('marginTop')(Number(x))} /></Field>
             <Field label="Bottom margin"><NumberInput value={v.marginBottom} onChange={(x) => s.set('marginBottom')(Number(x))} /></Field>
-            <Field label="Side margin (mm)" hint="Left = Right, always equal"><NumberInput value={v.marginSide} onChange={(x) => { const n = Number(x); s.setV({ ...v, marginSide: n, marginLeft: n, marginRight: n }); }} /></Field>
-            <div className="small faint" style={{ alignSelf: 'end', paddingBottom: 8 }}>Printer not centred? Use <b>Settings → Printers → Side balance</b>.</div>
+            <Field label="Left margin (mm)" hint="Set each side on its own"><NumberInput value={v.marginLeft} onChange={(x) => { const n = Number(x); s.setV({ ...v, marginLeft: n, marginSide: Math.min(n, v.marginRight), ...(v.marginLinked !== false ? { marginRight: n, marginSide: n } : {}) }); }} /></Field>
+            <Field label="Right margin (mm)" hint="Print cut off on the right? Raise this"><NumberInput value={v.marginRight} onChange={(x) => { const n = Number(x); s.setV({ ...v, marginRight: n, marginSide: Math.min(n, v.marginLeft), ...(v.marginLinked !== false ? { marginLeft: n, marginSide: n } : {}) }); }} /></Field>
+            <div className="full" style={{ gridColumn: '1 / -1' }}><Check label="Keep left and right equal (turn off to set them separately)" checked={v.marginLinked !== false} onChange={(on) => s.setV({ ...v, marginLinked: on, ...(on ? { marginRight: v.marginLeft, marginSide: v.marginLeft } : {}) })} /></div>
             <Field label="Font size (px)"><NumberInput value={v.fontSize} onChange={(x) => s.set('fontSize')(Number(x))} /></Field>
             <Field label="Font">
               <Select value={v.fontFamily} onChange={(e) => s.set('fontFamily')(e.target.value)} options={[{ value: 'sans', label: 'Arial (clear)' }, { value: 'mono', label: 'Monospace' }, { value: 'condensed', label: 'Condensed' }, { value: 'serif', label: 'Serif' }]} />
