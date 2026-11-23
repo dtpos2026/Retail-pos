@@ -60,7 +60,7 @@ test('ESC/POS: bitmap -> job -> decode round trip, band split, cut', () => {
 
 test('side balance: content width shrinks and is padded so both margins can be equalised', () => {
   const e = escpos.effectiveDots(80, { shift: 8 });
-  assert.deepEqual(e, { total: 576, shift: 8, content: 568 });
+  assert.deepEqual(e, { total: 576, shift: 8, left: 8, right: 0, content: 568 });
   assert.equal(escpos.effectiveDots(80, { shift: -16 }).content, 560);
   assert.equal(escpos.effectiveDots(58, {}).content, 384);
   assert.equal(escpos.effectiveDots(80, { shift: 999 }).shift, 96);
@@ -101,16 +101,21 @@ test('dithering only touches picture regions and keeps text pixels', () => {
   assert.ok(blacks > 200 && blacks < 850, `mid-tone dithered to a mix (${blacks} of 1024)`);
 });
 
-test('11 receipt templates, thermal mode prints 72mm/48mm wide, driver mode full paper', () => {
+test('11 receipt templates, thermal mode prints 68mm/44mm wide (standard print area), 72/48 at full area, driver mode full paper', () => {
   assert.ok(printService.TEMPLATES.length >= 11);
-  settings.set('printer', { method: 'thermal' });
+  settings.set('printer', { method: 'thermal', printArea: 'standard' });
+  assert.match(printService.receiptHtml({ sample: true }), /width:68mm/);
+  settings.set('receipt', { paperWidth: 58 });
+  assert.match(printService.receiptHtml({ sample: true }), /width:44mm/);
+  settings.set('receipt', { paperWidth: 80 });
+  settings.set('printer', { method: 'thermal', printArea: 'full' });
   const html80 = printService.receiptHtml({ sample: true });
   assert.match(html80, /width:72mm/);
   settings.set('receipt', { paperWidth: 58 });
   assert.match(printService.receiptHtml({ sample: true }), /width:48mm/);
   settings.set('printer', { method: 'driver' });
   assert.match(printService.receiptHtml({ sample: true }), /width:58mm/);
-  settings.set('printer', { method: 'thermal' });
+  settings.set('printer', { method: 'thermal', printArea: 'standard' });
   settings.set('receipt', { paperWidth: 80 });
 });
 
@@ -152,7 +157,7 @@ test('every report renders as compact 80mm and 58mm thermal HTML; day summary ha
     for (const width of [80, 58]) {
       const html = printService.reportHtml({ key: r.key, from: today, to: today, width });
       assert.match(html, new RegExp(r.label.toUpperCase().replace(/[()]/g, '\\$&')), r.key);
-      assert.match(html, new RegExp(`width:${width === 80 ? 72 : 48}mm`));
+      assert.match(html, new RegExp(`width:${width === 80 ? 68 : 44}mm`));
     }
   }
   const daily = reports.run({ key: 'daily', from: today, to: today });
@@ -197,4 +202,19 @@ test('ESC/POS: long blank gaps are sent as a feed (less data) and decode back to
   const a = escpos.decodeJob(plain), b = escpos.decodeJob(small);
   assert.equal(b.height, a.height); assert.equal(b.cuts, 1);
   for (const y of [20, 35, 400, 710, 725]) assert.deepEqual(Buffer.from(b.rows[y]), Buffer.from(a.rows[y]), `row ${y}`);
+});
+
+test('print area presets: equal blank strip on both edges, never with an explicit print width', () => {
+  const f = escpos.effectiveDots(80, { printArea: 'full' });
+  assert.deepEqual([f.left, f.right, f.content], [0, 0, 576]);
+  const s = escpos.effectiveDots(80, { printArea: 'standard' });
+  assert.deepEqual([s.left, s.right, s.content], [16, 16, 544], 'standard = 2 mm each side');
+  const n = escpos.effectiveDots(58, { printArea: 'narrow' });
+  assert.deepEqual([n.left, n.right, n.content], [32, 32, 320]);
+  // side balance still moves it
+  const sh = escpos.effectiveDots(80, { printArea: 'standard', shift: 8 });
+  assert.deepEqual([sh.left, sh.right], [24, 16]);
+  // an explicit width is exact (older setups keep their result)
+  const x = escpos.effectiveDots(80, { printArea: 'narrow', dots: 512 });
+  assert.deepEqual([x.total, x.left, x.right, x.content], [512, 0, 0, 512]);
 });

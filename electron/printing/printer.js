@@ -215,19 +215,18 @@ function startMonitor() {
 
 function thermalGeometry(widthMm) {
   const pr = settings.get('printer');
-  const { total, shift, content } = escpos.effectiveDots(widthMm, pr);
-  return { dots: total, content, shift, cssWidthMm: escpos.mmForDots(content), pr };
+  const { total, left, content } = escpos.effectiveDots(widthMm, pr);
+  return { dots: total, content, left, cssWidthMm: escpos.mmForDots(content), pr };
 }
 
 async function buildThermalJob(html, { widthMm, copies = 1, drawer = false }) {
-  const { dots, content, shift, cssWidthMm, pr } = thermalGeometry(widthMm);
+  const { dots, content, left, cssWidthMm, pr } = thermalGeometry(widthMm);
   // High quality: draw at 2x the printer's resolution and average down (smoother, truer text); Standard: 1x
   const ss = pr.quality === 'standard' ? 1 : 2;
   const big = await rasterize.renderBgra(html, { cssWidthMm, pixelWidth: content * ss, maxHeightPx: 60000 });
   const small = rasterize.downsampleGray(rasterize.toGray(big), big.width, big.height, ss);
   const img = { width: small.width, height: small.height, imgRects: big.imgRects.map((r) => ({ x: r.x / ss, y: r.y / ss, w: r.w / ss, h: r.h / ss })) };
   if (ss > 1) escpos.sharpenText(small.gray, small.width, small.height, img.imgRects);
-  const left = Math.max(0, shift); // + shift: unused dots on the left, content moves right
   const gray = escpos.padGray(small.gray, img.width, img.height, dots, left);
   img.imgRects = img.imgRects.map((r) => ({ ...r, x: r.x + left }));
   img.width = dots;

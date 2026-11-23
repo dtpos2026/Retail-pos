@@ -57,6 +57,7 @@ const DEFAULTS = {
     feedMm: 3, // extra blank feed after the receipt before the cut
     darkness: 'normal', // light | normal | dark
     dots: 0, // 0 = auto (384 for 58mm, 576 for 80mm)
+    printArea: 'standard', // full | standard | narrow — blank strip at both edges (0 / 2 / 4 mm) so nothing is clipped; used with automatic width
     shift: 0, // horizontal balance in dots (+ moves the print to the right, - to the left)
     autoDetect: true, // pick the thermal printer automatically when none is chosen
     compatCut: false, // older printers without "feed and cut"
@@ -256,6 +257,7 @@ function validate(section, v) {
     if (v.copies < 1 || v.copies > 5) throw new AppError('Copies must be between 1 and 5.');
   }
   if (section === 'printer') {
+    if (!['full', 'standard', 'narrow'].includes(v.printArea)) v.printArea = 'standard';
     if (!['thermal', 'driver'].includes(v.method)) throw new AppError('Unknown print method.');
     if (!['partial', 'full', 'none'].includes(v.cut)) throw new AppError('Unknown cut mode.');
     if (!Number.isInteger(Number(v.shift)) || v.shift < -96 || v.shift > 96) throw new AppError('Side balance must be a whole number between -96 and 96 dots.');

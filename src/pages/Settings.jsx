@@ -414,7 +414,8 @@ function PrinterTab() {
                 <div className="input b center" style={{ minWidth: 56, textAlign: 'center' }}>{Number(s.v.shift) > 0 ? '+' : ''}{Number(s.v.shift) || 0}</div>
                 <Button size="sm" onClick={() => s.set('shift')(Math.min(96, (Number(s.v.shift) || 0) + 4))} title="Move print right">►</Button>
               </div></Field>
-              <Field label="Print width (dots)" hint="Auto: 384 (58mm) / 576 (80mm)"><Select value={String(s.v.dots)} onChange={(e) => s.set('dots')(Number(e.target.value))} options={[{ value: '0', label: 'Auto' }, { value: '384', label: '384 (48 mm)' }, { value: '448', label: '448 (56 mm)' }, { value: '512', label: '512 (64 mm)' }, { value: '576', label: '576 (72 mm)' }, { value: '640', label: '640 (80 mm)' }]} /></Field>
+              <Field label="Print area" hint="Standard: 2 mm blank at each edge (recommended)"><Select value={s.v.printArea || 'standard'} onChange={(e) => s.set('printArea')(e.target.value)} options={[{ value: 'standard', label: 'Standard — fits most printers' }, { value: 'narrow', label: 'Narrow — 4 mm each side (edges cut off)' }, { value: 'full', label: 'Full — edge to edge' }]} /></Field>
+              <Field label="Print width (dots)" hint="Auto = use the Print area above (384 / 576)"><Select value={String(s.v.dots)} onChange={(e) => s.set('dots')(Number(e.target.value))} options={[{ value: '0', label: 'Auto' }, { value: '384', label: '384 (48 mm)' }, { value: '448', label: '448 (56 mm)' }, { value: '512', label: '512 (64 mm)' }, { value: '576', label: '576 (72 mm)' }, { value: '640', label: '640 (80 mm)' }]} /></Field>
               <div className="full" style={{ gridColumn: '1 / -1' }}><Check label="Compatibility cut for older printers (feed, then cut)" checked={s.v.compatCut} onChange={s.set('compatCut')} /></div>
             </div>
           )}

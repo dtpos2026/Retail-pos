@@ -14,6 +14,10 @@ Retail-pos/                  ← POS software (Windows, offline). Run npm comman
 ```
 
 
+## What's new in v1.10.12
+
+- **Standard print area** (Settings → Printers → Thermal → *Print area*): out of the box the receipt is now laid out **2 mm narrower on each side** (68 mm on 80 mm paper, 44 mm on 58 mm paper) and centred, so printers that clip the last dots at the edge no longer cut the right side. *Narrow* = 4 mm each side, *Full* = edge to edge (old behaviour). An explicit *Print width (dots)* still overrides it exactly. Side balance works as before.
+
 ## What's new in v1.10.11
 
 - **Margins are back to the proven behaviour** (equal left / right margin, *Side balance*, *Print width*). The separate left / right margins and *Align margins* from v1.10.9–v1.10.10 are removed — they did not fix the right edge being cut off on a real printer.

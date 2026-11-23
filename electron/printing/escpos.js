@@ -26,8 +26,16 @@ function dotsForPaper(paperMm, override) {
 function effectiveDots(paperMm, pr = {}) {
   const total = dotsForPaper(paperMm, pr.dots);
   const shift = Math.max(-96, Math.min(96, Math.round(Number(pr.shift) || 0)));
-  return { total, shift, content: total - Math.abs(shift) };
+  // "Print area": the same blank strip at BOTH edges, so the print is centred and the last dots (where many printers
+  // clip) stay empty. Only when the width is automatic; an explicit Print width (dots) is used exactly as chosen.
+  const strip = Number(pr.dots) > 0 ? 0 : AREA_STRIP[pr.printArea] ?? 0;
+  const left = strip + Math.max(0, shift);
+  const right = strip + Math.max(0, -shift);
+  return { total, shift, left, right, content: Math.max(160, total - left - right) };
 }
+
+/** Blank dots at each edge for the print area presets (8 dots = 1 mm): standard = 2 mm, narrow = 4 mm, full = 0. */
+const AREA_STRIP = { full: 0, standard: 16, narrow: 32 };
 
 /** Place a grayscale image of `w` dots inside a `total`-dot wide row, `left` dots from the left edge (white fill). */
 function padGray(gray, w, h, total, left) {
@@ -246,4 +254,4 @@ function decodeJob(buf) {
   return { rowBytes, width: rowBytes * 8, height: rows.length, rows, cuts, feedDots: feeds };
 }
 
-module.exports = { sharpenText, effectiveDots, padGray, dotsForPaper, mmForDots, DARKNESS, packBitmap, trimBlankTail, buildJob, decodeJob };
+module.exports = { AREA_STRIP, sharpenText, effectiveDots, padGray, dotsForPaper, mmForDots, DARKNESS, packBitmap, trimBlankTail, buildJob, decodeJob };

@@ -175,8 +175,8 @@ test('all receipt templates render at 58mm and 80mm with Urdu and logo', () => {
   for (const t of printService.TEMPLATES) {
     for (const w of [58, 80]) {
       const html = printService.receiptHtml({ sample: true, overrides: { receipt: { template: t.key, paperWidth: w } } });
-      // Thermal mode prints the printable area: 72 mm on 80 mm paper, 48 mm on 58 mm paper.
-      assert.match(html, new RegExp(`width:${w === 80 ? 72 : 48}mm`));
+      // Thermal mode prints the standard print area: 68 mm on 80 mm paper, 44 mm on 58 mm paper (2 mm blank at each edge).
+      assert.match(html, new RegExp(`width:${w === 80 ? 68 : 44}mm`));
       assert.match(html, /بسم اللہ بریانی/);
       assert.match(html, /چکن بریانی/);
       assert.match(html, /<img src="data:image\/png/);
