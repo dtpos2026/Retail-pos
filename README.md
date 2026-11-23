@@ -14,14 +14,11 @@ Retail-pos/                  ← POS software (Windows, offline). Run npm comman
 ```
 
 
-## What's new in v1.10.10
+## What's new in v1.10.11
 
-- **Align margins — per printer** (Settings → Printers): every printer cannot print the first few mm at each edge. *Print alignment page* prints two rulers; read the first number that prints completely on the left and on the right, type them and Save — or type them by hand. The software then keeps the print **centred for that printer** (left = right visible margin). Saved **per printer name**, so each printer keeps its own alignment; receipts, tokens, kitchen slips and reports all use it.
-
-## What's new in v1.10.9
-
-- **Left and right margins are separate** (Settings → Receipt → *Left margin* / *Right margin*): for printers whose print area is not centred or is narrower than the paper (right side cut off). Tick *Keep left and right equal* to link them again. Saved once and kept; used by receipts, tokens, kitchen slips and reports. The Margin test page now shows a ruler to read the visible edges.
-- **Compact mode really saves paper**: on every design it now cuts **33–48 %** of the receipt length (was ~8 %) — smaller type, tight spacing and paddings, small logo, no amount-in-words. The *Compact* design itself stays the smallest (about 45–55 % of Classic).
+- **Margins are back to the proven behaviour** (equal left / right margin, *Side balance*, *Print width*). The separate left / right margins and *Align margins* from v1.10.9–v1.10.10 are removed — they did not fix the right edge being cut off on a real printer.
+- **Compact mode** keeps the improvement: on every design it saves **33–48 %** of the receipt length (smaller type, tight spacing, small logo). The *Compact* design is unchanged.
+- If the **right side of the bill is cut off** on a printer: Settings → Printers → *Print width (dots)* — try 512, then 448 / 384; then use *Side balance* (◄ ►) with the *Margin test* page to centre it.
 
 ## What's new in v1.10.8
 

@@ -21,9 +21,8 @@ const DEFAULTS = {
     template: 'classic',
     marginTop: 1,
     marginBottom: 3,
-    marginSide: 1, // = the smaller of left / right (kept for older code)
-    marginLinked: true, // screen option: editing one side also sets the other
-    marginLeft: 1, // mm, independent of the right margin
+    marginSide: 1, // equal left and right margin (mm)
+    marginLeft: 1, // kept equal to marginSide (older versions stored them separately)
     marginRight: 1,
     showLogo: true,
     logoWidth: 45, // percentage of printable width
@@ -62,7 +61,6 @@ const DEFAULTS = {
     autoDetect: true, // pick the thermal printer automatically when none is chosen
     compatCut: false, // older printers without "feed and cut"
     openDrawer: false, // kick the cash drawer (connected to the receipt printer) when a receipt prints
-    profiles: {}, // per printer: { [printer]: { left, right } } = mm of paper this printer cannot print at each edge (Align margins)
     fallbackAny: true, // chosen printer missing / not working: print on another available printer instead of failing
     quality: 'high', // high = drawn at 2x and averaged down (sharper text) | standard = 1x
     serialBaud: 9600, // COM printers on a cable (USB-serial / RS-232); Bluetooth ignores it
@@ -168,7 +166,7 @@ function merge(defaults, stored) {
     const d = defaults[key];
     const v = stored ? stored[key] : undefined;
     if (v === undefined || v === null) out[key] = d;
-    else if (d && typeof d === 'object' && !Array.isArray(d)) out[key] = Object.keys(d).length === 0 && typeof v === 'object' ? v : merge(d, v); // an empty default object is a free-form map (e.g. printer profiles)
+    else if (d && typeof d === 'object' && !Array.isArray(d)) out[key] = merge(d, v);
     else if (typeof d === 'number') out[key] = Number.isFinite(Number(v)) ? Number(v) : d;
     else if (typeof d === 'boolean') out[key] = !!v;
     else out[key] = v;
@@ -190,12 +188,7 @@ function get(section) {
   }
   if (section === 'receipt' && stored) migrateMargins(stored);
   const value = merge(DEFAULTS[section], stored);
-  if (section === 'receipt') {
-    // left and right margins are independent; a record without them (older data) uses the single side margin
-    if (!stored || stored.marginLeft === undefined) value.marginLeft = value.marginSide;
-    if (!stored || stored.marginRight === undefined) value.marginRight = value.marginSide;
-    value.marginSide = Math.min(value.marginLeft, value.marginRight);
-  }
+  if (section === 'receipt') value.marginLeft = value.marginRight = value.marginSide;
   cache.set(section, value);
   return value;
 }
@@ -211,7 +204,6 @@ function migrateMargins(stored) {
   const r = Number(stored.marginRight);
   if (!Number.isFinite(l) || !Number.isFinite(r)) return;
   stored.marginSide = Math.min(l, r);
-  stored.marginLeft = stored.marginRight = stored.marginSide; // the difference moves to the printer's Side balance (below)
   if (Math.abs(l - r) > 0.01) {
     const row = ctx.db.get("SELECT value FROM settings WHERE key = 'printer'");
     let pr = {};
@@ -243,11 +235,7 @@ function set(section, patch, { internal = false } = {}) {
     patch = { ...(patch || {}), mode: current.mode, modeLocked: current.modeLocked };
   }
   const value = merge(DEFAULTS[section], { ...current, ...(patch || {}) });
-  if (section === 'receipt') {
-    // an older caller that only knows the single side margin sets both sides
-    if (patch && patch.marginSide !== undefined && patch.marginLeft === undefined && patch.marginRight === undefined) value.marginLeft = value.marginRight = value.marginSide;
-    value.marginSide = Math.min(Number(value.marginLeft), Number(value.marginRight));
-  }
+  if (section === 'receipt') value.marginLeft = value.marginRight = value.marginSide;
   validate(section, value);
   ctx.db.run(
     'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
@@ -260,7 +248,7 @@ function set(section, patch, { internal = false } = {}) {
 function validate(section, v) {
   if (section === 'receipt') {
     if (![58, 80].includes(Number(v.paperWidth))) throw new AppError('Paper width must be 58mm or 80mm.');
-    for (const k of ['marginTop', 'marginBottom', 'marginSide', 'marginLeft', 'marginRight']) {
+    for (const k of ['marginTop', 'marginBottom', 'marginSide']) {
       if (v[k] < 0 || v[k] > 20) throw new AppError('Margins must be between 0 and 20 mm.');
     }
     if (v.fontSize < 8 || v.fontSize > 20) throw new AppError('Font size must be between 8 and 20.');
@@ -268,11 +256,6 @@ function validate(section, v) {
     if (v.copies < 1 || v.copies > 5) throw new AppError('Copies must be between 1 and 5.');
   }
   if (section === 'printer') {
-    if (v.profiles === null || typeof v.profiles !== 'object' || Array.isArray(v.profiles)) throw new AppError('Printer margins are invalid.');
-    for (const [k, p] of Object.entries(v.profiles)) {
-      const l = Number(p && p.left), r = Number(p && p.right);
-      if (!Number.isFinite(l) || !Number.isFinite(r) || l < 0 || r < 0 || l > 25 || r > 25) throw new AppError(`Printer margins for "${k || 'auto'}" must be between 0 and 25 mm.`);
-    }
     if (!['thermal', 'driver'].includes(v.method)) throw new AppError('Unknown print method.');
     if (!['partial', 'full', 'none'].includes(v.cut)) throw new AppError('Unknown cut mode.');
     if (!Number.isInteger(Number(v.shift)) || v.shift < -96 || v.shift > 96) throw new AppError('Side balance must be a whole number between -96 and 96 dots.');

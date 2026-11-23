@@ -245,9 +245,8 @@ function ReceiptTab() {
           <div className="form-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
             <Field label="Top margin (mm)"><NumberInput value={v.marginTop} onChange={(x) => s.set('marginTop')(Number(x))} /></Field>
             <Field label="Bottom margin"><NumberInput value={v.marginBottom} onChange={(x) => s.set('marginBottom')(Number(x))} /></Field>
-            <Field label="Left margin (mm)" hint="Set each side on its own"><NumberInput value={v.marginLeft} onChange={(x) => { const n = Number(x); s.setV({ ...v, marginLeft: n, marginSide: Math.min(n, v.marginRight), ...(v.marginLinked !== false ? { marginRight: n, marginSide: n } : {}) }); }} /></Field>
-            <Field label="Right margin (mm)" hint="Print cut off on the right? Raise this"><NumberInput value={v.marginRight} onChange={(x) => { const n = Number(x); s.setV({ ...v, marginRight: n, marginSide: Math.min(n, v.marginLeft), ...(v.marginLinked !== false ? { marginLeft: n, marginSide: n } : {}) }); }} /></Field>
-            <div className="full" style={{ gridColumn: '1 / -1' }}><Check label="Keep left and right equal (turn off to set them separately)" checked={v.marginLinked !== false} onChange={(on) => s.setV({ ...v, marginLinked: on, ...(on ? { marginRight: v.marginLeft, marginSide: v.marginLeft } : {}) })} /></div>
+            <Field label="Side margin (mm)" hint="Left = Right, always equal"><NumberInput value={v.marginSide} onChange={(x) => { const n = Number(x); s.setV({ ...v, marginSide: n, marginLeft: n, marginRight: n }); }} /></Field>
+            <div className="small faint" style={{ alignSelf: 'end', paddingBottom: 8 }}>Printer not centred? Use <b>Settings → Printers → Side balance</b>.</div>
             <Field label="Font size (px)"><NumberInput value={v.fontSize} onChange={(x) => s.set('fontSize')(Number(x))} /></Field>
             <Field label="Font">
               <Select value={v.fontFamily} onChange={(e) => s.set('fontFamily')(e.target.value)} options={[{ value: 'sans', label: 'Arial (clear)' }, { value: 'mono', label: 'Monospace' }, { value: 'condensed', label: 'Condensed' }, { value: 'serif', label: 'Serif' }]} />
@@ -305,44 +304,6 @@ function ReceiptTab() {
 }
 
 // ------------------------------------------------------------------ Printers
-/**
- * Every printer has its own unprintable strip at the left / right of the paper. Print the alignment page, read the
- * first number that prints completely on each ruler, type them: the software then keeps the print centred for this
- * printer (left and right margins come out equal) — saved per printer.
- */
-function AlignMargins({ s, label, printerKey }) {
-  const { toast, toastError } = useApp();
-  const prof = (s.v.profiles || {})[printerKey] || { left: 0, right: 0 };
-  const [busy, setBusy] = useState(false);
-  const setEdge = (side) => (x) => s.setV({ ...s.v, profiles: { ...(s.v.profiles || {}), [printerKey]: { left: prof.left, right: prof.right, [side]: Math.max(0, Math.min(25, Number(x) || 0)) } } });
-  const printPage = async () => {
-    setBusy(true);
-    try {
-      if (s.dirty && !(await s.save())) return;
-      const r = await api('print.calibrate', { printerName: printerKey });
-      toast(`Alignment page printed on ${r.printer} — read the first full number on each ruler`);
-    } catch (e) {
-      toastError(e);
-    } finally {
-      setBusy(false);
-    }
-  };
-  const set = prof.left > 0 || prof.right > 0;
-  return (
-    <div className="card card-pad col" style={{ gap: 10, background: 'var(--surface-2)' }}>
-      <div className="row"><MoveHorizontal size={18} color="var(--primary)" /><b className="grow">Align margins — {label}</b>{set && <Badge color="green">Set for this printer</Badge>}</div>
-      <div className="small muted">Printers differ: each one cannot print the first few mm at the left / right edge. Press <b>Print alignment page</b>, read the <b>first number that prints completely</b> on the LEFT ruler and on the RIGHT ruler, type them here and press Save. The receipt is then centred for this printer (left = right). Or type the values by hand.</div>
-      <div className="row wrap" style={{ gap: 10, alignItems: 'flex-end' }}>
-        <Button icon={Printer} onClick={printPage} loading={busy}>Print alignment page</Button>
-        <Field label="Left: first full number (mm)" style={{ width: 190, marginBottom: 0 }}><NumberInput value={prof.left} onChange={setEdge('left')} /></Field>
-        <Field label="Right: first full number (mm)" style={{ width: 200, marginBottom: 0 }}><NumberInput value={prof.right} onChange={setEdge('right')} /></Field>
-        <Button variant="primary" icon={Save} onClick={() => s.save()} loading={s.saving} disabled={!s.dirty}>Save</Button>
-        {set && <Button variant="ghost" onClick={() => { const p = { ...(s.v.profiles || {}) }; delete p[printerKey]; s.setV({ ...s.v, profiles: p }); }}>Reset</Button>}
-      </div>
-    </div>
-  );
-}
-
 function PrinterTab() {
   const s = useSection('printer');
   const { toast, toastError } = useApp();
@@ -428,8 +389,6 @@ function PrinterTab() {
         <Field label="Token / kitchen printer" hint="Leave on default to use the receipt printer.">
           <Select value={s.v.tokenPrinter} onChange={(e) => s.set('tokenPrinter')(e.target.value)} options={[{ value: '', label: '— Same as receipt printer —' }, ...opts.slice(1)]} />
         </Field>
-        <AlignMargins s={s} label="Receipt printer" printerKey={s.v.receiptPrinter || ''} />
-        {s.v.tokenPrinter && s.v.tokenPrinter !== s.v.receiptPrinter && <AlignMargins s={s} label="Token / kitchen printer" printerKey={s.v.tokenPrinter} />}
         {(portOpts.length > 0 || /^serial:/i.test(s.v.receiptPrinter || '')) && (
           <Field label="Bluetooth / COM sending speed" hint="Printing slow with ‘tick-tick’ stops? Choose Fast. Printer stops or prints garbage? Choose Safe.">
             <Select value={s.v.serialSpeed === 'normal' ? 'auto' : s.v.serialSpeed} onChange={(e) => s.set('serialSpeed')(e.target.value)} options={SPEED_OPTIONS} />

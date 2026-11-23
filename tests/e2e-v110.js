@@ -111,25 +111,6 @@ let failed = false;
     if (comCuts() <= before) throw new Error('no receipt reached the COM port');
   });
 
-  await step('Align margins: alignment page prints, the printer\'s edges are saved per printer and the receipt is centred', async () => {
-    await page.click('a[href="#/settings"]');
-    await page.click('.tabs button:has-text("Printers")');
-    await page.waitForSelector('text=Align margins — Receipt printer');
-    const cuts0 = comCuts();
-    await page.click('button:has-text("Print alignment page")');
-    await page.waitForSelector('text=Alignment page printed');
-    if (comCuts() <= cuts0) throw new Error('alignment page did not reach the printer');
-    const left = page.locator('.card:has-text("Align margins — Receipt printer") input').nth(0);
-    const right = page.locator('.card:has-text("Align margins — Receipt printer") input').nth(1);
-    await left.fill('2'); await right.fill('6');
-    await page.click('.card:has-text("Align margins — Receipt printer") button:has-text("Save")');
-    await page.waitForSelector('text=Settings saved');
-    const prof = (await inv('settings.getAll')).printer;
-    const sel = prof.receiptPrinter;
-    if (!prof.profiles[sel] || prof.profiles[sel].left !== 2 || prof.profiles[sel].right !== 6) throw new Error('profile not saved: ' + JSON.stringify(prof.profiles));
-    await shot('v110-17-align-margins');
-  });
-
   await step('Add a printer: USB without a driver -> built-in driver installed', async () => {
     await page.click('a[href="#/settings"]');
     await page.click('.tabs button:has-text("Printers")');

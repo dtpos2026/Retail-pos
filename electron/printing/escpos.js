@@ -26,12 +26,7 @@ function dotsForPaper(paperMm, override) {
 function effectiveDots(paperMm, pr = {}) {
   const total = dotsForPaper(paperMm, pr.dots);
   const shift = Math.max(-96, Math.min(96, Math.round(Number(pr.shift) || 0)));
-  // the part of the paper this printer cannot print at each edge (calibrated per printer), in mm -> dots
-  const eL = Math.max(0, Math.round((Number(pr.edgeLeft) || 0) * 8));
-  const eR = Math.max(0, Math.round((Number(pr.edgeRight) || 0) * 8));
-  const left = eL + Math.max(0, shift);
-  const right = eR + Math.max(0, -shift);
-  return { total, shift, left, right, content: Math.max(160, total - left - right) };
+  return { total, shift, content: total - Math.abs(shift) };
 }
 
 /** Place a grayscale image of `w` dots inside a `total`-dot wide row, `left` dots from the left edge (white fill). */

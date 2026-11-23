@@ -60,7 +60,7 @@ test('ESC/POS: bitmap -> job -> decode round trip, band split, cut', () => {
 
 test('side balance: content width shrinks and is padded so both margins can be equalised', () => {
   const e = escpos.effectiveDots(80, { shift: 8 });
-  assert.deepEqual(e, { total: 576, shift: 8, left: 8, right: 0, content: 568 });
+  assert.deepEqual(e, { total: 576, shift: 8, content: 568 });
   assert.equal(escpos.effectiveDots(80, { shift: -16 }).content, 560);
   assert.equal(escpos.effectiveDots(58, {}).content, 384);
   assert.equal(escpos.effectiveDots(80, { shift: 999 }).shift, 96);
@@ -197,30 +197,4 @@ test('ESC/POS: long blank gaps are sent as a feed (less data) and decode back to
   const a = escpos.decodeJob(plain), b = escpos.decodeJob(small);
   assert.equal(b.height, a.height); assert.equal(b.cuts, 1);
   for (const y of [20, 35, 400, 710, 725]) assert.deepEqual(Buffer.from(b.rows[y]), Buffer.from(a.rows[y]), `row ${y}`);
-});
-
-test('per-printer edges: the unprintable strip at each side is blank, content is what remains, and calibration ignores them', () => {
-  const e = escpos.effectiveDots(80, { edgeLeft: 2, edgeRight: 5 });
-  assert.equal(e.left, 16); assert.equal(e.right, 40); assert.equal(e.content, 576 - 56);
-  // combined with the old side balance (+ moves right)
-  const b = escpos.effectiveDots(58, { edgeLeft: 1, edgeRight: 1, shift: 8 });
-  assert.equal(b.left, 16); assert.equal(b.right, 8); assert.equal(b.content, 384 - 24);
-  assert.equal(escpos.effectiveDots(58, { edgeLeft: 100, edgeRight: 100 }).content, 160, 'never smaller than a readable width');
-});
-
-test('Align margins: profile is per printer, drives the layout width, and the calibration page uses the full paper width', () => {
-  const settings = require('../electron/services/settings');
-  const common = require('../electron/printing/common');
-  const printService = require('../electron/printing/printService');
-  const pr = settings.get('printer');
-  settings.set('printer', { ...pr, receiptPrinter: 'POS-80', tokenPrinter: '', profiles: { 'POS-80': { left: 2, right: 6 }, 'XP-58': { left: 0, right: 1 } } });
-  const w = common.bodyWidthMm(80);
-  assert.equal(w, (576 - 8 * 8) / 8);
-  assert.equal(common.printerFor('POS-80').edgeRight, 6);
-  assert.equal(common.printerFor('XP-58').edgeLeft, 0);
-  assert.equal(common.printerFor('Other').edgeLeft, 0, 'a printer without a profile has no edges');
-  assert.equal(common.printerFor('receipt', { raw: true }).edgeLeft, 0);
-  assert.match(printService.calibrationHtml(80), /width:72mm/, 'calibration page is the full 72 mm');
-  assert.throws(() => settings.set('printer', { ...pr, profiles: { X: { left: 99, right: 0 } } }), /between 0 and 25/);
-  settings.set('printer', { ...pr, receiptPrinter: '', profiles: {} });
 });

@@ -264,7 +264,6 @@ const routes = {
   'orders.quickToken': { perm: 'pos', fn: async (a) => { const r = await printService.quickTokenSale(a); license.salesChanged(); return r; } },
   'print.test': { fn: (a) => printService.testPrint(a) },
   'print.textTest': { fn: (a) => printService.textTest(a) },
-  'print.calibrate': { perm: 'settings', fn: (a) => printService.printCalibration(a) },
 
   // ---- backup / data -------------------------------------------------------
   'backup.list': { perm: 'backup', fn: () => backup.list() },

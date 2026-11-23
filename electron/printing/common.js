@@ -50,23 +50,10 @@ function t(s) {
  * Width (mm) the receipt <body> must have. Thermal (ESC/POS) mode prints the printable area
  * (72 mm on 80 mm paper, 48 mm on 58 mm paper); driver mode uses the full paper width.
  */
-function bodyWidthMm(paperMm, role = 'receipt') {
-  const pr = printerFor(role);
+function bodyWidthMm(paperMm) {
+  const pr = settings.get('printer');
   if (pr.method === 'driver') return Number(paperMm);
   return escpos.mmForDots(escpos.effectiveDots(paperMm, pr).content);
-}
-
-/**
- * Printer settings plus the edges of the printer that does this job. Every printer has its own unprintable strip at
- * the left / right of the paper (found once with Settings → Printers → Align margins). `role` is 'receipt',
- * 'token' (token / kitchen printer) or a printer name; `raw` ignores the edges and the side balance (calibration page).
- */
-function printerFor(role, { raw = false } = {}) {
-  const pr = settings.get('printer');
-  const key = role === 'receipt' ? pr.receiptPrinter : role === 'token' ? pr.tokenPrinter || pr.receiptPrinter : String(role || '');
-  if (raw) return { ...pr, shift: 0, edgeLeft: 0, edgeRight: 0 };
-  const p = (pr.profiles || {})[key || ''] || {};
-  return { ...pr, edgeLeft: Number(p.left) || 0, edgeRight: Number(p.right) || 0 };
 }
 
 /** Left and right margins are always equal; `marginSide` is the single setting (older data: the smaller of left/right). */
@@ -76,22 +63,15 @@ function sideMargin({ marginSide, marginLeft, marginRight }) {
   return Math.max(0, Math.min(Number(marginLeft) || 0, Number(marginRight) || 0));
 }
 
-/** Left and right margin in mm (independent). Missing values fall back to the single side margin. */
-function sideMargins({ marginSide, marginLeft, marginRight }) {
-  const fallback = sideMargin({ marginSide, marginLeft: undefined, marginRight: undefined });
-  const l = Number(marginLeft), r = Number(marginRight);
-  return { left: Number.isFinite(l) && marginLeft !== null && marginLeft !== '' ? Math.max(0, l) : fallback, right: Number.isFinite(r) && marginRight !== null && marginRight !== '' ? Math.max(0, r) : fallback };
-}
-
 function baseCss({ paperWidth, bodyWidth, marginTop, marginSide, marginRight, marginBottom, marginLeft, fontSize, fontFamily, compact }) {
-  const { left, right } = sideMargins({ marginSide, marginLeft, marginRight });
+  const side = sideMargin({ marginSide, marginLeft, marginRight });
   const fam = FONT_FAMILIES[fontFamily] || FONT_FAMILIES.sans;
   const bw = bodyWidth || paperWidth;
   const lh = compact ? 1.2 : 1.35;
   return `${urduFontCss()}
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{background:#fff;color:#000}
-body{width:${bw}mm;padding:${marginTop}mm ${right}mm ${marginBottom}mm ${left}mm;
+body{width:${bw}mm;padding:${marginTop}mm ${side}mm ${marginBottom}mm ${side}mm;
   font-family:${fam},'RPOS Urdu',sans-serif;font-size:${fontSize}px;line-height:${lh};
   -webkit-print-color-adjust:exact;print-color-adjust:exact;overflow:hidden}
 bdi{unicode-bidi:isolate}
@@ -117,4 +97,4 @@ function wrap(css, body, title = 'Receipt') {
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title><style>${css}</style></head><body>${body}</body></html>`;
 }
 
-module.exports = { printerFor, sideMargins, sideMargin, FONT_FAMILIES, urduFontCss, esc, t, baseCss, logoHtml, wrap, bodyWidthMm };
+module.exports = { sideMargin, FONT_FAMILIES, urduFontCss, esc, t, baseCss, logoHtml, wrap, bodyWidthMm };
