@@ -8,6 +8,7 @@ const { renderReceipt, TEMPLATES } = require('./receiptTemplates');
 const { renderToken, renderKot, TOKEN_DESIGNS } = require('./tokenTemplate');
 const { renderThermalReport } = require('./reportThermal');
 const { esc, bodyWidthMm } = require('./common');
+const escpos = require('./escpos');
 const { AppError } = require('../core/errors');
 
 // printer.js needs Electron; load lazily so the HTML builders stay testable in plain Node.
@@ -153,6 +154,49 @@ body{width:${bw}mm;font-family:Arial,sans-serif;font-size:12px}
 </body></html>`;
 }
 
+
+/**
+ * Calibration page for Settings → Printers → Align margins: drawn over the printer's FULL width (no margins applied).
+ * Two rulers: numbers counted from the LEFT edge and from the RIGHT edge. The first number that prints completely on
+ * each side tells how many mm of paper that printer cannot reach there.
+ */
+function calibrationHtml(widthMm) {
+  const pr = require('./common').printerFor('receipt', { raw: true });
+  const dots = escpos.dotsForPaper(widthMm, pr.dots);
+  const bw = escpos.mmForDots(dots);
+  const mk = (fromRight) => {
+    let s = '';
+    for (let mm = 0; mm <= Math.floor(bw); mm++) {
+      const pos = fromRight ? `right:${mm}mm` : `left:${mm}mm`;
+      const tall = mm % 5 === 0;
+      s += `<i style="position:absolute;${pos};top:0;height:${tall ? 3.2 : 1.6}mm;border-left:1px solid #000;${fromRight ? 'border-left:0;border-right:1px solid #000' : ''}"></i>`;
+      if (mm % 2 === 0 && mm < bw - 4) s += `<b style="position:absolute;${fromRight ? `right:${mm}mm;transform:translateX(50%)` : `left:${mm}mm;transform:translateX(-50%)`};top:3.6mm;font-size:${mm >= 10 ? 8 : 9}px;line-height:1">${mm}</b>`;
+    }
+    return s;
+  };
+  return `<!doctype html><html><head><meta charset="utf-8"><style>
+*{box-sizing:border-box;margin:0;padding:0}html,body{background:#fff;color:#000}
+body{width:${bw}mm;font-family:Arial,sans-serif;font-size:11px;line-height:1.3}
+.r{position:relative;height:8mm;margin:1mm 0}
+.bar{height:2mm;background:#000}
+</style></head><body>
+<div class="bar"></div>
+<div style="text-align:center;font-weight:700;font-size:13px;margin:1mm 0">ALIGN MARGINS</div>
+<div style="font-weight:700">◄ FROM LEFT edge</div>
+<div class="r">${mk(false)}</div>
+<div style="text-align:right;font-weight:700">FROM RIGHT edge ►</div>
+<div class="r">${mk(true)}</div>
+<div style="font-size:10px;margin:1mm 0">Read the FIRST number that is fully printed on the left ruler and on the right ruler. Type them in the app.</div>
+<div class="bar"></div>
+</body></html>`;
+}
+
+async function printCalibration({ printerName } = {}) {
+  const pr = settings.get('printer');
+  const w = settings.get('receipt').paperWidth;
+  return printer().printHtml(calibrationHtml(w), { printerName: printerName ?? pr.receiptPrinter, widthMm: w, jobKey: 'calibrate', raw: true });
+}
+
 async function testPrint({ kind = 'receipt', printerName }) {
   const pr = settings.get('printer');
   if (kind === 'margins') {
@@ -192,6 +236,8 @@ module.exports = {
   printAfterSale,
   printReportThermal,
   testPrint,
+  calibrationHtml,
+  printCalibration,
   marginTestHtml,
   textTest: (a) => printer().textTest(a && a.printerName),
   printerStatus: (a) => printer().printerStatus(a),

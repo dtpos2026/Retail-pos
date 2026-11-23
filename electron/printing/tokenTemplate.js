@@ -18,7 +18,7 @@ function css(paperWidth, extra = '') {
   return (
     baseCss({
       paperWidth,
-      bodyWidth: bodyWidthMm(paperWidth),
+      bodyWidth: bodyWidthMm(paperWidth, 'token'),
       marginTop: rc.marginTop,
       marginBottom: rc.marginBottom,
       marginLeft: narrow ? Math.min(rc.marginLeft, 1) : rc.marginLeft,
@@ -99,7 +99,7 @@ function renderToken(order, token, overrides = {}) {
       ${p.itemsHtml()}${p.totalHtml}
       <div style="font-size:.85em;margin-top:1mm">${formatDate(token.created_at)} ${formatTime(token.created_at)}</div></div>`;
   } else if (design === 'ticket') {
-    const w = bodyWidthMm(cfg.paperWidth);
+    const w = bodyWidthMm(cfg.paperWidth, 'token');
     body = `${zig(w, false)}<div style="border-left:2px solid #000;border-right:2px solid #000;padding:1.5mm" class="c">${p.logo}${p.name}
       <div style="display:flex;border:2px dashed #000;margin:1.5mm 0;text-align:center">
         <div style="flex:1;padding:1mm"><div style="font-size:.7em">${title}</div><div style="font-size:${Math.round(num * 0.9)}px;font-weight:800;line-height:1">${esc(token.token_no)}</div></div>

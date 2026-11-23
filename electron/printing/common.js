@@ -50,10 +50,23 @@ function t(s) {
  * Width (mm) the receipt <body> must have. Thermal (ESC/POS) mode prints the printable area
  * (72 mm on 80 mm paper, 48 mm on 58 mm paper); driver mode uses the full paper width.
  */
-function bodyWidthMm(paperMm) {
-  const pr = settings.get('printer');
+function bodyWidthMm(paperMm, role = 'receipt') {
+  const pr = printerFor(role);
   if (pr.method === 'driver') return Number(paperMm);
   return escpos.mmForDots(escpos.effectiveDots(paperMm, pr).content);
+}
+
+/**
+ * Printer settings plus the edges of the printer that does this job. Every printer has its own unprintable strip at
+ * the left / right of the paper (found once with Settings → Printers → Align margins). `role` is 'receipt',
+ * 'token' (token / kitchen printer) or a printer name; `raw` ignores the edges and the side balance (calibration page).
+ */
+function printerFor(role, { raw = false } = {}) {
+  const pr = settings.get('printer');
+  const key = role === 'receipt' ? pr.receiptPrinter : role === 'token' ? pr.tokenPrinter || pr.receiptPrinter : String(role || '');
+  if (raw) return { ...pr, shift: 0, edgeLeft: 0, edgeRight: 0 };
+  const p = (pr.profiles || {})[key || ''] || {};
+  return { ...pr, edgeLeft: Number(p.left) || 0, edgeRight: Number(p.right) || 0 };
 }
 
 /** Left and right margins are always equal; `marginSide` is the single setting (older data: the smaller of left/right). */
@@ -104,4 +117,4 @@ function wrap(css, body, title = 'Receipt') {
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title><style>${css}</style></head><body>${body}</body></html>`;
 }
 
-module.exports = { sideMargins, sideMargin, FONT_FAMILIES, urduFontCss, esc, t, baseCss, logoHtml, wrap, bodyWidthMm };
+module.exports = { printerFor, sideMargins, sideMargin, FONT_FAMILIES, urduFontCss, esc, t, baseCss, logoHtml, wrap, bodyWidthMm };

@@ -14,6 +14,10 @@ Retail-pos/                  ← POS software (Windows, offline). Run npm comman
 ```
 
 
+## What's new in v1.10.10
+
+- **Align margins — per printer** (Settings → Printers): every printer cannot print the first few mm at each edge. *Print alignment page* prints two rulers; read the first number that prints completely on the left and on the right, type them and Save — or type them by hand. The software then keeps the print **centred for that printer** (left = right visible margin). Saved **per printer name**, so each printer keeps its own alignment; receipts, tokens, kitchen slips and reports all use it.
+
 ## What's new in v1.10.9
 
 - **Left and right margins are separate** (Settings → Receipt → *Left margin* / *Right margin*): for printers whose print area is not centred or is narrower than the paper (right side cut off). Tick *Keep left and right equal* to link them again. Saved once and kept; used by receipts, tokens, kitchen slips and reports. The Margin test page now shows a ruler to read the visible edges.

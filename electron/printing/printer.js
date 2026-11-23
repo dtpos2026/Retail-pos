@@ -11,6 +11,7 @@ const escpos = require('./escpos');
 const rasterize = require('./rasterize');
 const rawPrint = require('./rawPrint');
 const detect = require('./detect');
+const { printerFor } = require('./common');
 const serial = require('./serial');
 
 const MICRONS_PER_PX = 25400 / 96;
@@ -213,21 +214,20 @@ function startMonitor() {
 // Thermal (ESC/POS raster) — default
 // ---------------------------------------------------------------------------------------
 
-function thermalGeometry(widthMm) {
-  const pr = settings.get('printer');
-  const { total, shift, content } = escpos.effectiveDots(widthMm, pr);
-  return { dots: total, content, shift, cssWidthMm: escpos.mmForDots(content), pr };
+function thermalGeometry(widthMm, printerKey, raw = false) {
+  const pr = printerFor(printerKey || '', { raw });
+  const { total, left, content } = escpos.effectiveDots(widthMm, pr);
+  return { dots: total, content, left, cssWidthMm: escpos.mmForDots(content), pr };
 }
 
-async function buildThermalJob(html, { widthMm, copies = 1, drawer = false }) {
-  const { dots, content, shift, cssWidthMm, pr } = thermalGeometry(widthMm);
+async function buildThermalJob(html, { widthMm, copies = 1, drawer = false, printerKey = '', raw = false }) {
+  const { dots, content, left, cssWidthMm, pr } = thermalGeometry(widthMm, printerKey, raw);
   // High quality: draw at 2x the printer's resolution and average down (smoother, truer text); Standard: 1x
   const ss = pr.quality === 'standard' ? 1 : 2;
   const big = await rasterize.renderBgra(html, { cssWidthMm, pixelWidth: content * ss, maxHeightPx: 60000 });
   const small = rasterize.downsampleGray(rasterize.toGray(big), big.width, big.height, ss);
   const img = { width: small.width, height: small.height, imgRects: big.imgRects.map((r) => ({ x: r.x / ss, y: r.y / ss, w: r.w / ss, h: r.h / ss })) };
   if (ss > 1) escpos.sharpenText(small.gray, small.width, small.height, img.imgRects);
-  const left = Math.max(0, shift); // + shift: unused dots on the left, content moves right
   const gray = escpos.padGray(small.gray, img.width, img.height, dots, left);
   img.imgRects = img.imgRects.map((r) => ({ ...r, x: r.x + left }));
   img.width = dots;
@@ -280,7 +280,7 @@ async function printOnAnother(html, opts, failedName, reason) {
   if (!pick) return null;
   logger.warn('Printing on another printer:', pick.name, '— the chosen one failed:', reason);
   if (detect.score(pick) >= 10) {
-    const { job } = await buildThermalJob(html, { widthMm: opts.widthMm, copies: opts.copies || 1, drawer: false });
+    const { job } = await buildThermalJob(html, { widthMm: opts.widthMm, copies: opts.copies || 1, drawer: false, printerKey: opts.printerName || '' });
     await sendWithRetry(pick.name, pick.name, job, `DT Retail POS ${opts.jobKey || ''}`.trim());
     return { printer: pick.name, method: 'thermal', fallback: true };
   }
@@ -288,12 +288,12 @@ async function printOnAnother(html, opts, failedName, reason) {
   return { ...r, printer: pick.name, fallback: true };
 }
 
-async function printThermal(html, { printerName, widthMm, copies = 1, jobKey, drawer = false }) {
+async function printThermal(html, { printerName, widthMm, copies = 1, jobKey, drawer = false, raw = false }) {
   const dump = dumpDir();
   let deviceName;
   try {
     deviceName = dump ? '(dump)' : await resolvePrinter(printerName);
-    const { job } = await buildThermalJob(html, { widthMm, copies, drawer });
+    const { job } = await buildThermalJob(html, { widthMm, copies, drawer, printerKey: printerName || '', raw });
     if (dump) {
       fs.mkdirSync(dump, { recursive: true });
       fs.writeFileSync(path.join(dump, `${String(jobKey || 'job').replace(/[^\w.-]+/g, '_')}-${Date.now()}.escpos`), job);
