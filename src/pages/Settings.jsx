@@ -309,6 +309,8 @@ function PrinterTab() {
   const { toast, toastError } = useApp();
   const [printers, setPrinters] = useState(null);
   const [testing, setTesting] = useState('');
+  const [calFirst, setCalFirst] = useState('');
+  const [calLast, setCalLast] = useState('');
   const [status, setStatus] = useState(null);
   const [verify, setVerify] = useState(null);
   const [verifying, setVerifying] = useState(false);
@@ -348,7 +350,7 @@ function PrinterTab() {
         toast(`Text test sent to ${r.printer} in ${(r.ms / 1000).toFixed(1)} s — check the paper`);
       } else {
         const r = await api('print.test', { kind });
-        toast(`Test ${kind === 'margins' ? 'margin page' : kind} printed on ${r.printer}`);
+        toast(`Test ${kind === 'margins' ? 'margin page' : kind === 'ruler' ? 'ruler' : kind} printed on ${r.printer}`);
       }
     } catch (e) {
       toastError(e);
@@ -415,7 +417,23 @@ function PrinterTab() {
                 <Button size="sm" onClick={() => s.set('shift')(Math.min(96, (Number(s.v.shift) || 0) + 4))} title="Move print right">►</Button>
               </div></Field>
               <Field label="Print area" hint="Standard: 2 mm blank at each edge (recommended)"><Select value={s.v.printArea || 'standard'} onChange={(e) => s.set('printArea')(e.target.value)} options={[{ value: 'standard', label: 'Standard — fits most printers' }, { value: 'narrow', label: 'Narrow — 4 mm each side (edges cut off)' }, { value: 'full', label: 'Full — edge to edge' }]} /></Field>
-              <Field label="Print width (dots)" hint="Auto = use the Print area above (384 / 576)"><Select value={String(s.v.dots)} onChange={(e) => s.set('dots')(Number(e.target.value))} options={[{ value: '0', label: 'Auto' }, { value: '384', label: '384 (48 mm)' }, { value: '448', label: '448 (56 mm)' }, { value: '512', label: '512 (64 mm)' }, { value: '576', label: '576 (72 mm)' }, { value: '640', label: '640 (80 mm)' }]} /></Field>
+              <Field label="Print width (dots)" hint="Auto = fit to printer / Print area. A fixed width overrides Fit to printer"><Select value={String(s.v.dots)} onChange={(e) => s.set('dots')(Number(e.target.value))} options={[{ value: '0', label: 'Auto' }, { value: '384', label: '384 (48 mm)' }, { value: '448', label: '448 (56 mm)' }, { value: '512', label: '512 (64 mm)' }, { value: '576', label: '576 (72 mm)' }, { value: '640', label: '640 (80 mm)' }]} /></Field>
+              <div className="full" style={{ gridColumn: '1 / -1' }}>
+                <div className="b small" style={{ marginBottom: 6 }}>Fit to printer — equal left/right margins on any printer</div>
+                <div className="row" style={{ gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                  <Button icon={MoveHorizontal} loading={testing === 'ruler'} onClick={() => test('ruler')}>1. Print ruler</Button>
+                  <Field label="2. First number visible on the left"><NumberInput value={calFirst} onChange={(x) => setCalFirst(x)} /></Field>
+                  <Field label="Last number visible on the right"><NumberInput value={calLast} onChange={(x) => setCalLast(x)} /></Field>
+                  <Button variant="primary" onClick={() => {
+                    const a = Math.round(Number(calFirst)), b = Math.round(Number(calLast));
+                    if (!(a >= 1 && b >= a + 4 && b <= 26)) return toastError(new Error('Enter the two numbers you can read at the left and right edge of the ruler (e.g. 2 and 19).'));
+                    s.set('calLeft')((a - 1) * 32); s.set('calWidth')((b - a + 1) * 32);
+                    toast(`Fitted: ${(b - a + 1) * 4} mm printable — press Save, then Test receipt`);
+                  }}>3. Apply</Button>
+                  <Button onClick={() => { s.set('calLeft')(0); s.set('calWidth')(0); setCalFirst(''); setCalLast(''); }}>Reset</Button>
+                </div>
+                <div className="small faint" style={{ marginTop: 4 }}>{Number(s.v.calWidth) > 0 ? `Fitted: ${Number(s.v.calWidth) / 8} mm visible, ${Number(s.v.calLeft) / 8} mm hidden on the left. ` : 'Not fitted yet (automatic). '}The receipt is centred in what your printer really shows, so both side gaps are equal.</div>
+              </div>
               <div className="full" style={{ gridColumn: '1 / -1' }}><Check label="Compatibility cut for older printers (feed, then cut)" checked={s.v.compatCut} onChange={s.set('compatCut')} /></div>
             </div>
           )}

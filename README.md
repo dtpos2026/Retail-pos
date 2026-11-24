@@ -14,6 +14,12 @@ Retail-pos/                  ← POS software (Windows, offline). Run npm comman
 ```
 
 
+## What's new in v1.10.13
+
+- **Fit to printer** (Settings → Printers → Thermal): *1. Print ruler* prints a numbered ruler (one box per 4 mm) across the full width. Enter the first number you can read fully at the **left** edge and the last at the **right** edge, press *Apply*, *Save*. DT Retail POS then centres the receipt inside what *your* printer really shows, so left and right margins are equal on any printer (Bixolon, Xprinter, Rongta, Epson, 58 mm minis…). *Reset* returns to automatic.
+- **Print area now always works** (Standard / Narrow / Full), also when a fixed *Print width (dots)* is chosen — previously a fixed width ignored it.
+- **Compact mode** now saves about **30 %** paper (was 36–48 %), keeping text more readable.
+
 ## What's new in v1.10.12
 
 - **Standard print area** (Settings → Printers → Thermal → *Print area*): out of the box the receipt is now laid out **2 mm narrower on each side** (68 mm on 80 mm paper, 44 mm on 58 mm paper) and centred, so printers that clip the last dots at the edge no longer cut the right side. *Narrow* = 4 mm each side, *Full* = edge to edge (old behaviour). An explicit *Print width (dots)* still overrides it exactly. Side balance works as before.

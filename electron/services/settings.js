@@ -58,6 +58,8 @@ const DEFAULTS = {
     darkness: 'normal', // light | normal | dark
     dots: 0, // 0 = auto (384 for 58mm, 576 for 80mm)
     printArea: 'standard', // full | standard | narrow — blank strip at both edges (0 / 2 / 4 mm) so nothing is clipped; used with automatic width
+    calLeft: 0, // "Fit to printer": dots hidden at the left edge (measured with the numbered ruler)
+    calWidth: 0, // "Fit to printer": dots visible (0 = not calibrated)
     shift: 0, // horizontal balance in dots (+ moves the print to the right, - to the left)
     autoDetect: true, // pick the thermal printer automatically when none is chosen
     compatCut: false, // older printers without "feed and cut"
@@ -262,6 +264,8 @@ function validate(section, v) {
     if (!['partial', 'full', 'none'].includes(v.cut)) throw new AppError('Unknown cut mode.');
     if (!Number.isInteger(Number(v.shift)) || v.shift < -96 || v.shift > 96) throw new AppError('Side balance must be a whole number between -96 and 96 dots.');
     if (v.feedMm < 0 || v.feedMm > 30) throw new AppError('Feed must be between 0 and 30 mm.');
+    if (v.calWidth && (!Number.isInteger(Number(v.calWidth)) || v.calWidth < 160 || v.calWidth > 832 || v.calWidth % 8)) throw new AppError('Fit to printer: visible width must be a multiple of 8 between 160 and 832 dots.');
+    if (!(Number(v.calLeft) >= 0 && Number(v.calLeft) <= 320 && Number(v.calLeft) % 8 === 0)) v.calLeft = 0;
     if (v.dots && (v.dots < 192 || v.dots > 832 || v.dots % 8)) throw new AppError('Print width (dots) must be a multiple of 8 between 192 and 832, or 0 for automatic.');
   }
   if (section === 'appearance') {

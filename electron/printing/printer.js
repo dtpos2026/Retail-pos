@@ -213,14 +213,18 @@ function startMonitor() {
 // Thermal (ESC/POS raster) — default
 // ---------------------------------------------------------------------------------------
 
-function thermalGeometry(widthMm) {
+function thermalGeometry(widthMm, ruler) {
   const pr = settings.get('printer');
+  if (ruler) {
+    const w = Number(widthMm) === 58 ? 448 : 640; // wider than the usual head so the hidden edges show up
+    return { dots: w, content: w, left: 0, cssWidthMm: escpos.mmForDots(w), pr };
+  }
   const { total, left, content } = escpos.effectiveDots(widthMm, pr);
   return { dots: total, content, left, cssWidthMm: escpos.mmForDots(content), pr };
 }
 
-async function buildThermalJob(html, { widthMm, copies = 1, drawer = false }) {
-  const { dots, content, left, cssWidthMm, pr } = thermalGeometry(widthMm);
+async function buildThermalJob(html, { widthMm, copies = 1, drawer = false, ruler = false }) {
+  const { dots, content, left, cssWidthMm, pr } = thermalGeometry(widthMm, ruler);
   // High quality: draw at 2x the printer's resolution and average down (smoother, truer text); Standard: 1x
   const ss = pr.quality === 'standard' ? 1 : 2;
   const big = await rasterize.renderBgra(html, { cssWidthMm, pixelWidth: content * ss, maxHeightPx: 60000 });
@@ -287,12 +291,12 @@ async function printOnAnother(html, opts, failedName, reason) {
   return { ...r, printer: pick.name, fallback: true };
 }
 
-async function printThermal(html, { printerName, widthMm, copies = 1, jobKey, drawer = false }) {
+async function printThermal(html, { printerName, widthMm, copies = 1, jobKey, drawer = false, ruler = false }) {
   const dump = dumpDir();
   let deviceName;
   try {
     deviceName = dump ? '(dump)' : await resolvePrinter(printerName);
-    const { job } = await buildThermalJob(html, { widthMm, copies, drawer });
+    const { job } = await buildThermalJob(html, { widthMm, copies, drawer, ruler });
     if (dump) {
       fs.mkdirSync(dump, { recursive: true });
       fs.writeFileSync(path.join(dump, `${String(jobKey || 'job').replace(/[^\w.-]+/g, '_')}-${Date.now()}.escpos`), job);

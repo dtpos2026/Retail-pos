@@ -553,14 +553,14 @@ const RENDERERS = { classic, modern, minimal, restaurant, retail, compact, boxed
  * The Compact design is already the smallest, so it is left as it is.
  */
 function compactCss(fontSize) {
-  const fs = Math.max(8, fontSize - 2.5);
+  const fs = Math.max(8, fontSize - 1.5);
   return `
-body{font-size:${fs}px!important;line-height:1.1!important;padding-top:.6mm!important;padding-bottom:1.5mm!important}
-td,th{padding-top:.1mm!important;padding-bottom:.1mm!important}
-td[style*="padding"],th[style*="padding"]{padding:.2mm .6mm!important}
-div[style*="padding"]{padding-top:.4mm!important;padding-bottom:.4mm!important}
-[style*="margin"]{margin-top:.4mm!important;margin-bottom:.4mm!important}
-.logo{margin-bottom:.4mm!important}.logo img{max-height:13mm!important}`;
+body{font-size:${fs}px!important;line-height:1.15!important;padding-top:.8mm!important;padding-bottom:2mm!important}
+td,th{padding-top:.2mm!important;padding-bottom:.2mm!important}
+td[style*="padding"],th[style*="padding"]{padding:.4mm .8mm!important}
+div[style*="padding"]{padding-top:.6mm!important;padding-bottom:.6mm!important}
+[style*="margin"]{margin-top:.6mm!important;margin-bottom:.6mm!important}
+.logo{margin-bottom:.8mm!important}.logo img{max-height:15mm!important}`;
 }
 
 function renderReceipt(data) {

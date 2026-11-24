@@ -153,8 +153,34 @@ body{width:${bw}mm;font-family:Arial,sans-serif;font-size:12px}
 </body></html>`;
 }
 
+/**
+ * Numbered ruler printed the full (wider than usual) width, one box per 4 mm. Whatever numbers the printer
+ * cannot show at either edge tell us exactly which part of the paper is printable ("Fit to printer").
+ */
+function rulerHtml(widthMm) {
+  const n = Number(widthMm) === 58 ? 14 : 20;
+  let cells = '';
+  for (let i = 1; i <= n; i++) cells += `<div class="c${i % 2 ? ' o' : ''}"><b>${i}</b></div>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><style>
+*{box-sizing:border-box;margin:0;padding:0}html,body{background:#fff;color:#000}
+body{width:${n * 4}mm;font-family:Arial,sans-serif}
+.r{display:flex;border-top:2px solid #000;border-bottom:2px solid #000}
+.c{width:4mm;height:11mm;text-align:center;border-left:1px solid #000;border-right:1px solid #000;padding-top:1.5mm;font-size:10px;line-height:1}
+.c.o{background:repeating-linear-gradient(135deg,#000 0 1px,#fff 1px 3px)}.c.o b{background:#fff;padding:0 .3mm}
+.t{text-align:center;font-size:11px;line-height:1.35;padding:1mm 8mm}
+</style></head><body>
+<div class="r">${cells}</div>
+<div class="t"><b>FIT TO PRINTER</b><br>Find the first number fully visible on the LEFT and the last number fully visible on the RIGHT. Enter them in Settings &rarr; Printers &rarr; Fit to printer.</div>
+<div class="r">${cells}</div>
+</body></html>`;
+}
+
 async function testPrint({ kind = 'receipt', printerName }) {
   const pr = settings.get('printer');
+  if (kind === 'ruler') {
+    const w = settings.get('receipt').paperWidth;
+    return printer().printHtml(rulerHtml(w), { printerName: printerName ?? pr.receiptPrinter, widthMm: w, jobKey: 'test:ruler', ruler: true });
+  }
   if (kind === 'margins') {
     const w = settings.get('receipt').paperWidth;
     return printer().printHtml(marginTestHtml(w), { printerName: printerName ?? pr.receiptPrinter, widthMm: w, jobKey: 'test:margins' });
@@ -193,6 +219,7 @@ module.exports = {
   printReportThermal,
   testPrint,
   marginTestHtml,
+  rulerHtml,
   textTest: (a) => printer().textTest(a && a.printerName),
   printerStatus: (a) => printer().printerStatus(a),
   verifyPrinters: () => printer().verifyPrinters(),

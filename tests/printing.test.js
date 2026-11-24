@@ -60,7 +60,7 @@ test('ESC/POS: bitmap -> job -> decode round trip, band split, cut', () => {
 
 test('side balance: content width shrinks and is padded so both margins can be equalised', () => {
   const e = escpos.effectiveDots(80, { shift: 8 });
-  assert.deepEqual(e, { total: 576, shift: 8, left: 8, right: 0, content: 568 });
+  assert.deepEqual(e, { total: 576, shift: 8, left: 8, right: 0, content: 568, calibrated: false });
   assert.equal(escpos.effectiveDots(80, { shift: -16 }).content, 560);
   assert.equal(escpos.effectiveDots(58, {}).content, 384);
   assert.equal(escpos.effectiveDots(80, { shift: 999 }).shift, 96);
@@ -214,7 +214,25 @@ test('print area presets: equal blank strip on both edges, never with an explici
   // side balance still moves it
   const sh = escpos.effectiveDots(80, { printArea: 'standard', shift: 8 });
   assert.deepEqual([sh.left, sh.right], [24, 16]);
-  // an explicit width is exact (older setups keep their result)
+  // an explicit width is the total; the print area strip still applies inside it
   const x = escpos.effectiveDots(80, { printArea: 'narrow', dots: 512 });
-  assert.deepEqual([x.total, x.left, x.right, x.content], [512, 0, 0, 512]);
+  assert.deepEqual([x.total, x.left, x.right, x.content], [512, 32, 32, 448]);
+});
+
+test('fit to printer: receipt is centred inside the measured visible window', () => {
+  // ruler: first visible box 2, last visible box 19 -> 32 dots hidden at the left, 18 boxes (576 dots) visible
+  const c = escpos.effectiveDots(80, { printArea: 'standard', calLeft: 32, calWidth: 576 });
+  assert.deepEqual([c.total, c.left, c.right, c.content, c.calibrated], [608, 48, 16, 544, true]);
+  // equal gaps inside the visible window: (left - hidden) === right
+  assert.equal(c.left - 32, c.right);
+  // an explicit width ignores the calibration
+  assert.equal(escpos.effectiveDots(80, { dots: 512, calLeft: 32, calWidth: 576 }).calibrated, false);
+  // not calibrated -> unchanged
+  assert.equal(escpos.effectiveDots(80, { printArea: 'full' }).total, 576);
+});
+
+test('fit to printer ruler page: 20 numbered boxes for 80 mm, 14 for 58 mm', () => {
+  const ps = require('../electron/printing/printService');
+  assert.equal((ps.rulerHtml(80).match(/<b>\d+<\/b>/g) || []).length, 40);
+  assert.equal((ps.rulerHtml(58).match(/<b>\d+<\/b>/g) || []).length, 28);
 });

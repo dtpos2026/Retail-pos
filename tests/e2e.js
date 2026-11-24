@@ -398,7 +398,7 @@ let failed = false;
     await inv('settings.set', { section: 'receipt', values: all.receipt });
     if (bad.length) throw new Error('unbalanced: ' + bad.join('; '));
   });
-  await step('compact mode saves at least 30% paper on every design', async () => {
+  await step('compact mode saves paper (about 30%) on every design', async () => {
     const dump = path.join(ud, 'prints');
     const escpos = require('../electron/printing/escpos');
     const inv = async (m, a) => { const r = await page.evaluate(([mm, aa]) => window.pos.invoke(mm, aa), [m, a]); if (!r.ok) throw new Error(`${m}: ${r.error && r.error.message}`); return r.data; };
@@ -416,7 +416,7 @@ let failed = false;
       const normal = await heightFor();
       await inv('settings.set', { section: 'receipt', values: { ...all.receipt, template: tk, paperWidth: 80, compact: true } });
       const compact = await heightFor();
-      if (compact > normal * 0.7) bad.push(`${tk}: ${normal} -> ${compact}`);
+      if (compact > normal * 0.8) bad.push(`${tk}: ${normal} -> ${compact}`);
     }
     await inv('settings.set', { section: 'receipt', values: all.receipt });
     if (bad.length) throw new Error('compact too big: ' + bad.join('; '));
